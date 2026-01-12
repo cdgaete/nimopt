@@ -21,7 +21,7 @@ pip install nimopt
 For development:
 
 ```bash
-git clone https://github.com/yourusername/nimopt.git
+git clone https://github.com/cdgaete/nimopt.git
 cd nimopt
 pip install -e ".[dev]"
 ```
@@ -208,6 +208,6 @@ If you use nimopt in academic work, please cite:
   title = {nimopt: Algebraic Optimization Modeling with Lazy Constraint Expansion},
   author = {Your Name},
   year = {2024},
-  url = {https://github.com/yourusername/nimopt}
+  url = {https://github.com/cdgaete/nimopt}
 }
 ```
