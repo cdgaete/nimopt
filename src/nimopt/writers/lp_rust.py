@@ -40,7 +40,8 @@ def _write_objective_fast(model, filename: str) -> None:
             f.write(" obj: 0\n\n")
         return
 
-    for var, coef, fixed in model.objective.terms:
+    for term in model.objective.terms:
+        var, coef, _ = term[0], term[1], term[2]
         if var.sets:
             dim_elements = [[str(e) for e in s.elements] for s in var.sets]
             if isinstance(coef, nb.Array):
@@ -74,7 +75,8 @@ def _get_objective_data(model):
     var_names = []
     coefs = []
     if model.objective:
-        for var, coef, fixed in model.objective.terms:
+        for term in model.objective.terms:
+            var, coef, _ = term[0], term[1], term[2]
             # Generate all variable names
             if var.sets:
                 combos = list(itertools.product(*(s.elements for s in var.sets)))
@@ -127,13 +129,15 @@ def _write_constraints_rust(model, filename: str):
         rhs_const = 0.0
 
         if isinstance(con.rhs, LinearExpr):
-            for var, coef, fixed in con.rhs.terms:
-                lhs_terms.append((var, _negate_coef(coef), fixed))
+            for term in con.rhs.terms:
+                var, coef, fixed = term[0], term[1], term[2]
+                lagged = term[3] if len(term) > 3 else []
+                lhs_terms.append((var, _negate_coef(coef), fixed, lagged))
             if isinstance(con.rhs.const, (int, float)):
                 rhs_const = -con.rhs.const
         elif isinstance(con.rhs, (Variable, VarRef)):
             var = con.rhs if isinstance(con.rhs, Variable) else con.rhs.var
-            lhs_terms.append((var, -1.0, []))
+            lhs_terms.append((var, -1.0, [], []))
         elif isinstance(con.rhs, (int, float)):
             rhs_const = float(con.rhs)
 
@@ -165,8 +169,10 @@ def _can_use_sum_constraints(lhs_terms, free_sets) -> bool:
     """Check if we can use the optimized sum constraints path."""
     if len(lhs_terms) != 1:
         return False
-    var, coef, fixed = lhs_terms[0]
-    if fixed:
+    term = lhs_terms[0]
+    _, _, fixed = term[0], term[1], term[2]
+    lagged = term[3] if len(term) > 3 else []
+    if fixed or lagged:
         return False
     return True
 
@@ -175,7 +181,8 @@ def _write_sum_constraints_fast(
     filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig
 ):
     """Use optimized Rust path for Sum constraints."""
-    var, coef, fixed = lhs_terms[0]
+    term = lhs_terms[0]
+    var, coef, _ = term[0], term[1], term[2]
 
     # Build var_dim_elements and is_free_dim in variable dimension order
     free_set_ids = {id(s) for s in free_sets}
@@ -238,7 +245,9 @@ def _write_batch_constraints_rust(
         con_var_names = []
         con_coefs = []
 
-        for var, coef, fixed in lhs_terms:
+        for term in lhs_terms:
+            var, coef, _ = term[0], term[1], term[2]
+            # lagged = term[3] if len(term) > 3 else []  # TODO: handle lag
             var_combos = []
             for s in var.sets:
                 if s in bindings:
@@ -287,7 +296,8 @@ def _write_single_constraint_fast(
     all_var_names = []
     all_coefs = []
 
-    for var, coef, fixed in lhs_terms:
+    for term in lhs_terms:
+        var, coef, _ = term[0], term[1], term[2]
         if not var.sets:
             all_var_names.append(var.name)
             if isinstance(coef, (int, float)):
@@ -337,7 +347,8 @@ def _write_single_constraint_py(
     with open(filename, "a") as f:
         f.write(f" {eq_name}: ")
         first = True
-        for var, coef, fixed in lhs_terms:
+        for term in lhs_terms:
+            var, coef, _ = term[0], term[1], term[2]
             var_combos = []
             for s in var.sets:
                 if s in bindings:

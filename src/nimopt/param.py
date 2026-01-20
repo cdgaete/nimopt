@@ -99,3 +99,63 @@ class Param:
     @property
     def shape(self):
         return self.array.shape
+
+    def __add__(self, other):
+        """Add to param - returns nimblend Array or delegates to other."""
+        if isinstance(other, Param):
+            return self.array + other.array
+        if hasattr(other, "__radd__"):
+            result = other.__radd__(self)
+            if result is not NotImplemented:
+                return result
+        return self.array + other
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __sub__(self, other):
+        """Subtract from param - returns nimblend Array or delegates to other."""
+        if isinstance(other, Param):
+            return self.array - other.array
+        if hasattr(other, "__rsub__"):
+            result = other.__rsub__(self)
+            if result is not NotImplemented:
+                return result
+        return self.array - other
+
+    def __rsub__(self, other):
+        if isinstance(other, Param):
+            return other.array - self.array
+        return other - self.array
+
+    def __mul__(self, other):
+        """Multiply param - returns nimblend Array or delegates to other."""
+        if isinstance(other, Param):
+            return self.array * other.array
+        if hasattr(other, "__rmul__"):
+            result = other.__rmul__(self)
+            if result is not NotImplemented:
+                return result
+        return self.array * other
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __truediv__(self, other):
+        """Divide param - returns nimblend Array or delegates to other."""
+        if isinstance(other, Param):
+            return self.array / other.array
+        if hasattr(other, "__rtruediv__"):
+            result = other.__rtruediv__(self)
+            if result is not NotImplemented:
+                return result
+        return self.array / other
+
+    def __rtruediv__(self, other):
+        if isinstance(other, Param):
+            return other.array / self.array
+        return other / self.array
+
+    def __neg__(self):
+        """Negate param - returns nimblend Array."""
+        return -self.array

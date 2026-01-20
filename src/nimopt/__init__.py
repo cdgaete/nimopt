@@ -25,10 +25,10 @@ Example
 """
 
 from .expression import Constraint, LinearExpr
-from .functions import Sum
+from .functions import Sum, abs_, exp, log, power, sqrt
 from .model import Model
 from .param import Param
-from .sets import Set
+from .sets import LaggedSet, Set
 from .solution_api import extract_solution, load_solution, to_csv
 from .variable import Variable, VarRef
 
@@ -36,12 +36,18 @@ __version__ = "0.2.0"
 
 __all__ = [
     "Set",
+    "LaggedSet",
     "Param",
     "Variable",
     "VarRef",
     "LinearExpr",
     "Constraint",
     "Sum",
+    "sqrt",
+    "exp",
+    "log",
+    "abs_",
+    "power",
     "Model",
     "extract_solution",
     "load_solution",

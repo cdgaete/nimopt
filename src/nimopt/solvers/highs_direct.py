@@ -177,7 +177,7 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
     # === Build objective vector (vectorized) ===
     c = np.zeros(n_vars, dtype=np.float64)
     if model.objective:
-        for var, coef, fixed in model.objective.terms:
+        for var, coef, fixed, _lagged in model.objective.terms:
             start = var_start_idx[var.name]
             n = var.size
             if isinstance(coef, (int, float)):
@@ -214,29 +214,37 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
         rhs_const = 0.0
 
         if isinstance(con.rhs, LinearExpr):
-            for var, coef, fixed in con.rhs.terms:
-                lhs_terms.append((var, _negate_coef(coef), fixed))
+            for var, coef, fixed, lagged in con.rhs.terms:
+                lhs_terms.append((var, _negate_coef(coef), fixed, lagged))
             if isinstance(con.rhs.const, (int, float)):
                 rhs_const = -con.rhs.const
-        elif isinstance(con.rhs, (Variable, VarRef)):
-            v = con.rhs if isinstance(con.rhs, Variable) else con.rhs.var
-            lhs_terms.append((v, -1.0, []))
+        elif isinstance(con.rhs, VarRef):
+            # VarRef may have fixed/lagged indices
+            lhs_terms.append((
+                con.rhs.var,
+                -1.0,
+                con.rhs.fixed_indices,
+                con.rhs.lagged_indices,
+            ))
+        elif isinstance(con.rhs, Variable):
+            lhs_terms.append((con.rhs, -1.0, [], []))
         elif isinstance(con.rhs, (int, float)):
             rhs_const = float(con.rhs)
 
         free_sets = con.free_sets
         sense = con.sense
 
-        # Rust fast path: single indexed var, has free sets, no fixed indices
+        # Rust fast path: single indexed var, has free sets, no fixed/lagged indices
         can_use_rust = (
             len(lhs_terms) == 1
             and lhs_terms[0][0].sets
             and free_sets
-            and not lhs_terms[0][2]
+            and not lhs_terms[0][2]  # no fixed indices
+            and not lhs_terms[0][3]  # no lagged indices
         )
 
         if can_use_rust:
-            var, coef, fixed = lhs_terms[0]
+            var, coef, fixed, _lagged = lhs_terms[0]
             result = _build_sum_csr_rust_fast(
                 var, coef, free_sets, con.rhs, rhs_const, sense, var_start_idx[var.name]
             )
@@ -256,20 +264,26 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
         var_idx = _build_var_idx_lazy(model, var_start_idx)
 
         if not free_sets:
-            idx_list, val_list = _expand_constraint(lhs_terms, {}, var_idx)
-            rhs_val = _get_rhs_value(con.rhs, {}, rhs_const)
-            total_nnz += len(idx_list)
-            all_indptr.append(total_nnz)
-            all_indices.append(np.array(idx_list, dtype=np.int32))
-            all_data.append(np.array(val_list, dtype=np.float64))
-            _append_bounds(all_row_lower, all_row_upper, sense, rhs_val)
-            con_names.append(eq_name)
+            result = _expand_constraint(lhs_terms, {}, var_idx)
+            if result is not None:
+                idx_list, val_list = result
+                rhs_val = _get_rhs_value(con.rhs, {}, rhs_const)
+                total_nnz += len(idx_list)
+                all_indptr.append(total_nnz)
+                all_indices.append(np.array(idx_list, dtype=np.int32))
+                all_data.append(np.array(val_list, dtype=np.float64))
+                _append_bounds(all_row_lower, all_row_upper, sense, rhs_val)
+                con_names.append(eq_name)
         else:
             import itertools
 
             for combo in itertools.product(*(s.elements for s in free_sets)):
                 bindings = dict(zip(free_sets, combo))
-                idx_list, val_list = _expand_constraint(lhs_terms, bindings, var_idx)
+                result = _expand_constraint(lhs_terms, bindings, var_idx)
+                if result is None:
+                    # Skip constraint (lagged index out of bounds)
+                    continue
+                idx_list, val_list = result
                 rhs_val = _get_rhs_value(con.rhs, bindings, rhs_const)
                 total_nnz += len(idx_list)
                 all_indptr.append(total_nnz)
@@ -431,7 +445,7 @@ def _build_matrices(model: "Model") -> Dict:
 
     c = np.zeros(n_vars, dtype=np.float64)
     if model.objective:
-        for var, coef, fixed in model.objective.terms:
+        for var, coef, fixed, _lagged in model.objective.terms:
             if not var.sets:
                 c[var_idx[var.name]] = _get_scalar_coef(coef)
             else:
@@ -458,13 +472,20 @@ def _build_matrices(model: "Model") -> Dict:
         rhs_const = 0.0
 
         if isinstance(con.rhs, LinearExpr):
-            for var, coef, fixed in con.rhs.terms:
-                lhs_terms.append((var, _negate_coef(coef), fixed))
+            for var, coef, fixed, lagged in con.rhs.terms:
+                lhs_terms.append((var, _negate_coef(coef), fixed, lagged))
             if isinstance(con.rhs.const, (int, float)):
                 rhs_const = -con.rhs.const
-        elif isinstance(con.rhs, (Variable, VarRef)):
-            v = con.rhs if isinstance(con.rhs, Variable) else con.rhs.var
-            lhs_terms.append((v, -1.0, []))
+        elif isinstance(con.rhs, VarRef):
+            # VarRef may have fixed/lagged indices
+            lhs_terms.append((
+                con.rhs.var,
+                -1.0,
+                con.rhs.fixed_indices,
+                con.rhs.lagged_indices,
+            ))
+        elif isinstance(con.rhs, Variable):
+            lhs_terms.append((con.rhs, -1.0, [], []))
         elif isinstance(con.rhs, (int, float)):
             rhs_const = float(con.rhs)
 
@@ -472,14 +493,19 @@ def _build_matrices(model: "Model") -> Dict:
         sense = con.sense
 
         if not free_sets:
-            idx_list, val_list = _expand_constraint(lhs_terms, {}, var_idx)
-            rhs_val = _get_rhs_value(con.rhs, {}, rhs_const)
-            row_data.append((idx_list, val_list, sense, rhs_val))
-            con_names.append(eq_name)
+            result = _expand_constraint(lhs_terms, {}, var_idx)
+            if result is not None:
+                idx_list, val_list = result
+                rhs_val = _get_rhs_value(con.rhs, {}, rhs_const)
+                row_data.append((idx_list, val_list, sense, rhs_val))
+                con_names.append(eq_name)
         else:
             for combo in itertools.product(*(s.elements for s in free_sets)):
                 bindings = dict(zip(free_sets, combo))
-                idx_list, val_list = _expand_constraint(lhs_terms, bindings, var_idx)
+                result = _expand_constraint(lhs_terms, bindings, var_idx)
+                if result is None:
+                    continue
+                idx_list, val_list = result
                 rhs_val = _get_rhs_value(con.rhs, bindings, rhs_const)
                 row_data.append((idx_list, val_list, sense, rhs_val))
                 con_names.append(eq_name + "_" + "_".join(str(e) for e in combo))
@@ -528,23 +554,61 @@ def _build_matrices(model: "Model") -> Dict:
 
 
 def _expand_constraint(lhs_terms, bindings, var_idx):
+    """Expand constraint terms for given bindings.
+
+    Returns (indices, values) or None if constraint should be skipped
+    (e.g., lagged index out of bounds).
+    """
     import itertools
 
+    # First pass: check if any lagged indices are out of bounds
+    for var, coef, fixed, lagged in lhs_terms:
+        if lagged:
+            for pos, ls in lagged:
+                # Find the current element at this position from bindings
+                base_set = ls.base_set
+                if base_set in bindings:
+                    elem = bindings[base_set]
+                    lagged_elem = ls.get_lagged_element(elem)
+                    if lagged_elem is None:
+                        # Out of bounds - skip entire constraint
+                        return None
+
+    # Second pass: build constraint row
     indices = []
     values = []
-    for var, coef, fixed in lhs_terms:
+    for var, coef, fixed, lagged in lhs_terms:
         if not var.sets:
             indices.append(var_idx[var.name])
             values.append(_get_scalar_coef(coef))
         else:
+            # Build lagged_map: position -> LaggedSet for quick lookup
+            lagged_map = {pos: ls for pos, ls in lagged} if lagged else {}
+
             var_combos = []
-            for s in var.sets:
+            for i, s in enumerate(var.sets):
                 if s in bindings:
                     var_combos.append([bindings[s]])
+                elif i in lagged_map:
+                    # For lagged dims, use the binding for base set
+                    base_set = lagged_map[i].base_set
+                    if base_set in bindings:
+                        var_combos.append([bindings[base_set]])
+                    else:
+                        var_combos.append(lagged_map[i].base_set.elements)
                 else:
                     var_combos.append(s.elements)
+
             for combo in itertools.product(*var_combos) if var_combos else [()]:
-                vname = var.name + "_" + "_".join(str(e) for e in combo)
+                # Apply lag offset to get actual variable indices
+                actual_combo = list(combo)
+                for pos, ls in lagged_map.items():
+                    elem = combo[pos]
+                    lagged_elem = ls.get_lagged_element(elem)
+                    # Should not be None here since we checked in first pass
+                    actual_combo[pos] = lagged_elem
+
+                vname = var.name + "_" + "_".join(str(e) for e in actual_combo)
                 idx = var_idx.get(vname)
                 if idx is not None:
                     cv = _get_coef_for_combo(coef, var.sets, combo)

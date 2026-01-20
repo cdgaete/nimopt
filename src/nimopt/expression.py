@@ -18,7 +18,9 @@ class LinearExpr:
     """
     Linear expression with nimblend-backed coefficients.
 
-    Stores terms as (Variable, coef, fixed_indices) tuples.
+    Stores terms as (Variable, coef, fixed_indices, lagged_indices) tuples.
+    - fixed_indices: List of (position, value) for concrete indices
+    - lagged_indices: List of (position, LaggedSet) for lagged indices
     Coefficients can be scalars or nimblend Arrays for broadcasting.
     """
 
@@ -26,7 +28,7 @@ class LinearExpr:
 
     def __init__(
         self,
-        terms: Optional[List[Tuple["Variable", Any, List]]] = None,
+        terms: Optional[List[Tuple["Variable", Any, List, List]]] = None,
         const: Any = 0.0,
         free_sets: Optional[List[Set]] = None,
     ):
@@ -41,6 +43,7 @@ class LinearExpr:
 
         free_sets = var_ref.free_sets
         fixed = var_ref.fixed_indices
+        lagged = var_ref.lagged_indices
 
         if isinstance(coef, Param):
             coef_val = coef.array
@@ -52,14 +55,15 @@ class LinearExpr:
             coef_val = coef
 
         return cls(
-            terms=[(var_ref.var, coef_val, fixed)],
+            terms=[(var_ref.var, coef_val, fixed, lagged)],
             const=0.0,
             free_sets=free_sets,
         )
 
     def __repr__(self):
         parts = []
-        for var, coef, fixed in self.terms:
+        for term in self.terms:
+            var, coef = term[0], term[1]
             if isinstance(coef, nb.Array):
                 parts.append(f"{var.name}[coef:{coef.shape}]")
             else:
@@ -95,7 +99,10 @@ class LinearExpr:
         if isinstance(other, (int, float)):
             return self.__add__(-other)
         elif isinstance(other, LinearExpr):
-            neg_terms = [(v, _negate(c), f) for v, c, f in other.terms]
+            neg_terms = [
+                (t[0], _negate(t[1]), t[2], t[3] if len(t) > 3 else [])
+                for t in other.terms
+            ]
             return LinearExpr(
                 self.terms + neg_terms,
                 _add_const(self.const, _negate(other.const)),
@@ -105,7 +112,10 @@ class LinearExpr:
 
     def __mul__(self, other):
         if isinstance(other, (int, float)):
-            new_terms = [(v, _scale(c, other), f) for v, c, f in self.terms]
+            new_terms = [
+                (t[0], _scale(t[1], other), t[2], t[3] if len(t) > 3 else [])
+                for t in self.terms
+            ]
             new_const = _scale(self.const, other)
             return LinearExpr(new_terms, new_const, self.free_sets.copy())
         return NotImplemented

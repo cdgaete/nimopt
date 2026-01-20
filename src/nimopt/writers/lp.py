@@ -106,7 +106,7 @@ def _write_objective(f: TextIO, model, var_names: Dict) -> None:
     f.write(" obj: ")
     first = True
     if model.objective:
-        for var, coef, fixed in model.objective.terms:
+        for var, coef, fixed, _lagged in model.objective.terms:
             if var.sets:
                 combos = list(itertools.product(*(s.elements for s in var.sets)))
             else:
@@ -131,14 +131,14 @@ def _write_constraints(f: TextIO, model, var_names: Dict) -> None:
         rhs_const = 0.0
 
         if isinstance(con.rhs, LinearExpr):
-            for var, coef, fixed in con.rhs.terms:
+            for var, coef, fixed, lagged in con.rhs.terms:
                 neg_coef = _negate_coef(coef)
-                lhs_terms.append((var, neg_coef, fixed))
+                lhs_terms.append((var, neg_coef, fixed, lagged))
             if isinstance(con.rhs.const, (int, float)):
                 rhs_const = -con.rhs.const
         elif isinstance(con.rhs, (Variable, VarRef)):
             var = con.rhs if isinstance(con.rhs, Variable) else con.rhs.var
-            lhs_terms.append((var, -1.0, []))
+            lhs_terms.append((var, -1.0, [], []))
         elif isinstance(con.rhs, (int, float)):
             rhs_const = float(con.rhs)
 
@@ -181,7 +181,7 @@ def _write_lhs(
 ) -> None:
     """Write LHS expression terms."""
     first = True
-    for var, coef, fixed in expr.terms:
+    for var, coef, fixed, _lagged in expr.terms:
         var_combos = []
         for s in var.sets:
             if s in bindings:

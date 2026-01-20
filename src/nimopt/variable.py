@@ -57,6 +57,8 @@ class Variable:
 
     def __getitem__(self, indices) -> "VarRef":
         """Index the variable, returns VarRef for expressions."""
+        from .sets import LaggedSet
+
         if not isinstance(indices, tuple):
             indices = (indices,)
 
@@ -69,6 +71,12 @@ class Variable:
             if isinstance(idx, Set):
                 if idx is not s:
                     raise IndexError(f"Expected set '{s.name}', got '{idx.name}'")
+            elif isinstance(idx, LaggedSet):
+                # LaggedSet must reference the same base set
+                if idx.base_set is not s:
+                    raise IndexError(
+                        f"Expected set '{s.name}', got lagged '{idx.base_set.name}'"
+                    )
             elif idx not in s:
                 raise IndexError(f"'{idx}' not in set '{s.name}'")
 
@@ -159,10 +167,18 @@ class VarRef:
         self.indices = indices
 
     def __repr__(self):
-        idx_str = ", ".join(
-            s.name if isinstance(s, Set) else repr(s) for s in self.indices
-        )
-        return f"{self.var.name}[{idx_str}]"
+        from .sets import LaggedSet
+
+        parts = []
+        for s in self.indices:
+            if isinstance(s, Set):
+                parts.append(s.name)
+            elif isinstance(s, LaggedSet):
+                sign = "-" if s.offset < 0 else "+"
+                parts.append(f"{s.base_set.name}{sign}{abs(s.offset)}")
+            else:
+                parts.append(repr(s))
+        return f"{self.var.name}[{', '.join(parts)}]"
 
     @property
     def name(self):
@@ -171,12 +187,40 @@ class VarRef:
     @property
     def free_sets(self) -> List[Set]:
         """Sets used symbolically (not fixed to specific element)."""
-        return [s for s in self.indices if isinstance(s, Set)]
+        from .sets import LaggedSet
+
+        result = []
+        for s in self.indices:
+            if isinstance(s, Set):
+                result.append(s)
+            elif isinstance(s, LaggedSet):
+                result.append(s.base_set)
+        return result
+
+    @property
+    def lagged_indices(self) -> List[Tuple[int, Any]]:
+        """List of (position, LaggedSet) for lagged indices."""
+        from .sets import LaggedSet
+
+        return [(i, s) for i, s in enumerate(self.indices) if isinstance(s, LaggedSet)]
+
+    @property
+    def has_lag(self) -> bool:
+        """Check if this VarRef has any lagged indices."""
+        from .sets import LaggedSet
+
+        return any(isinstance(s, LaggedSet) for s in self.indices)
 
     @property
     def fixed_indices(self) -> List[Tuple[int, Any]]:
         """List of (position, value) for fixed indices."""
-        return [(i, v) for i, v in enumerate(self.indices) if not isinstance(v, Set)]
+        from .sets import LaggedSet
+
+        return [
+            (i, v)
+            for i, v in enumerate(self.indices)
+            if not isinstance(v, (Set, LaggedSet))
+        ]
 
     def __mul__(self, other):
         from .expression import LinearExpr
@@ -185,6 +229,25 @@ class VarRef:
 
     def __rmul__(self, other):
         return self.__mul__(other)
+
+    def __truediv__(self, other):
+        """Division: x / coef = (1/coef) * x."""
+        import nimblend as nb
+
+        from .expression import LinearExpr
+        from .param import Param
+
+        # Compute 1/other as the coefficient
+        if isinstance(other, Param):
+            inv_coef = Param(f"inv_{other.name}", other.sets, 1.0 / other.values)
+            return LinearExpr.from_term(self, inv_coef)
+        elif isinstance(other, nb.Array):
+            inv_coef = nb.Array(1.0 / other.values, other.coords, other.dims)
+            return LinearExpr.from_term(self, inv_coef)
+        elif isinstance(other, (int, float)):
+            return LinearExpr.from_term(self, 1.0 / other)
+        else:
+            return NotImplemented
 
     def __add__(self, other):
         from .expression import LinearExpr
