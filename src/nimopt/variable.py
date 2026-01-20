@@ -62,8 +62,7 @@ class Variable:
 
         if len(indices) != len(self.sets):
             raise IndexError(
-                f"Variable '{self.name}' has {len(self.sets)} dims, "
-                f"got {len(indices)}"
+                f"Variable '{self.name}' has {len(self.sets)} dims, got {len(indices)}"
             )
 
         for idx, s in zip(indices, self.sets):
@@ -105,6 +104,45 @@ class Variable:
             names.append(self.name + "_" + "_".join(str(e) for e in combo))
         return names
 
+    # Arithmetic operators for scalar variables
+    def _as_varref(self) -> "VarRef":
+        """Convert scalar Variable to VarRef."""
+        if self.sets:
+            msg = f"Cannot use indexed variable '{self.name}' directly. "
+            msg += "Use x[i,j] syntax."
+            raise ValueError(msg)
+        return VarRef(self, ())
+
+    def __mul__(self, other):
+        return self._as_varref() * other
+
+    def __rmul__(self, other):
+        return self._as_varref() * other
+
+    def __add__(self, other):
+        return self._as_varref() + other
+
+    def __radd__(self, other):
+        return self._as_varref() + other
+
+    def __sub__(self, other):
+        return self._as_varref() - other
+
+    def __rsub__(self, other):
+        return other + (-self._as_varref())
+
+    def __neg__(self):
+        return -self._as_varref()
+
+    def __le__(self, other):
+        return self._as_varref() <= other
+
+    def __ge__(self, other):
+        return self._as_varref() >= other
+
+    def __eq__(self, other):
+        return self._as_varref() == other
+
 
 class VarRef:
     """
@@ -138,12 +176,11 @@ class VarRef:
     @property
     def fixed_indices(self) -> List[Tuple[int, Any]]:
         """List of (position, value) for fixed indices."""
-        return [
-            (i, v) for i, v in enumerate(self.indices) if not isinstance(v, Set)
-        ]
+        return [(i, v) for i, v in enumerate(self.indices) if not isinstance(v, Set)]
 
     def __mul__(self, other):
         from .expression import LinearExpr
+
         return LinearExpr.from_term(self, other)
 
     def __rmul__(self, other):
@@ -151,6 +188,7 @@ class VarRef:
 
     def __add__(self, other):
         from .expression import LinearExpr
+
         return LinearExpr.from_term(self, 1.0) + other
 
     def __radd__(self, other):
@@ -158,22 +196,27 @@ class VarRef:
 
     def __sub__(self, other):
         from .expression import LinearExpr
+
         return LinearExpr.from_term(self, 1.0) - other
 
     def __neg__(self):
         from .expression import LinearExpr
+
         return LinearExpr.from_term(self, -1.0)
 
     def __le__(self, other):
         from .expression import Constraint, LinearExpr
+
         return Constraint(LinearExpr.from_term(self, 1.0), "<=", other)
 
     def __ge__(self, other):
         from .expression import Constraint, LinearExpr
+
         return Constraint(LinearExpr.from_term(self, 1.0), ">=", other)
 
     def __eq__(self, other):
         from .expression import Constraint, LinearExpr
+
         return Constraint(LinearExpr.from_term(self, 1.0), "==", other)
 
     def __hash__(self):

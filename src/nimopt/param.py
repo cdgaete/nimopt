@@ -55,8 +55,7 @@ class Param:
         expected = tuple(len(s) for s in self.sets)
         if self.array.shape != expected:
             raise ValueError(
-                f"Data shape {self.array.shape} doesn't match "
-                f"set dimensions {expected}"
+                f"Data shape {self.array.shape} doesn't match set dimensions {expected}"
             )
 
     def __repr__(self):

@@ -4,9 +4,13 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from .base import Solver, SolverResult, SolverStatus
+
+if TYPE_CHECKING:
+    from ..model import Model
+    from ..solution import Solution
 
 GAMS_DIR = "/opt/gams/gams46.4_linux_x64_64_sfx"
 
@@ -29,11 +33,16 @@ class GamsCplexSolver(Solver):
         self._lp_file: Optional[Path] = None
         self._work_dir: Optional[Path] = None
         self._result: Optional[SolverResult] = None
+        self._model: Optional["Model"] = None
         self._var_names: list[str] = []
         self._var_values: list[float] = []
         self._var_duals: list[float] = []
         self._con_names: list[str] = []
         self._con_duals: list[float] = []
+
+    def set_model(self, model: "Model") -> None:
+        """Store model reference for solution extraction."""
+        self._model = model
 
     def read_lp(self, path: str | Path) -> None:
         """Load model from LP file."""
@@ -70,7 +79,9 @@ class GamsCplexSolver(Solver):
 
             subprocess.run(
                 [str(self._mps2gms), str(self._lp_file), str(gdx_file), str(gms_file)],
-                env=env, capture_output=True, check=True
+                env=env,
+                capture_output=True,
+                check=True,
             )
 
             # Modify GMS to output solution to GDX
@@ -78,9 +89,17 @@ class GamsCplexSolver(Solver):
 
             # Run GAMS with CPLEX
             subprocess.run(
-                [str(self._gams_exe), str(gms_file), "lp=cplex", "mip=cplex",
-                 "lo=2", f"curdir={self._work_dir}"],
-                env=env, capture_output=True, cwd=self._work_dir
+                [
+                    str(self._gams_exe),
+                    str(gms_file),
+                    "lp=cplex",
+                    "mip=cplex",
+                    "lo=2",
+                    f"curdir={self._work_dir}",
+                ],
+                env=env,
+                capture_output=True,
+                cwd=self._work_dir,
             )
 
             # Parse results
@@ -97,7 +116,7 @@ class GamsCplexSolver(Solver):
 
     def _add_solution_output(self, gms_file: Path) -> None:
         """Add solution export to GMS file."""
-        with open(gms_file, 'a') as f:
+        with open(gms_file, "a") as f:
             f.write("""
 * Export solution to GDX
 execute_unload 'solution.gdx', xc, obj, eg, el, ee;
@@ -126,14 +145,14 @@ execute_unload 'solution.gdx', xc, obj, eg, el, ee;
                     status = SolverStatus.UNBOUNDED
 
                 # Extract objective value (LP format)
-                for line in content.split('\n'):
-                    if 'Objective:' in line:
+                for line in content.split("\n"):
+                    if "Objective:" in line:
                         try:
-                            obj_value = float(line.split(':')[1].strip())
+                            obj_value = float(line.split(":")[1].strip())
                         except (ValueError, IndexError):
                             pass
                     # MIP format
-                    elif 'OBJECTIVE VALUE' in line:
+                    elif "OBJECTIVE VALUE" in line:
                         try:
                             obj_value = float(line.split()[-1])
                         except (ValueError, IndexError):
@@ -143,7 +162,7 @@ execute_unload 'solution.gdx', xc, obj, eg, el, ee;
         if sol_gdx.exists():
             ws = gams.GamsWorkspace(
                 system_directory=str(self.gams_dir),
-                working_directory=str(self._work_dir)
+                working_directory=str(self._work_dir),
             )
             db = ws.add_database_from_gdx(str(sol_gdx))
 
@@ -212,8 +231,18 @@ execute_unload 'solution.gdx', xc, obj, eg, el, ee;
     def get_objective_value(self) -> float:
         return self._result.objective_value if self._result else None
 
-
     def write_solution(self, path: str | Path) -> None:
         """Write solution to file."""
         # Not implemented - GAMS handles solution internally
         pass
+
+    def get_solution(self) -> "Solution":
+        """Extract solution as nimblend Arrays.
+
+        Requires set_model() to be called first.
+        """
+        from ..solution import extract_solution_python
+
+        if self._model is None:
+            raise RuntimeError("No model set. Call set_model(model) first.")
+        return extract_solution_python(self, self._model)

@@ -68,7 +68,8 @@ def extract_solution(
     if use_lazy:
         if directory is None:
             import tempfile
-            directory = tempfile.mkdtemp(prefix='nimopt_sol_')
+
+            directory = tempfile.mkdtemp(prefix="nimopt_sol_")
         return save_solution(solver, model, directory)
     else:
         return extract_solution_python(solver, model)
@@ -116,6 +117,7 @@ def _lazy_to_csv(sol: LazySolution, directory: Path) -> None:
     """Convert lazy solution to CSV files."""
     try:
         import nimopt_rust
+
         use_rust = True
     except ImportError:
         use_rust = False
@@ -129,8 +131,8 @@ def _lazy_to_csv(sol: LazySolution, directory: Path) -> None:
                 path,
                 var.dims,
                 var.elements,
-                var.values.flatten().astype('float64'),
-                var.duals.flatten().astype('float64'),
+                var.values.flatten().astype("float64"),
+                var.duals.flatten().astype("float64"),
             )
         else:
             _write_var_csv_python(var, path)
@@ -144,7 +146,7 @@ def _lazy_to_csv(sol: LazySolution, directory: Path) -> None:
                 path,
                 con.dims,
                 con.elements,
-                con.duals.flatten().astype('float64'),
+                con.duals.flatten().astype("float64"),
             )
         else:
             _write_con_csv_python(con, path)
@@ -153,9 +155,10 @@ def _lazy_to_csv(sol: LazySolution, directory: Path) -> None:
 def _write_var_csv_python(var, path: str) -> None:
     """Write variable CSV (Python fallback)."""
     import itertools
-    with open(path, 'w') as f:
-        header = var.dims + ['value', 'dual']
-        f.write(','.join(header) + '\n')
+
+    with open(path, "w") as f:
+        header = var.dims + ["value", "dual"]
+        f.write(",".join(header) + "\n")
 
         if not var.dims:
             f.write(f"{var.values.flat[0]},{var.duals.flat[0]}\n")
@@ -164,15 +167,16 @@ def _write_var_csv_python(var, path: str) -> None:
             for idx in itertools.product(*ranges):
                 row = [var.elements[d][idx[d]] for d in range(len(idx))]
                 row.extend([str(var.values[idx]), str(var.duals[idx])])
-                f.write(','.join(str(x) for x in row) + '\n')
+                f.write(",".join(str(x) for x in row) + "\n")
 
 
 def _write_con_csv_python(con, path: str) -> None:
     """Write constraint CSV (Python fallback)."""
     import itertools
-    with open(path, 'w') as f:
-        header = con.dims + ['dual']
-        f.write(','.join(header) + '\n')
+
+    with open(path, "w") as f:
+        header = con.dims + ["dual"]
+        f.write(",".join(header) + "\n")
 
         if not con.dims:
             f.write(f"{con.duals.flat[0]}\n")
@@ -181,17 +185,17 @@ def _write_con_csv_python(con, path: str) -> None:
             for idx in itertools.product(*ranges):
                 row = [con.elements[d][idx[d]] for d in range(len(idx))]
                 row.append(str(con.duals[idx]))
-                f.write(','.join(str(x) for x in row) + '\n')
+                f.write(",".join(str(x) for x in row) + "\n")
 
 
 # Re-export for convenience
 __all__ = [
-    'extract_solution',
-    'get_variable',
-    'get_constraint',
-    'to_csv',
-    'load_solution',
-    'Solution',
-    'LazySolution',
-    'DEFAULT_LAZY_THRESHOLD',
+    "extract_solution",
+    "get_variable",
+    "get_constraint",
+    "to_csv",
+    "load_solution",
+    "Solution",
+    "LazySolution",
+    "DEFAULT_LAZY_THRESHOLD",
 ]

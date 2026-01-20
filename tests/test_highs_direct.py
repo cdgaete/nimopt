@@ -161,3 +161,40 @@ def test_direct_solver_equality():
 
     assert result.status == SolverStatus.OPTIMAL
     assert abs(result.objective_value - 10.0) < 1e-6
+
+
+def test_direct_solver_solution_arrays():
+    """Test solution extraction as nimblend Arrays."""
+    import nimopt as no
+    from nimopt.solvers import HiGHSDirectSolver
+
+    i = no.Set('i', ['a', 'b'])
+    j = no.Set('j', ['x', 'y', 'z'])
+
+    m = no.Model(sense='minimize')
+    v = m.var('v', [i, j], lb=0, ub=10)
+    m.set_objective(no.Sum(i, j, v[i, j]))
+    m.eq('limit', no.Sum(j, v[i, j]) >= 5)
+
+    solver = HiGHSDirectSolver(use_rust=True)
+    solver.load_model(m)
+    solver.solve()
+
+    # Get solution
+    sol = solver.get_solution()
+
+    # Check objective
+    assert sol.objective_value is not None
+    assert abs(sol.objective_value - 10.0) < 1e-6
+
+    # Check variable array
+    v_arr = sol.var('v')
+    assert v_arr.shape == (2, 3)
+    assert v_arr.dims == ['i', 'j']
+    assert list(v_arr.coords['i']) == ['a', 'b']
+    assert list(v_arr.coords['j']) == ['x', 'y', 'z']
+
+    # Check constraint duals
+    limit_arr = sol.con('limit')
+    assert limit_arr.shape == (2,)
+    assert limit_arr.dims == ['i']

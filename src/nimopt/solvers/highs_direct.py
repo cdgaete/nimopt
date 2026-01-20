@@ -11,6 +11,7 @@ from .base import Solver, SolverResult, SolverStatus
 
 if TYPE_CHECKING:
     from ..model import Model
+    from ..solution import Solution
 
 try:
     import highspy
@@ -123,6 +124,18 @@ class HiGHSDirectSolver(Solver):
 
     def get_constraint_duals(self) -> List[float]:
         return self._h.allConstrDuals()
+
+    def get_solution(self) -> "Solution":
+        """Extract solution as nimblend Arrays.
+
+        Returns a Solution object with .var(name) and .con(name) methods
+        that return nimblend Arrays.
+        """
+        from ..solution import extract_solution_python
+
+        if self._model is None:
+            raise RuntimeError("No model loaded")
+        return extract_solution_python(self, self._model)
 
     def write_solution(self, path: str | Path) -> None:
         self._h.writeSolution(str(path), 0)

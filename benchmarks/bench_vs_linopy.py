@@ -1,116 +1,112 @@
-"""Benchmark nimopt vs linopy LP generation."""
+"""Benchmark: nimopt vs linopy."""
 
-import tempfile
+import sys
 import time
 
+import numpy as np
 
-def benchmark_nimopt(n_sources: int, n_destinations: int):
-    """Benchmark nimopt LP generation."""
-    import nimopt as no
-
-    t0 = time.perf_counter()
-
-    # Sets
-    i = no.Set('i', [f'S{k}' for k in range(n_sources)])
-    j = no.Set('j', [f'D{k}' for k in range(n_destinations)])
-
-    # Parameters
-    import numpy as np
-    supply_data = np.random.randint(50, 150, n_sources).tolist()
-    demand_data = np.random.randint(30, 100, n_destinations).tolist()
-    cost_data = np.random.rand(n_sources, n_destinations) * 10
-
-    supply = no.Param('supply', [i], supply_data)
-    demand = no.Param('demand', [j], demand_data)
-    cost = no.Param('cost', [i, j], cost_data)
-
-    # Model
-    m = no.Model(name='transport', sense='minimize')
-    x = m.var('x', [i, j], lb=0)
-    m.eq('supply', no.Sum(j, x[i, j]) <= supply[i])
-    m.eq('demand', no.Sum(i, x[i, j]) >= demand[j])
-    m.objective = no.Sum(i, j, cost[i, j] * x[i, j])
-
-    build_time = time.perf_counter() - t0
-
-    # Write LP
-    with tempfile.NamedTemporaryFile(suffix='.lp', delete=False) as f:
-        lp_file = f.name
-
-    t0 = time.perf_counter()
-    m.to_lp(lp_file)
-    write_time = time.perf_counter() - t0
-
-    return build_time, write_time
+# Suppress linopy solver output
+import os
+os.environ['HIGHS_OUTPUT'] = '0'
 
 
-def benchmark_linopy(n_sources: int, n_destinations: int):
-    """Benchmark linopy LP generation."""
+def bench_linopy(n_src, n_dst, supply_vals, demand_vals, cost_vals, n_runs=3):
+    """Benchmark linopy."""
     import linopy
-    import numpy as np
-    import pandas as pd
     import xarray as xr
 
-    t0 = time.perf_counter()
+    sources = [f's{i}' for i in range(n_src)]
+    dests = [f'd{j}' for j in range(n_dst)]
 
-    sources = [f'S{k}' for k in range(n_sources)]
-    dests = [f'D{k}' for k in range(n_destinations)]
-
-    supply_data = np.random.randint(50, 150, n_sources)
-    demand_data = np.random.randint(30, 100, n_destinations)
-    cost_data = np.random.rand(n_sources, n_destinations) * 10
-
-    m = linopy.Model()
-
-    x = m.add_variables(lower=0, coords=[sources, dests], name='x')
-
-    m.add_constraints(
-        x.sum('dim_1') <= pd.Series(supply_data, index=sources),
-        name='supply'
-    )
-    m.add_constraints(
-        x.sum('dim_0') >= pd.Series(demand_data, index=dests),
-        name='demand'
-    )
-
-    cost = xr.DataArray(cost_data, coords=[sources, dests], dims=['dim_0', 'dim_1'])
-    m.add_objective((cost * x).sum())
-
-    build_time = time.perf_counter() - t0
-
-    with tempfile.NamedTemporaryFile(suffix='.lp', delete=False) as f:
-        lp_file = f.name
-
-    t0 = time.perf_counter()
-    m.to_file(lp_file)
-    write_time = time.perf_counter() - t0
-
-    return build_time, write_time
+    times = []
+    for _ in range(n_runs):
+        t0 = time.perf_counter()
+        m = linopy.Model()
+        x = m.add_variables(lower=0, coords=[sources, dests], name='x')
+        supply = xr.DataArray(supply_vals, coords=[sources], dims=['dim_0'])
+        demand = xr.DataArray(demand_vals, coords=[dests], dims=['dim_1'])
+        cost = xr.DataArray(cost_vals, coords=[sources, dests],
+                           dims=['dim_0', 'dim_1'])
+        m.add_objective((cost * x).sum())
+        m.add_constraints(x.sum('dim_1') <= supply, name='supply')
+        m.add_constraints(x.sum('dim_0') >= demand, name='demand')
+        m.solve(solver_name='highs', log_fn=None, io_api='direct')
+        times.append(time.perf_counter() - t0)
+    return np.median(times)
 
 
-def run_benchmark(sizes):
-    """Run benchmarks for different sizes."""
-    print(f"{'Size':<15} {'nimopt build':<15} {'nimopt write':<15} "
-          f"{'linopy build':<15} {'linopy write':<15}")
-    print("=" * 75)
+def bench_nimopt(n_src, n_dst, supply_vals, demand_vals, cost_vals, n_runs=3):
+    """Benchmark nimopt with Rust-accelerated direct solver."""
+    import nimopt as no
+    from nimopt.solvers import HiGHSDirectSolver
 
-    for n in sizes:
-        n_vars = n * n
+    sources = [f's{i}' for i in range(n_src)]
+    dests = [f'd{j}' for j in range(n_dst)]
 
-        # nimopt
-        nimopt_build, nimopt_write = benchmark_nimopt(n, n)
+    times = []
+    for _ in range(n_runs):
+        t0 = time.perf_counter()
+        i = no.Set('i', sources)
+        j = no.Set('j', dests)
+        supply_p = no.Param('supply', [i], supply_vals.tolist())
+        demand_p = no.Param('demand', [j], demand_vals.tolist())
+        cost_p = no.Param('cost', [i, j], cost_vals.tolist())
 
-        # linopy
-        linopy_build, linopy_write = benchmark_linopy(n, n)
+        m = no.Model(sense='minimize')
+        x = m.var('x', [i, j], lb=0)
+        m.set_objective(no.Sum(i, j, cost_p[i, j] * x[i, j]))
+        m.eq('supply', no.Sum(j, x[i, j]) <= supply_p[i])
+        m.eq('demand', no.Sum(i, x[i, j]) >= demand_p[j])
 
-        print(f"{n}x{n} ({n_vars:,})"
-              f"  {nimopt_build*1000:>10.1f}ms"
-              f"  {nimopt_write*1000:>12.1f}ms"
-              f"  {linopy_build*1000:>12.1f}ms"
-              f"  {linopy_write*1000:>12.1f}ms")
+        solver = HiGHSDirectSolver(use_rust=True)
+        solver.load_model(m)
+        solver.solve()
+        times.append(time.perf_counter() - t0)
+    return np.median(times)
+
+
+def main():
+    print("=" * 70)
+    print("Benchmark: nimopt vs linopy (transport problem)")
+    print("=" * 70)
+
+    sizes = [(30, 30), (100, 100), (200, 200), (300, 300), (400, 400)]
+
+    print()
+    print(f"{'Size':<12} {'Vars':<10} {'linopy':<15} {'nimopt':<15} {'Speedup':<10}")
+    print("-" * 70)
+
+    for n_src, n_dst in sizes:
+        np.random.seed(42)
+
+        supply_vals = np.random.uniform(100, 1000, n_src)
+        demand_vals = np.random.uniform(50, 200, n_dst)
+        total_supply = supply_vals.sum()
+        total_demand = demand_vals.sum()
+        demand_vals = demand_vals * total_supply / total_demand * 0.9
+        cost_vals = np.random.uniform(1, 10, (n_src, n_dst))
+
+        # Suppress output during benchmarks
+        old_stdout = sys.stdout
+        sys.stdout = open(os.devnull, 'w')
+        try:
+            lp_time = bench_linopy(n_src, n_dst, supply_vals, demand_vals,
+                                   cost_vals)
+            no_time = bench_nimopt(n_src, n_dst, supply_vals, demand_vals,
+                                   cost_vals)
+        finally:
+            sys.stdout = old_stdout
+
+        n_vars = n_src * n_dst
+        speedup = lp_time / no_time
+        print(f"{n_src}x{n_dst:<8} {n_vars:<10} {lp_time*1000:>10.1f} ms   "
+              f"{no_time*1000:>10.1f} ms   {speedup:>6.1f}x")
+
+    print("-" * 70)
+    print()
+    print("Note: Times include model building + solving")
+    print("=" * 70)
 
 
 if __name__ == "__main__":
-    print("LP Generation Benchmark: nimopt vs linopy")
-    print()
-    run_benchmark([10, 50, 100, 200, 300])
+    main()

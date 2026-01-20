@@ -1,8 +1,13 @@
 """HiGHS solver wrapper."""
 
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 
 from .base import Solver, SolverResult, SolverStatus
+
+if TYPE_CHECKING:
+    from ..model import Model
+    from ..solution import Solution
 
 
 class HiGHSSolver(Solver):
@@ -11,8 +16,10 @@ class HiGHSSolver(Solver):
     def __init__(self):
         try:
             import highspy
+
             self._h = highspy.Highs()
             self._h.setOptionValue("output_flag", False)
+            self._model: Optional[Model] = None
         except ImportError:
             raise ImportError("highspy not installed. Run: pip install highspy")
 
@@ -23,6 +30,10 @@ class HiGHSSolver(Solver):
     def read_mps(self, path: str | Path) -> None:
         """Load model from MPS file."""
         self._h.readModel(str(path))
+
+    def set_model(self, model: "Model") -> None:
+        """Store model reference for solution extraction."""
+        self._model = model
 
     def set_option(self, name: str, value) -> None:
         """Set solver option."""
@@ -88,3 +99,14 @@ class HiGHSSolver(Solver):
     def write_solution(self, path: str | Path) -> None:
         """Write solution to file."""
         self._h.writeSolution(str(path), 0)
+
+    def get_solution(self) -> "Solution":
+        """Extract solution as nimblend Arrays.
+
+        Requires set_model() to be called first.
+        """
+        from ..solution import extract_solution_python
+
+        if self._model is None:
+            raise RuntimeError("No model set. Call set_model(model) first.")
+        return extract_solution_python(self, self._model)

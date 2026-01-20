@@ -8,6 +8,7 @@ import numpy as np
 
 try:
     import nimopt_rust
+
     HAS_RUST = True
 except ImportError:
     HAS_RUST = False
@@ -19,6 +20,7 @@ def write_lp_rust(model, filename: str) -> None:
     """Write LP using Rust-accelerated functions."""
     if not HAS_RUST:
         from .lp import write_lp
+
         return write_lp(model, filename)
 
     nimopt_rust.write_lp_header(filename, model.name, model.sense)
@@ -60,7 +62,7 @@ def _write_objective_fast(model, filename: str) -> None:
             # Scalar variable - use old method
             if isinstance(coef, (int, float)):
                 c = float(coef)
-            elif hasattr(coef, 'values'):
+            elif hasattr(coef, "values"):
                 c = float(coef.values.flat[0])
             else:
                 c = float(coef)
@@ -144,13 +146,18 @@ def _write_constraints_rust(model, filename: str):
             )
         elif _can_use_sum_constraints(lhs_terms, free_sets):
             _write_sum_constraints_fast(
-                filename, eq_name, sense, lhs_terms,
-                free_sets, rhs_const, con.rhs
+                filename, eq_name, sense, lhs_terms, free_sets, rhs_const, con.rhs
             )
         else:
             _write_batch_constraints_rust(
-                filename, eq_name, sense, lhs_terms,
-                free_sets, rhs_const, con.rhs, model
+                filename,
+                eq_name,
+                sense,
+                lhs_terms,
+                free_sets,
+                rhs_const,
+                con.rhs,
+                model,
             )
 
 
@@ -203,9 +210,15 @@ def _write_sum_constraints_fast(
         rhs_flat = np.full(n_free, rhs_const, dtype=np.float64)
 
     nimopt_rust.write_sum_constraints(
-        filename, eq_name, sense, var.name,
-        var_dim_elements, is_free_dim,
-        coef_flat, coef_shape, rhs_flat
+        filename,
+        eq_name,
+        sense,
+        var.name,
+        var_dim_elements,
+        is_free_dim,
+        coef_flat,
+        coef_shape,
+        rhs_flat,
     )
 
 
@@ -257,7 +270,10 @@ def _write_batch_constraints_rust(
         all_rhs.append(rv)
 
     nimopt_rust.write_coef_constraints(
-        filename, eq_name, sense, all_var_names,
+        filename,
+        eq_name,
+        sense,
+        all_var_names,
         np.array(all_coefs, dtype=np.float64),
         np.array(all_rhs, dtype=np.float64),
         vars_per_con,
@@ -305,8 +321,12 @@ def _write_single_constraint_fast(
         rhs = rhs_const
 
     nimopt_rust.write_single_constraint(
-        filename, eq_name, sense,
-        all_var_names, np.array(all_coefs, dtype=np.float64), rhs
+        filename,
+        eq_name,
+        sense,
+        all_var_names,
+        np.array(all_coefs, dtype=np.float64),
+        rhs,
     )
 
 
@@ -369,7 +389,6 @@ def _negate_coef(coef):
     return coef
 
 
-
 def _write_bounds_fast(model, filename):
     """Write bounds using Rust for variable name generation."""
     # Write header
@@ -393,6 +412,7 @@ def _write_bounds_fast(model, filename):
                     f.write(f" {var.name} >= {var.lb}\n")
                 else:
                     f.write(f" {var.lb} <= {var.name} <= {var.ub}\n")
+
 
 def _get_bounds_data(model):
     """Get all variable names and bounds."""

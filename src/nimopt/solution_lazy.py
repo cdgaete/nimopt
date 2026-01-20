@@ -18,6 +18,7 @@ class LazySolution:
 
     Data stays on disk until accessed. Efficient for large models.
     """
+
     directory: Path
     objective_value: Optional[float] = None
     _var_meta: dict = field(default_factory=dict)
@@ -54,6 +55,7 @@ class LazySolution:
 @dataclass
 class LazyVariable:
     """Lazy-loaded variable solution."""
+
     directory: Path
     name: str
     meta: dict
@@ -62,22 +64,22 @@ class LazyVariable:
 
     @property
     def dims(self) -> list[str]:
-        return self.meta['dims']
+        return self.meta["dims"]
 
     @property
     def elements(self) -> list[list]:
-        return self.meta['elements']
+        return self.meta["elements"]
 
     @property
     def shape(self) -> tuple:
-        return tuple(self.meta['shape'])
+        return tuple(self.meta["shape"])
 
     @property
     def values(self) -> np.ndarray:
         """Load values on first access (memory-mapped)."""
         if self._values is None:
             path = self.directory / f"var_{self.name}_values.npy"
-            self._values = np.load(path, mmap_mode='r').reshape(self.shape)
+            self._values = np.load(path, mmap_mode="r").reshape(self.shape)
         return self._values
 
     @property
@@ -85,7 +87,7 @@ class LazyVariable:
         """Load duals on first access (memory-mapped)."""
         if self._duals is None:
             path = self.directory / f"var_{self.name}_duals.npy"
-            self._duals = np.load(path, mmap_mode='r').reshape(self.shape)
+            self._duals = np.load(path, mmap_mode="r").reshape(self.shape)
         return self._duals
 
     def __getitem__(self, idx):
@@ -96,6 +98,7 @@ class LazyVariable:
 @dataclass
 class LazyConstraint:
     """Lazy-loaded constraint solution."""
+
     directory: Path
     name: str
     meta: dict
@@ -103,21 +106,21 @@ class LazyConstraint:
 
     @property
     def dims(self) -> list[str]:
-        return self.meta['dims']
+        return self.meta["dims"]
 
     @property
     def elements(self) -> list[list]:
-        return self.meta['elements']
+        return self.meta["elements"]
 
     @property
     def shape(self) -> tuple:
-        return tuple(self.meta['shape'])
+        return tuple(self.meta["shape"])
 
     @property
     def duals(self) -> np.ndarray:
         if self._duals is None:
             path = self.directory / f"con_{self.name}_duals.npy"
-            self._duals = np.load(path, mmap_mode='r').reshape(self.shape)
+            self._duals = np.load(path, mmap_mode="r").reshape(self.shape)
         return self._duals
 
     def __getitem__(self, idx):
@@ -139,6 +142,7 @@ def save_solution(
     if use_rust:
         try:
             import nimopt_rust
+
             write_npy = nimopt_rust.write_npy_f64
         except ImportError:
             pass
@@ -162,8 +166,8 @@ def save_solution(
         # Save arrays
         vals_path = str(directory / f"var_{var_name}_values.npy")
         duals_path = str(directory / f"var_{var_name}_duals.npy")
-        vals_slice = var_values[var_offset:var_offset + size]
-        duals_slice = var_duals[var_offset:var_offset + size]
+        vals_slice = var_values[var_offset : var_offset + size]
+        duals_slice = var_duals[var_offset : var_offset + size]
 
         if write_npy:
             write_npy(vals_path, np.ascontiguousarray(vals_slice))
@@ -173,7 +177,7 @@ def save_solution(
             np.save(duals_path, duals_slice)
         var_offset += size
 
-        var_meta[var_name] = {'dims': dims, 'elements': elements, 'shape': shape}
+        var_meta[var_name] = {"dims": dims, "elements": elements, "shape": shape}
 
     # Save constraints
     con_offset = 0
@@ -190,7 +194,7 @@ def save_solution(
             elements = [list(s.elements) for s in free_sets]
 
         duals_path = str(directory / f"con_{con_name}_duals.npy")
-        duals_slice = con_duals[con_offset:con_offset + size]
+        duals_slice = con_duals[con_offset : con_offset + size]
 
         if write_npy:
             write_npy(duals_path, np.ascontiguousarray(duals_slice))
@@ -198,23 +202,23 @@ def save_solution(
             np.save(duals_path, duals_slice)
         con_offset += size
 
-        con_meta[con_name] = {'dims': dims, 'elements': elements, 'shape': shape}
+        con_meta[con_name] = {"dims": dims, "elements": elements, "shape": shape}
 
     # Save metadata
     obj_val = None
-    if hasattr(solver, 'get_objective_value'):
+    if hasattr(solver, "get_objective_value"):
         obj_val = solver.get_objective_value()
     meta = {
-        'objective_value': obj_val,
-        'variables': var_meta,
-        'constraints': con_meta,
+        "objective_value": obj_val,
+        "variables": var_meta,
+        "constraints": con_meta,
     }
-    with open(directory / 'meta.json', 'w') as f:
+    with open(directory / "meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
     return LazySolution(
         directory=directory,
-        objective_value=meta['objective_value'],
+        objective_value=meta["objective_value"],
         _var_meta=var_meta,
         _con_meta=con_meta,
     )
@@ -224,12 +228,12 @@ def load_solution(directory: str | Path) -> LazySolution:
     """Load a saved solution (lazy - no data loaded until accessed)."""
     directory = Path(directory)
 
-    with open(directory / 'meta.json') as f:
+    with open(directory / "meta.json") as f:
         meta = json.load(f)
 
     return LazySolution(
         directory=directory,
-        objective_value=meta.get('objective_value'),
-        _var_meta=meta['variables'],
-        _con_meta=meta['constraints'],
+        objective_value=meta.get("objective_value"),
+        _var_meta=meta["variables"],
+        _con_meta=meta["constraints"],
     )

@@ -9,6 +9,7 @@ from typing import Optional
 
 class SolverStatus(Enum):
     """Solver termination status."""
+
     OPTIMAL = "optimal"
     INFEASIBLE = "infeasible"
     UNBOUNDED = "unbounded"
@@ -21,6 +22,7 @@ class SolverStatus(Enum):
 @dataclass
 class SolverResult:
     """Result from solver execution."""
+
     status: SolverStatus
     objective_value: Optional[float] = None
     solve_time: float = 0.0

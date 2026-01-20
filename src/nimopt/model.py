@@ -86,11 +86,13 @@ class Model:
         if use_rust:
             try:
                 from .writers.lp_rust import write_lp_rust
+
                 write_lp_rust(self, filename)
                 return
             except ImportError:
                 pass
         from .writers.lp import write_lp
+
         write_lp(self, filename)
 
     def __repr__(self):
