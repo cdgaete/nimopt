@@ -35,10 +35,16 @@ Repository = "https://github.com/cdgaete/nimopt"
 Issues = "https://github.com/cdgaete/nimopt/issues"
 
 [project.optional-dependencies]
+highs = ["highspy>=1.5.0"]
 dev = [
     "pytest>=7.0",
     "ruff>=0.1.0",
 ]
+test = [
+    "pytest>=7.0",
+    "highspy>=1.5.0",
+]
+all = ["highspy>=1.5.0"]
 
 [tool.ruff]
 line-length = 88
