@@ -1,6 +1,6 @@
 //! Rust accelerated LP writer for nimopt
 
-use numpy::PyReadonlyArray1;
+use numpy::{PyReadonlyArray1, PyArray1, ToPyArray};
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::fs::File;
@@ -582,6 +582,380 @@ fn write_con_solution_csv(
     Ok(())
 }
 
+/// Build CSR matrix for sum constraints - efficient version
+/// 
+/// Takes var_start_idx to compute final indices directly without string mapping.
+/// This is the fast path for direct HiGHS solving.
+///
+/// Parameters:
+/// - var_start_idx: starting index of this variable in the global variable array
+/// - dim_sizes: size of each variable dimension (e.g., [2, 3] for 2x3 variable)
+/// - is_free_dim: which dims iterate over constraints (true) vs sum within (false)
+/// - coef_flat: flattened coefficient array (or None for all 1s)
+/// - rhs_flat: RHS values, one per constraint
+/// - sense: constraint sense ("<=" -> -inf to rhs, ">=" -> rhs to inf, "=" -> rhs to rhs)
+///
+/// Returns: (indptr, indices, data, row_lower, row_upper)
+#[pyfunction]
+#[pyo3(signature = (var_start_idx, dim_sizes, is_free_dim, coef_flat, rhs_flat, sense))]
+fn build_sum_csr_fast(
+    py: Python<'_>,
+    var_start_idx: i32,
+    dim_sizes: Vec<usize>,
+    is_free_dim: Vec<bool>,
+    coef_flat: Option<PyReadonlyArray1<'_, f64>>,
+    rhs_flat: PyReadonlyArray1<'_, f64>,
+    sense: &str,
+) -> PyResult<(
+    Py<PyArray1<i32>>,        // indptr
+    Py<PyArray1<i32>>,        // indices  
+    Py<PyArray1<f64>>,        // data
+    Py<PyArray1<f64>>,        // row_lower
+    Py<PyArray1<f64>>,        // row_upper
+)> {
+    let rhs_vals = rhs_flat.as_slice()?;
+    let coef_data: Option<Vec<f64>> = coef_flat.map(|c| c.as_slice().unwrap().to_vec());
+    
+    let ndim = dim_sizes.len();
+    
+    // Compute strides for variable indexing (row-major order)
+    let mut var_strides = vec![1usize; ndim];
+    for i in (0..ndim.saturating_sub(1)).rev() {
+        var_strides[i] = var_strides[i + 1] * dim_sizes[i + 1];
+    }
+    
+    // Separate free (constraint) and sum dimensions
+    let mut free_dims: Vec<usize> = Vec::new();
+    let mut sum_dims: Vec<usize> = Vec::new();
+    let mut n_free = 1usize;
+    let mut n_sum = 1usize;
+    
+    for (i, &is_free) in is_free_dim.iter().enumerate() {
+        if is_free {
+            free_dims.push(i);
+            n_free *= dim_sizes[i];
+        } else {
+            sum_dims.push(i);
+            n_sum *= dim_sizes[i];
+        }
+    }
+    
+    let n_cons = n_free;
+    let vars_per_con = n_sum;
+    let nnz = n_cons * vars_per_con;
+    
+    // Pre-allocate CSR arrays
+    let mut indptr = vec![0i32; n_cons + 1];
+    let mut indices = vec![0i32; nnz];
+    let mut data = vec![0f64; nnz];
+    let mut row_lower = vec![0f64; n_cons];
+    let mut row_upper = vec![0f64; n_cons];
+    
+    // Fill CSR arrays in parallel
+    py.allow_threads(|| {
+        // Build free dimension strides
+        let mut free_strides = vec![1usize; free_dims.len()];
+        for i in (0..free_dims.len().saturating_sub(1)).rev() {
+            free_strides[i] = free_strides[i + 1] * dim_sizes[free_dims[i + 1]];
+        }
+        
+        // Build sum dimension strides  
+        let mut sum_strides = vec![1usize; sum_dims.len()];
+        for i in (0..sum_dims.len().saturating_sub(1)).rev() {
+            sum_strides[i] = sum_strides[i + 1] * dim_sizes[sum_dims[i + 1]];
+        }
+        
+        (0..n_cons).into_par_iter().for_each(|con_idx| {
+            // Decode con_idx into free dimension indices
+            let mut free_idx = vec![0usize; free_dims.len()];
+            let mut remaining = con_idx;
+            for (fi, &stride) in free_strides.iter().enumerate() {
+                free_idx[fi] = remaining / stride;
+                remaining %= stride;
+            }
+            
+            let row_start = con_idx * vars_per_con;
+            
+            for sum_idx in 0..vars_per_con {
+                // Decode sum_idx into sum dimension indices
+                let mut sum_indices = vec![0usize; sum_dims.len()];
+                let mut rem = sum_idx;
+                for (si, &stride) in sum_strides.iter().enumerate() {
+                    sum_indices[si] = rem / stride;
+                    rem %= stride;
+                }
+                
+                // Build full index and compute flat variable index
+                let mut full_idx = vec![0usize; ndim];
+                let mut fi = 0;
+                let mut si = 0;
+                for d in 0..ndim {
+                    if is_free_dim[d] {
+                        full_idx[d] = free_idx[fi];
+                        fi += 1;
+                    } else {
+                        full_idx[d] = sum_indices[si];
+                        si += 1;
+                    }
+                }
+                
+                // Compute flat variable index using strides
+                let mut var_flat_idx = 0usize;
+                for (d, &idx) in full_idx.iter().enumerate() {
+                    var_flat_idx += idx * var_strides[d];
+                }
+                
+                // Get coefficient
+                let c = if let Some(ref coef) = coef_data {
+                    coef.get(var_flat_idx).copied().unwrap_or(1.0)
+                } else {
+                    1.0
+                };
+                
+                // Store in CSR
+                let pos = row_start + sum_idx;
+                unsafe {
+                    let indices_ptr = indices.as_ptr() as *mut i32;
+                    let data_ptr = data.as_ptr() as *mut f64;
+                    *indices_ptr.add(pos) = var_start_idx + var_flat_idx as i32;
+                    *data_ptr.add(pos) = c;
+                }
+            }
+        });
+        
+        // Fill indptr (sequential)
+        for i in 0..=n_cons {
+            indptr[i] = (i * vars_per_con) as i32;
+        }
+        
+        // Fill bounds
+        for (i, rhs) in rhs_vals.iter().enumerate() {
+            match sense {
+                "<=" => {
+                    row_lower[i] = f64::NEG_INFINITY;
+                    row_upper[i] = *rhs;
+                }
+                ">=" => {
+                    row_lower[i] = *rhs;
+                    row_upper[i] = f64::INFINITY;
+                }
+                _ => {
+                    row_lower[i] = *rhs;
+                    row_upper[i] = *rhs;
+                }
+            }
+        }
+    });
+    
+    Ok((
+        indptr.to_pyarray_bound(py).into(),
+        indices.to_pyarray_bound(py).into(),
+        data.to_pyarray_bound(py).into(),
+        row_lower.to_pyarray_bound(py).into(),
+        row_upper.to_pyarray_bound(py).into(),
+    ))
+}
+
+/// Build CSR matrix for sum constraints (e.g., Sum(j, x[i,j]) <= a[i])
+/// 
+/// This builds the constraint matrix directly in Rust, returning arrays
+/// that can be passed to HiGHS without writing LP files.
+///
+/// Parameters:
+/// - var_name: base variable name (e.g., "x")
+/// - var_dim_elements: elements for each variable dimension
+/// - is_free_dim: which dims iterate over constraints (true) vs sum within (false)
+/// - coef_flat: flattened coefficient array (or None for all 1s)
+/// - coef_shape: shape of coefficient array
+/// - rhs_flat: RHS values, one per constraint
+/// - sense: constraint sense ("<=" -> -inf to rhs, ">=" -> rhs to inf, "=" -> rhs to rhs)
+///
+/// Returns: (var_names, indptr, indices, data, row_lower, row_upper)
+#[pyfunction]
+#[pyo3(signature = (var_name, var_dim_elements, is_free_dim, coef_flat, coef_shape, rhs_flat, sense))]
+fn build_sum_constraint_csr(
+    py: Python<'_>,
+    var_name: &str,
+    var_dim_elements: Vec<Vec<String>>,
+    is_free_dim: Vec<bool>,
+    coef_flat: Option<PyReadonlyArray1<'_, f64>>,
+    coef_shape: Vec<usize>,
+    rhs_flat: PyReadonlyArray1<'_, f64>,
+    sense: &str,
+) -> PyResult<(
+    Vec<String>,              // var_names
+    Py<PyArray1<i32>>,        // indptr
+    Py<PyArray1<i32>>,        // indices  
+    Py<PyArray1<f64>>,        // data
+    Py<PyArray1<f64>>,        // row_lower
+    Py<PyArray1<f64>>,        // row_upper
+)> {
+    let rhs_vals = rhs_flat.as_slice()?;
+    let coef_data: Option<Vec<f64>> = coef_flat.map(|c| c.as_slice().unwrap().to_vec());
+    
+    let ndim = var_dim_elements.len();
+    
+    // Compute strides for coefficient indexing
+    let mut coef_strides = vec![1usize; coef_shape.len()];
+    for i in (0..coef_shape.len().saturating_sub(1)).rev() {
+        coef_strides[i] = coef_strides[i + 1] * coef_shape[i + 1];
+    }
+    
+    // Separate free (constraint) and sum dimensions
+    let mut free_dims: Vec<usize> = Vec::new();
+    let mut sum_dims: Vec<usize> = Vec::new();
+    for (i, &is_free) in is_free_dim.iter().enumerate() {
+        if is_free {
+            free_dims.push(i);
+        } else {
+            sum_dims.push(i);
+        }
+    }
+    
+    // Generate all variable names
+    let all_combos = cartesian_product_ref(&var_dim_elements);
+    let n_vars = all_combos.len();
+    let var_names: Vec<String> = all_combos.iter().map(|combo| {
+        let mut name = var_name.to_string();
+        for (d, &idx) in combo.iter().enumerate() {
+            name.push('_');
+            name.push_str(&var_dim_elements[d][idx]);
+        }
+        name
+    }).collect();
+    
+    // Build variable index map (combo -> flat index)
+    let mut var_idx_map: std::collections::HashMap<Vec<usize>, usize> = 
+        std::collections::HashMap::with_capacity(n_vars);
+    for (i, combo) in all_combos.iter().enumerate() {
+        var_idx_map.insert(combo.clone(), i);
+    }
+    
+    // Generate free (constraint) combinations
+    let free_elements: Vec<Vec<String>> = free_dims.iter()
+        .map(|&d| var_dim_elements[d].clone())
+        .collect();
+    let free_combos = cartesian_product_ref(&free_elements);
+    let n_cons = free_combos.len();
+    
+    // Generate sum combinations
+    let sum_elements: Vec<&Vec<String>> = sum_dims.iter()
+        .map(|&d| &var_dim_elements[d])
+        .collect();
+    let sum_combos = cartesian_product(&sum_elements);
+    let vars_per_con = sum_combos.len();
+    
+    // Pre-allocate CSR arrays
+    let nnz = n_cons * vars_per_con;
+    let mut indptr = vec![0i32; n_cons + 1];
+    let mut indices = vec![0i32; nnz];
+    let mut data = vec![0f64; nnz];
+    let mut row_lower = vec![0f64; n_cons];
+    let mut row_upper = vec![0f64; n_cons];
+    
+    // Fill CSR arrays in parallel
+    py.allow_threads(|| {
+        free_combos.par_iter().enumerate().for_each(|(con_idx, free_combo)| {
+            let row_start = con_idx * vars_per_con;
+            
+            for (j, sum_combo) in sum_combos.iter().enumerate() {
+                // Build full index in variable dimension order
+                let mut full_idx = vec![0usize; ndim];
+                let mut fi = 0;
+                let mut si = 0;
+                for d in 0..ndim {
+                    if is_free_dim[d] {
+                        full_idx[d] = free_combo[fi];
+                        fi += 1;
+                    } else {
+                        full_idx[d] = sum_combo[si];
+                        si += 1;
+                    }
+                }
+                
+                // Get variable index
+                let var_idx = *var_idx_map.get(&full_idx).unwrap();
+                
+                // Get coefficient
+                let c = if let Some(ref coef) = coef_data {
+                    let mut flat_idx = 0;
+                    for (d, &idx) in full_idx.iter().enumerate() {
+                        if d < coef_strides.len() {
+                            flat_idx += idx * coef_strides[d];
+                        }
+                    }
+                    coef.get(flat_idx).copied().unwrap_or(1.0)
+                } else {
+                    1.0
+                };
+                
+                // Store in CSR (note: indices/data are pre-sized, so direct write)
+                let pos = row_start + j;
+                // SAFETY: We pre-sized the arrays and each thread writes to disjoint positions
+                unsafe {
+                    let indices_ptr = indices.as_ptr() as *mut i32;
+                    let data_ptr = data.as_ptr() as *mut f64;
+                    *indices_ptr.add(pos) = var_idx as i32;
+                    *data_ptr.add(pos) = c;
+                }
+            }
+        });
+        
+        // Fill indptr and bounds (sequential, fast)
+        for i in 0..=n_cons {
+            indptr[i] = (i * vars_per_con) as i32;
+        }
+        
+        for (i, rhs) in rhs_vals.iter().enumerate() {
+            match sense {
+                "<=" => {
+                    row_lower[i] = f64::NEG_INFINITY;
+                    row_upper[i] = *rhs;
+                }
+                ">=" => {
+                    row_lower[i] = *rhs;
+                    row_upper[i] = f64::INFINITY;
+                }
+                _ => {
+                    row_lower[i] = *rhs;
+                    row_upper[i] = *rhs;
+                }
+            }
+        }
+    });
+    
+    Ok((
+        var_names,
+        indptr.to_pyarray_bound(py).into(),
+        indices.to_pyarray_bound(py).into(),
+        data.to_pyarray_bound(py).into(),
+        row_lower.to_pyarray_bound(py).into(),
+        row_upper.to_pyarray_bound(py).into(),
+    ))
+}
+
+/// Generate variable names efficiently in Rust
+/// Returns list of names like ["x_a_1", "x_a_2", "x_b_1", "x_b_2"]
+#[pyfunction]
+fn generate_var_names(
+    py: Python<'_>,
+    var_name: &str,
+    dim_elements: Vec<Vec<String>>,
+) -> PyResult<Vec<String>> {
+    let names: Vec<String> = py.allow_threads(|| {
+        let combos = cartesian_product_ref(&dim_elements);
+        combos.into_par_iter().map(|combo| {
+            let mut name = var_name.to_string();
+            for (d, idx) in combo.iter().enumerate() {
+                name.push('_');
+                name.push_str(&dim_elements[d][*idx]);
+            }
+            name
+        }).collect()
+    });
+    Ok(names)
+}
+
 #[pymodule]
 fn nimopt_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(write_lp_header, m)?)?;
@@ -598,5 +972,8 @@ fn nimopt_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(write_var_solution_csv, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_solution_csv, m)?)?;
     m.add_function(wrap_pyfunction!(write_npy_f64, m)?)?;
+    m.add_function(wrap_pyfunction!(build_sum_constraint_csr, m)?)?;
+    m.add_function(wrap_pyfunction!(build_sum_csr_fast, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_var_names, m)?)?;
     Ok(())
 }

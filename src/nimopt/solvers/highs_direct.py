@@ -1,0 +1,617 @@
+"""Direct HiGHS solver interface - no LP file generation."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+
+import numpy as np
+
+from .base import Solver, SolverResult, SolverStatus
+
+if TYPE_CHECKING:
+    from ..model import Model
+
+try:
+    import highspy
+
+    HAS_HIGHS = True
+except ImportError:
+    HAS_HIGHS = False
+
+try:
+    import nimopt_rust
+
+    HAS_RUST = True
+except ImportError:
+    HAS_RUST = False
+
+
+class HiGHSDirectSolver(Solver):
+    """Direct HiGHS solver - builds model in memory without LP file."""
+
+    def __init__(self, use_rust: bool = True):
+        if not HAS_HIGHS:
+            raise ImportError("highspy not installed. Run: pip install highspy")
+        self._h = highspy.Highs()
+        self._h.setOptionValue("output_flag", False)
+        self._model: Optional[Model] = None
+        self._var_names: Optional[List[str]] = None
+        self._con_names: Optional[List[str]] = None
+        self._var_info: Optional[List] = None  # For lazy name generation
+        self._use_rust = use_rust and HAS_RUST
+
+    def read_lp(self, path: str | Path) -> None:
+        self._h.readModel(str(path))
+
+    def read_mps(self, path: str | Path) -> None:
+        self._h.readModel(str(path))
+
+    def set_option(self, name: str, value) -> None:
+        self._h.setOptionValue(name, value)
+
+    def load_model(self, model: "Model") -> None:
+        self._model = model
+        if self._use_rust:
+            matrices = _build_matrices_rust_fast(model)
+        else:
+            matrices = _build_matrices(model)
+
+        self._var_names = matrices.get("var_names")
+        self._con_names = matrices.get("con_names")
+        self._var_info = matrices.get("var_info")
+
+        n_vars = matrices["n_vars"]
+        self._h.addVars(n_vars, matrices["lb"], matrices["ub"])
+        self._h.changeColsCost(n_vars, np.arange(n_vars, dtype=np.int32), matrices["c"])
+
+        if model.sense == "maximize":
+            self._h.changeObjectiveSense(highspy.ObjSense.kMaximize)
+
+        if matrices["n_cons"] > 0:
+            self._h.addRows(
+                matrices["n_cons"],
+                matrices["row_lower"],
+                matrices["row_upper"],
+                matrices["nnz"],
+                matrices["indptr"],
+                matrices["indices"],
+                matrices["data"],
+            )
+
+    def solve(self) -> SolverResult:
+        self._h.run()
+        status = self._map_status(self._h.getModelStatus())
+        info = self._h.getInfo()
+        return SolverResult(
+            status=status,
+            objective_value=info.objective_function_value,
+            solve_time=self._h.getRunTime(),
+            iterations=info.simplex_iteration_count,
+            nodes=info.mip_node_count,
+            gap=info.mip_gap if info.mip_node_count > 0 else None,
+        )
+
+    def _map_status(self, highs_status) -> SolverStatus:
+        s = str(highs_status)
+        if "Optimal" in s:
+            return SolverStatus.OPTIMAL
+        elif "Infeasible" in s:
+            return SolverStatus.INFEASIBLE
+        elif "Unbounded" in s:
+            return SolverStatus.UNBOUNDED
+        elif "Time" in s:
+            return SolverStatus.TIME_LIMIT
+        elif "Iteration" in s:
+            return SolverStatus.ITERATION_LIMIT
+        return SolverStatus.UNKNOWN
+
+    def get_variable_names(self) -> List[str]:
+        """Get variable names (generated lazily if needed)."""
+        if self._var_names is None and self._var_info is not None:
+            self._var_names = _generate_var_names_from_info(self._var_info)
+        return self._var_names or []
+
+    def get_constraint_names(self) -> List[str]:
+        return self._con_names or []
+
+    def get_variable_values(self) -> List[float]:
+        return self._h.allVariableValues()
+
+    def get_variable_duals(self) -> List[float]:
+        return self._h.allVariableDuals()
+
+    def get_constraint_duals(self) -> List[float]:
+        return self._h.allConstrDuals()
+
+    def write_solution(self, path: str | Path) -> None:
+        self._h.writeSolution(str(path), 0)
+
+
+def _generate_var_names_from_info(var_info: List) -> List[str]:
+    """Generate variable names from var_info (lazy generation)."""
+    names = []
+    for var_name, dim_elements in var_info:
+        if not dim_elements:
+            names.append(var_name)
+        else:
+            names.extend(nimopt_rust.generate_var_names(var_name, dim_elements))
+    return names
+
+
+def _build_matrices_rust_fast(model: "Model") -> Dict:
+    """Build matrices with minimal Python overhead - Rust fast path."""
+    import nimblend as nb
+
+    from ..expression import LinearExpr
+    from ..variable import Variable, VarRef
+
+    # === Build variable info (no names, no dict) ===
+    var_start_idx: Dict[str, int] = {}
+    var_info: List[Tuple[str, List[List[str]]]] = []  # For lazy name gen
+    n_vars = 0
+
+    for var in model.variables.values():
+        var_start_idx[var.name] = n_vars
+        if not var.sets:
+            var_info.append((var.name, []))
+            n_vars += 1
+        else:
+            dim_elements = [[str(e) for e in s.elements] for s in var.sets]
+            var_info.append((var.name, dim_elements))
+            n_vars += var.size
+
+    # === Build objective vector (vectorized) ===
+    c = np.zeros(n_vars, dtype=np.float64)
+    if model.objective:
+        for var, coef, fixed in model.objective.terms:
+            start = var_start_idx[var.name]
+            n = var.size
+            if isinstance(coef, (int, float)):
+                c[start : start + n] = float(coef)
+            elif isinstance(coef, nb.Array):
+                c[start : start + n] = coef.values.flatten()
+            elif hasattr(coef, "array"):
+                c[start : start + n] = coef.array.values.flatten()
+            else:
+                c[start : start + n] = float(coef)
+
+    # === Build variable bounds (vectorized) ===
+    lb = np.full(n_vars, -np.inf, dtype=np.float64)
+    ub = np.full(n_vars, np.inf, dtype=np.float64)
+    for var in model.variables.values():
+        start = var_start_idx[var.name]
+        n = var.size
+        if var.lb is not None:
+            lb[start : start + n] = var.lb
+        if var.ub is not None:
+            ub[start : start + n] = var.ub
+
+    # === Build constraints (Rust fast path) ===
+    all_indptr = [0]
+    all_indices = []
+    all_data = []
+    all_row_lower = []
+    all_row_upper = []
+    con_names: List[str] = []
+    total_nnz = 0
+
+    for eq_name, con in model._constraints.items():
+        lhs_terms = list(con.lhs.terms)
+        rhs_const = 0.0
+
+        if isinstance(con.rhs, LinearExpr):
+            for var, coef, fixed in con.rhs.terms:
+                lhs_terms.append((var, _negate_coef(coef), fixed))
+            if isinstance(con.rhs.const, (int, float)):
+                rhs_const = -con.rhs.const
+        elif isinstance(con.rhs, (Variable, VarRef)):
+            v = con.rhs if isinstance(con.rhs, Variable) else con.rhs.var
+            lhs_terms.append((v, -1.0, []))
+        elif isinstance(con.rhs, (int, float)):
+            rhs_const = float(con.rhs)
+
+        free_sets = con.free_sets
+        sense = con.sense
+
+        # Rust fast path: single indexed var, has free sets, no fixed indices
+        can_use_rust = (
+            len(lhs_terms) == 1
+            and lhs_terms[0][0].sets
+            and free_sets
+            and not lhs_terms[0][2]
+        )
+
+        if can_use_rust:
+            var, coef, fixed = lhs_terms[0]
+            result = _build_sum_csr_rust_fast(
+                var, coef, free_sets, con.rhs, rhs_const, sense, var_start_idx[var.name]
+            )
+            if result is not None:
+                indptr, indices, data, row_lower, row_upper, suffixes = result
+                for ptr in indptr[1:]:
+                    all_indptr.append(ptr + total_nnz)
+                all_indices.append(indices)
+                all_data.append(data)
+                all_row_lower.append(row_lower)
+                all_row_upper.append(row_upper)
+                con_names.extend(eq_name + "_" + s for s in suffixes)
+                total_nnz += len(indices)
+                continue
+
+        # Fallback needs var_idx - build it lazily
+        var_idx = _build_var_idx_lazy(model, var_start_idx)
+
+        if not free_sets:
+            idx_list, val_list = _expand_constraint(lhs_terms, {}, var_idx)
+            rhs_val = _get_rhs_value(con.rhs, {}, rhs_const)
+            total_nnz += len(idx_list)
+            all_indptr.append(total_nnz)
+            all_indices.append(np.array(idx_list, dtype=np.int32))
+            all_data.append(np.array(val_list, dtype=np.float64))
+            _append_bounds(all_row_lower, all_row_upper, sense, rhs_val)
+            con_names.append(eq_name)
+        else:
+            import itertools
+
+            for combo in itertools.product(*(s.elements for s in free_sets)):
+                bindings = dict(zip(free_sets, combo))
+                idx_list, val_list = _expand_constraint(lhs_terms, bindings, var_idx)
+                rhs_val = _get_rhs_value(con.rhs, bindings, rhs_const)
+                total_nnz += len(idx_list)
+                all_indptr.append(total_nnz)
+                all_indices.append(np.array(idx_list, dtype=np.int32))
+                all_data.append(np.array(val_list, dtype=np.float64))
+                _append_bounds(all_row_lower, all_row_upper, sense, rhs_val)
+                con_names.append(eq_name + "_" + "_".join(str(e) for e in combo))
+
+    # Combine
+    n_cons = len(all_indptr) - 1
+    if n_cons > 0:
+        indptr = np.array(all_indptr, dtype=np.int32)
+        indices = (
+            np.concatenate(all_indices) if all_indices else np.array([], dtype=np.int32)
+        )
+        data = np.concatenate(all_data) if all_data else np.array([], dtype=np.float64)
+        row_lower = np.concatenate(all_row_lower)
+        row_upper = np.concatenate(all_row_upper)
+    else:
+        indptr = np.array([0], dtype=np.int32)
+        indices = np.array([], dtype=np.int32)
+        data = np.array([], dtype=np.float64)
+        row_lower = np.array([], dtype=np.float64)
+        row_upper = np.array([], dtype=np.float64)
+
+    return {
+        "n_vars": n_vars,
+        "n_cons": n_cons,
+        "var_info": var_info,
+        "con_names": con_names,
+        "c": c,
+        "lb": lb,
+        "ub": ub,
+        "row_lower": row_lower,
+        "row_upper": row_upper,
+        "indptr": indptr,
+        "indices": indices,
+        "data": data,
+        "nnz": len(indices),
+    }
+
+
+_var_idx_cache: Dict[int, Dict[str, int]] = {}
+
+
+def _build_var_idx_lazy(model, var_start_idx) -> Dict[str, int]:
+    """Build var_idx dict only when needed (fallback path)."""
+    import itertools
+
+    model_id = id(model)
+    if model_id in _var_idx_cache:
+        return _var_idx_cache[model_id]
+
+    var_idx = {}
+    for var in model.variables.values():
+        start = var_start_idx[var.name]
+        if not var.sets:
+            var_idx[var.name] = start
+        else:
+            idx = start
+            for combo in itertools.product(*(s.elements for s in var.sets)):
+                vname = var.name + "_" + "_".join(str(e) for e in combo)
+                var_idx[vname] = idx
+                idx += 1
+
+    _var_idx_cache[model_id] = var_idx
+    return var_idx
+
+
+def _build_sum_csr_rust_fast(
+    var, coef, free_sets, rhs_orig, rhs_const, sense, var_start_idx
+) -> Optional[Tuple]:
+    """Build sum constraint CSR using fast Rust path."""
+    import itertools
+
+    import nimblend as nb
+
+    dim_sizes = [len(s) for s in var.sets]
+    free_set_ids = {id(s) for s in free_sets}
+    is_free_dim = [id(s) in free_set_ids for s in var.sets]
+
+    # Get coefficient array
+    if isinstance(coef, nb.Array):
+        coef_flat = coef.values.flatten().astype(np.float64)
+    elif isinstance(coef, (int, float)):
+        coef_flat = None
+    elif hasattr(coef, "array"):
+        coef_flat = coef.array.values.flatten().astype(np.float64)
+    else:
+        coef_flat = None
+
+    # Get RHS array
+    n_free = 1
+    for s in free_sets:
+        n_free *= len(s)
+
+    if hasattr(rhs_orig, "array"):
+        rhs_flat = rhs_orig.array.values.flatten().astype(np.float64)
+    elif hasattr(rhs_orig, "values"):
+        rhs_flat = rhs_orig.values.flatten().astype(np.float64)
+    else:
+        rhs_flat = np.full(n_free, rhs_const, dtype=np.float64)
+
+    sense_str = "<=" if sense == "<=" else (">=" if sense == ">=" else "=")
+
+    indptr, indices, data, row_lower, row_upper = nimopt_rust.build_sum_csr_fast(
+        var_start_idx, dim_sizes, is_free_dim, coef_flat, rhs_flat, sense_str
+    )
+
+    # Build constraint name suffixes
+    suffixes = []
+    for combo in itertools.product(*(s.elements for s in free_sets)):
+        suffixes.append("_".join(str(e) for e in combo))
+
+    return (
+        np.asarray(indptr),
+        np.asarray(indices),
+        np.asarray(data),
+        np.asarray(row_lower),
+        np.asarray(row_upper),
+        suffixes,
+    )
+
+
+def _append_bounds(row_lower, row_upper, sense, rhs):
+    if sense == "<=":
+        row_lower.append(np.array([-np.inf], dtype=np.float64))
+        row_upper.append(np.array([rhs], dtype=np.float64))
+    elif sense == ">=":
+        row_lower.append(np.array([rhs], dtype=np.float64))
+        row_upper.append(np.array([np.inf], dtype=np.float64))
+    else:
+        row_lower.append(np.array([rhs], dtype=np.float64))
+        row_upper.append(np.array([rhs], dtype=np.float64))
+
+
+def _build_matrices(model: "Model") -> Dict:
+    """Build matrices (pure Python fallback)."""
+    import itertools
+
+    from ..expression import LinearExpr
+    from ..variable import Variable, VarRef
+
+    var_idx: Dict[str, int] = {}
+    var_names: List[str] = []
+    n_vars = 0
+
+    for var in model.variables.values():
+        if not var.sets:
+            var_idx[var.name] = n_vars
+            var_names.append(var.name)
+            n_vars += 1
+        else:
+            for combo in itertools.product(*(s.elements for s in var.sets)):
+                vname = var.name + "_" + "_".join(str(e) for e in combo)
+                var_idx[vname] = n_vars
+                var_names.append(vname)
+                n_vars += 1
+
+    c = np.zeros(n_vars, dtype=np.float64)
+    if model.objective:
+        for var, coef, fixed in model.objective.terms:
+            if not var.sets:
+                c[var_idx[var.name]] = _get_scalar_coef(coef)
+            else:
+                for i, combo in enumerate(
+                    itertools.product(*(s.elements for s in var.sets))
+                ):
+                    vname = var.name + "_" + "_".join(str(e) for e in combo)
+                    c[var_idx[vname]] = _get_array_coef(coef, i)
+
+    lb = np.full(n_vars, -np.inf, dtype=np.float64)
+    ub = np.full(n_vars, np.inf, dtype=np.float64)
+    for var in model.variables.values():
+        for vname in var.all_names():
+            idx = var_idx[vname]
+            if var.lb is not None:
+                lb[idx] = var.lb
+            if var.ub is not None:
+                ub[idx] = var.ub
+
+    row_data = []
+    con_names = []
+    for eq_name, con in model._constraints.items():
+        lhs_terms = list(con.lhs.terms)
+        rhs_const = 0.0
+
+        if isinstance(con.rhs, LinearExpr):
+            for var, coef, fixed in con.rhs.terms:
+                lhs_terms.append((var, _negate_coef(coef), fixed))
+            if isinstance(con.rhs.const, (int, float)):
+                rhs_const = -con.rhs.const
+        elif isinstance(con.rhs, (Variable, VarRef)):
+            v = con.rhs if isinstance(con.rhs, Variable) else con.rhs.var
+            lhs_terms.append((v, -1.0, []))
+        elif isinstance(con.rhs, (int, float)):
+            rhs_const = float(con.rhs)
+
+        free_sets = con.free_sets
+        sense = con.sense
+
+        if not free_sets:
+            idx_list, val_list = _expand_constraint(lhs_terms, {}, var_idx)
+            rhs_val = _get_rhs_value(con.rhs, {}, rhs_const)
+            row_data.append((idx_list, val_list, sense, rhs_val))
+            con_names.append(eq_name)
+        else:
+            for combo in itertools.product(*(s.elements for s in free_sets)):
+                bindings = dict(zip(free_sets, combo))
+                idx_list, val_list = _expand_constraint(lhs_terms, bindings, var_idx)
+                rhs_val = _get_rhs_value(con.rhs, bindings, rhs_const)
+                row_data.append((idx_list, val_list, sense, rhs_val))
+                con_names.append(eq_name + "_" + "_".join(str(e) for e in combo))
+
+    n_cons = len(row_data)
+    nnz = sum(len(r[0]) for r in row_data)
+    indptr = np.zeros(n_cons + 1, dtype=np.int32)
+    indices = np.zeros(nnz, dtype=np.int32)
+    data = np.zeros(nnz, dtype=np.float64)
+    row_lower = np.zeros(n_cons, dtype=np.float64)
+    row_upper = np.zeros(n_cons, dtype=np.float64)
+
+    ptr = 0
+    for i, (col_idx, col_val, sense, rhs) in enumerate(row_data):
+        indptr[i] = ptr
+        for j, (c, v) in enumerate(zip(col_idx, col_val)):
+            indices[ptr + j] = c
+            data[ptr + j] = v
+        ptr += len(col_idx)
+        if sense == "<=":
+            row_lower[i] = -np.inf
+            row_upper[i] = rhs
+        elif sense == ">=":
+            row_lower[i] = rhs
+            row_upper[i] = np.inf
+        else:
+            row_lower[i] = rhs
+            row_upper[i] = rhs
+    indptr[n_cons] = ptr
+
+    return {
+        "n_vars": n_vars,
+        "n_cons": n_cons,
+        "var_names": var_names,
+        "con_names": con_names,
+        "c": c,
+        "lb": lb,
+        "ub": ub,
+        "row_lower": row_lower,
+        "row_upper": row_upper,
+        "indptr": indptr,
+        "indices": indices,
+        "data": data,
+        "nnz": nnz,
+    }
+
+
+def _expand_constraint(lhs_terms, bindings, var_idx):
+    import itertools
+
+    indices = []
+    values = []
+    for var, coef, fixed in lhs_terms:
+        if not var.sets:
+            indices.append(var_idx[var.name])
+            values.append(_get_scalar_coef(coef))
+        else:
+            var_combos = []
+            for s in var.sets:
+                if s in bindings:
+                    var_combos.append([bindings[s]])
+                else:
+                    var_combos.append(s.elements)
+            for combo in itertools.product(*var_combos) if var_combos else [()]:
+                vname = var.name + "_" + "_".join(str(e) for e in combo)
+                idx = var_idx.get(vname)
+                if idx is not None:
+                    cv = _get_coef_for_combo(coef, var.sets, combo)
+                    if cv != 0.0:
+                        indices.append(idx)
+                        values.append(cv)
+    return indices, values
+
+
+def _get_scalar_coef(coef) -> float:
+    import nimblend as nb
+
+    if isinstance(coef, (int, float)):
+        return float(coef)
+    elif isinstance(coef, nb.Array):
+        return float(coef.values.flat[0])
+    elif hasattr(coef, "array"):
+        return float(coef.array.values.flat[0])
+    return float(coef)
+
+
+def _get_array_coef(coef, flat_idx) -> float:
+    import nimblend as nb
+
+    if isinstance(coef, (int, float)):
+        return float(coef)
+    elif isinstance(coef, nb.Array):
+        return float(coef.values.flat[flat_idx])
+    elif hasattr(coef, "array"):
+        return float(coef.array.values.flat[flat_idx])
+    return float(coef)
+
+
+def _get_coef_for_combo(coef, var_sets, combo) -> float:
+    import nimblend as nb
+
+    if isinstance(coef, (int, float)):
+        return float(coef)
+    elif isinstance(coef, nb.Array):
+        indices = []
+        for i, s in enumerate(var_sets):
+            if s.name in coef.dims:
+                coord_list = list(coef.coords[s.name])
+                try:
+                    indices.append(coord_list.index(combo[i]))
+                except ValueError:
+                    return 0.0
+        if indices:
+            return float(coef.values[tuple(indices)])
+        return float(coef.values.flat[0])
+    elif hasattr(coef, "array"):
+        return _get_coef_for_combo(coef.array, var_sets, combo)
+    return float(coef)
+
+
+def _get_rhs_value(rhs, bindings, const) -> float:
+    if isinstance(rhs, (int, float)):
+        return float(rhs)
+    elif hasattr(rhs, "array"):
+        arr = rhs.array
+        if not bindings:
+            return float(arr.values.flat[0])
+        indices = []
+        for s in rhs.sets:
+            if s in bindings:
+                coord_list = list(arr.coords[s.name])
+                indices.append(coord_list.index(bindings[s]))
+        if indices:
+            return float(arr.values[tuple(indices)])
+        return float(arr.values.flat[0])
+    elif hasattr(rhs, "values"):
+        return float(rhs.values.flat[0])
+    return const
+
+
+def _negate_coef(coef):
+    import nimblend as nb
+
+    if isinstance(coef, (int, float)):
+        return -coef
+    elif isinstance(coef, nb.Array):
+        return coef * (-1)
+    return coef
