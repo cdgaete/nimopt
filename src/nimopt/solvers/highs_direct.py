@@ -234,6 +234,9 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
         free_sets = con.free_sets
         sense = con.sense
 
+        # Check if any term has lagged indices
+        has_lagged = any(term[3] for term in lhs_terms)
+
         # Rust fast path: single indexed var, has free sets, no fixed/lagged indices
         can_use_rust = (
             len(lhs_terms) == 1
@@ -257,6 +260,24 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
                 all_row_lower.append(row_lower)
                 all_row_upper.append(row_upper)
                 con_names.extend(eq_name + "_" + s for s in suffixes)
+                total_nnz += len(indices)
+                continue
+
+        # Vectorized path for lagged constraints
+        if has_lagged and free_sets:
+            result = _build_lagged_constraint_vectorized(
+                lhs_terms, free_sets, con.rhs, rhs_const, sense,
+                var_start_idx, eq_name
+            )
+            if result is not None:
+                indptr, indices, data, row_lower, row_upper, names = result
+                for ptr in indptr[1:]:
+                    all_indptr.append(ptr + total_nnz)
+                all_indices.append(indices)
+                all_data.append(data)
+                all_row_lower.append(row_lower)
+                all_row_upper.append(row_upper)
+                con_names.extend(names)
                 total_nnz += len(indices)
                 continue
 
@@ -406,6 +427,209 @@ def _build_sum_csr_rust_fast(
         np.asarray(row_upper),
         suffixes,
     )
+
+
+def _build_lagged_constraint_vectorized(
+    lhs_terms, free_sets, rhs_orig, rhs_const, sense, var_start_indices, eq_name
+) -> Optional[Tuple]:
+    """
+    Build lagged constraint CSR using vectorized nimblend operations.
+
+    Uses shift() for non-cyclic lag and roll() for cyclic lag to compute
+    valid rows, then constructs CSR matrix efficiently.
+
+    Returns (indptr, indices, data, row_lower, row_upper, con_names) or None.
+    """
+    import itertools
+
+    import nimblend as nb
+
+    if not free_sets:
+        return None
+
+    # Compute total number of potential constraint rows
+    free_sizes = [len(s) for s in free_sets]
+    n_rows = 1
+    for sz in free_sizes:
+        n_rows *= sz
+
+    # Compute strides for decomposing flat index into per-dimension indices
+    free_strides = []
+    stride = 1
+    for sz in reversed(free_sizes):
+        free_strides.insert(0, stride)
+        stride *= sz
+
+    # Track valid rows (start with all valid, AND with each non-cyclic lag)
+    valid_mask = np.ones(n_rows, dtype=bool)
+
+    # For each term, collect info needed to compute variable indices
+    # (var_start, coef_flat, var_strides, dim_to_free_pos, lag_offsets_by_dim)
+    term_data = []
+
+    for var, coef, fixed, lagged in lhs_terms:
+        if not var.sets:
+            # Scalar variable
+            c = float(coef) if isinstance(coef, (int, float)) else 1.0
+            term_data.append({
+                "var_start": var_start_indices[var.name],
+                "coef": c,
+                "is_scalar": True,
+            })
+            continue
+
+        var_start = var_start_indices[var.name]
+        var_sets = var.sets
+
+        # Build coefficient array
+        if isinstance(coef, nb.Array):
+            coef_vals = coef.values.flatten().astype(np.float64)
+        elif isinstance(coef, (int, float)):
+            coef_vals = float(coef)
+        elif hasattr(coef, "array"):
+            coef_vals = coef.array.values.flatten().astype(np.float64)
+        else:
+            coef_vals = 1.0
+
+        # Compute variable strides
+        var_strides = []
+        stride = 1
+        for s in reversed(var_sets):
+            var_strides.insert(0, stride)
+            stride *= len(s)
+
+        # Map variable dimensions to free set positions
+        dim_to_free_pos = {}
+        for i, s in enumerate(var_sets):
+            for j, fs in enumerate(free_sets):
+                if s is fs or s.name == fs.name:
+                    dim_to_free_pos[i] = j
+                    break
+
+        # Process lagged indices
+        lagged_map = {pos: ls for pos, ls in lagged} if lagged else {}
+        lag_offsets = {}  # dim_pos -> offset
+
+        for pos, ls in lagged_map.items():
+            offset = ls.offset  # negative for lag, positive for lead
+            lag_offsets[pos] = offset
+
+            if not ls.cyclic:
+                # Mark invalid rows: where lagged index would be out of bounds
+                dim_size = len(var_sets[pos])
+                free_pos = dim_to_free_pos.get(pos)
+                if free_pos is not None:
+                    # Build mask for this dimension
+                    for flat_idx in range(n_rows):
+                        # Decompose flat_idx
+                        fs = free_strides[free_pos]
+                        dim_idx = (flat_idx // fs) % free_sizes[free_pos]
+                        lagged_idx = dim_idx + offset
+                        if lagged_idx < 0 or lagged_idx >= dim_size:
+                            valid_mask[flat_idx] = False
+
+        term_data.append({
+            "var_start": var_start,
+            "coef": coef_vals,
+            "is_scalar": False,
+            "var_strides": var_strides,
+            "dim_to_free_pos": dim_to_free_pos,
+            "lag_offsets": lag_offsets,
+            "var_sizes": [len(s) for s in var_sets],
+        })
+
+    # Build CSR matrix for valid rows only
+    valid_indices = np.where(valid_mask)[0]
+    n_valid = len(valid_indices)
+
+    if n_valid == 0:
+        return None
+
+    # Pre-allocate CSR arrays
+    indptr = np.zeros(n_valid + 1, dtype=np.int32)
+    indices_list = []
+    data_list = []
+
+    # Build RHS array
+    if hasattr(rhs_orig, "array"):
+        rhs_flat = rhs_orig.array.values.flatten().astype(np.float64)
+    elif hasattr(rhs_orig, "values"):
+        rhs_flat = rhs_orig.values.flatten().astype(np.float64)
+    else:
+        rhs_flat = np.full(n_rows, rhs_const, dtype=np.float64)
+
+    # Fill CSR arrays
+    row_lower = np.zeros(n_valid, dtype=np.float64)
+    row_upper = np.zeros(n_valid, dtype=np.float64)
+
+    ptr = 0
+    for out_row, flat_idx in enumerate(valid_indices):
+        indptr[out_row] = ptr
+
+        # Set bounds
+        rhs_val = rhs_flat[flat_idx] if len(rhs_flat) > 1 else rhs_flat[0]
+        if sense == "<=":
+            row_lower[out_row] = -np.inf
+            row_upper[out_row] = rhs_val
+        elif sense == ">=":
+            row_lower[out_row] = rhs_val
+            row_upper[out_row] = np.inf
+        else:
+            row_lower[out_row] = rhs_val
+            row_upper[out_row] = rhs_val
+
+        # Decompose flat_idx into per-dimension indices
+        dim_indices = []
+        remaining = flat_idx
+        for stride in free_strides:
+            dim_indices.append(remaining // stride)
+            remaining = remaining % stride
+
+        for td in term_data:
+            if td["is_scalar"]:
+                indices_list.append(td["var_start"])
+                data_list.append(td["coef"])
+                ptr += 1
+            else:
+                # Compute variable flat index
+                var_flat_idx = 0
+                for var_dim, var_stride in enumerate(td["var_strides"]):
+                    free_pos = td["dim_to_free_pos"].get(var_dim)
+                    if free_pos is not None:
+                        idx = dim_indices[free_pos]
+                        # Apply lag offset
+                        offset = td["lag_offsets"].get(var_dim, 0)
+                        idx = idx + offset
+                        # Handle cyclic wrap (if cyclic, valid_mask didn't filter)
+                        idx = idx % td["var_sizes"][var_dim]
+                        var_flat_idx += idx * var_stride
+
+                # Get coefficient
+                coef = td["coef"]
+                if isinstance(coef, np.ndarray):
+                    c = coef[flat_idx] if flat_idx < len(coef) else coef[0]
+                else:
+                    c = coef
+
+                if c != 0:
+                    indices_list.append(td["var_start"] + var_flat_idx)
+                    data_list.append(c)
+                    ptr += 1
+
+    indptr[n_valid] = ptr
+
+    # Convert to arrays
+    indices = np.array(indices_list, dtype=np.int32)
+    data = np.array(data_list, dtype=np.float64)
+
+    # Build constraint names for valid rows
+    con_names = []
+    all_combos = list(itertools.product(*(s.elements for s in free_sets)))
+    for flat_idx in valid_indices:
+        combo = all_combos[flat_idx]
+        con_names.append(eq_name + "_" + "_".join(str(e) for e in combo))
+
+    return (indptr, indices, data, row_lower, row_upper, con_names)
 
 
 def _append_bounds(row_lower, row_upper, sense, rhs):
