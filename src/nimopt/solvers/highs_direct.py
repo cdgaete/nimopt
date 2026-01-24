@@ -258,7 +258,8 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
 
         # Rust fast path: single indexed var, has free sets, no fixed/lagged indices
         can_use_rust = (
-            len(lhs_terms) == 1
+            HAS_RUST
+            and len(lhs_terms) == 1
             and lhs_terms[0][0].sets
             and free_sets
             and not lhs_terms[0][2]  # no fixed indices
@@ -284,7 +285,8 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
 
         # Multi-term Rust fast path: multiple terms, free sets, no lagged indices
         can_use_multi_rust = (
-            free_sets
+            HAS_RUST
+            and free_sets
             and not has_lagged
             and all(not term[2] for term in lhs_terms)  # no fixed indices
             and all(term[0].sets for term in lhs_terms)  # all vars indexed
