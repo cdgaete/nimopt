@@ -21,7 +21,7 @@ pip install highspy pandas  # For DIETER example
 
 - **Lazy constraint expansion**: O(1) model building time
 - **nimblend backend**: Outer-join/zero-fill semantics for parameters
-- **Rust acceleration**: 10x+ speedup for LP writing and matrix building
+- **Rust acceleration**: 100x+ speedup for LP writing (full year DIETER)
 - **Multiple solvers**: HiGHS (open-source), GAMS/CPLEX (commercial)
 - **Smart solution storage**: Auto lazy/eager based on model size
 - **Math functions**: `sqrt`, `exp`, `log`, `abs_`, `power` for parameters
@@ -34,28 +34,30 @@ Full implementation of DIETER (Dispatch and Investment Evaluation Tool with Endo
 
 ```bash
 source .venv/bin/activate
-python examples/dieter/dieter.py --hours 8760  # Full year
-python examples/dieter/dieter.py --hours 168   # One week
+python examples/dieter/dieter.py --hours 8760       # Full year, direct solver
+python examples/dieter/dieter.py --hours 168        # One week
+python examples/dieter/dieter.py --hours 168 --lp   # Via LP file
 ```
 
 ### Full Year Results (8760 hours)
-- **Objective**: €9.5 billion
-- **Generation**: 28 TWh dispatchable, 408 TWh renewables
-- **Curtailment**: 137 TWh
-- **Load served**: 432 TWh (100%, no infeasibility)
-- **Solve time**: ~70s optimization + ~90s model loading
+- **Objective**: €32.1 billion
+- **Solve time**: ~14s via LP file, ~50s direct solver
 
-### Model Components
-- 18 technologies: 5 dispatchable, 13 non-dispatchable (wind/solar regions)
-- 2 storage technologies (Li-Ion, pumped hydro)
-- Energy balance, generation limits, storage dynamics constraints
+### Solver Comparison (Full Year)
 
-## Performance
+| Solver Path | Write/Load | Read | Solve | Total |
+|-------------|------------|------|-------|-------|
+| Direct HiGHS (Rust) | 206ms | - | 49.5s | 49.7s |
+| LP (Rust) + HiGHS | 396ms | 2.1s | 13.9s | 16.4s |
 
-| Model Size | nimopt | linopy | JuMP |
-|------------|--------|--------|------|
-| 90k vars | 148 ms | 366 ms | 336 ms |
-| 2M vars | 4.5s | 8.9s | 11.0s |
+Note: LP file path is faster because HiGHS optimizes better from LP format. Direct solver has extra non-zeros (matrix deduplication issue to investigate).
+
+### LP Writer Performance
+
+| Model | Python LP | Rust LP | Speedup |
+|-------|-----------|---------|---------|
+| 168 hours | 59ms | 10ms | 6x |
+| 8760 hours | 40.3s | 394ms | **102x** |
 
 ## API Usage
 
@@ -88,6 +90,13 @@ solver = HiGHSDirectSolver(use_rust=True)
 solver.load_model(m)
 result = solver.solve()
 
+# Or via LP file
+m.to_lp('model.lp', use_rust=True)  # Rust-accelerated
+import highspy
+h = highspy.Highs()
+h.readModel('model.lp')
+h.run()
+
 # Get solution as nimblend Arrays
 sol = solver.get_solution()
 x_values = sol.var('x')           # nimblend Array
@@ -112,6 +121,8 @@ src/nimopt/
 └── writers/
     ├── lp.py             # Python LP writer
     └── lp_rust.py        # Rust-accelerated LP generation
+rust/
+└── src/lib.rs            # Rust extension (LP writing, matrix building)
 examples/
 └── dieter/               # DIETER energy system model
     ├── dieter.py         # Main model implementation
@@ -124,24 +135,27 @@ examples/
 ```bash
 cd /home/carlos/projects/nimopt
 source .venv/bin/activate
-pytest tests/ --tb=short          # Run tests (26 passing)
-python3 -m ruff check src/ tests/ # Lint
+pytest tests/ --tb=short          # Run tests (28 passing)
+ruff check src/ tests/            # Lint
 
 # Rebuild Rust extension
-source ~/.cargo/env && cd rust && maturin develop --release
+export PATH="$HOME/.cargo/bin:$PATH"
+cd rust && maturin develop --release
 ```
 
 ## Recent Fixes (January 2025)
+
+### Rust LP Writer Fixes
+1. **Scalar coefficients for constraints**: When constraint terms had scalar coefficients (e.g., `-1`), they were lost (defaulted to `1.0`). Fixed by adding `term_scalar_coefs` parameter to Rust function.
+
+2. **Array RHS constant handling**: When `con.rhs.const` was an Array (like demand in energy balance), it was incorrectly negated. The Python LP writer doesn't negate array constants - fixed to match.
+
+3. **Objective coefficient deduplication**: Variables appearing multiple times in objective (e.g., from multiple Sum terms) needed coefficient accumulation. Added `coef_map` dictionary.
 
 ### Coefficient Broadcasting
 Fixed parameter broadcasting when dimensions differ from variable:
 - `MarginalCost[Tech]` × `G[Tech, Hours]` now broadcasts correctly
 - Affects both objective and constraint coefficient extraction
-
-### Array RHS Constants  
-Fixed constraints with array constants on RHS:
-- `generation == Load[Hours]` extracts correct load value per hour
-- Added `_get_array_value_for_bindings()` helper
 
 ### Variable Shadowing Bug
 Fixed loop variable `c` overwriting cost vector in `_build_matrices()`.
@@ -162,8 +176,14 @@ When extracting coefficients for constraints/objectives:
 ### Lazy Constraint Expansion
 Constraints stored symbolically with `free_sets`, expanded at solve time.
 
+## Known Issues
+
+### Direct Solver Extra Non-Zeros
+The direct HiGHS solver produces more matrix non-zeros than the LP file path (e.g., 779k vs 744k for full year DIETER). This causes slower solving (~50s vs ~14s). The LP writer correctly deduplicates entries but the direct solver doesn't. Both produce correct results.
+
 ## Test Coverage
 
-- **26 tests** passing
+- **28 tests** passing
 - Transport problem, lag/lead constraints, solution extraction
 - Both Python and Rust solver paths verified
+- GAMS/CPLEX solver verified against HiGHS
