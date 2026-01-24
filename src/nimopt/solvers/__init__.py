@@ -4,6 +4,7 @@ from .base import Solver, SolverResult, SolverStatus
 from .gams_cplex import GamsCplexSolver
 from .highs import HiGHSSolver
 from .highs_direct import HiGHSDirectSolver
+from .pdlp import PDLPSolver
 
 __all__ = [
     "Solver",
@@ -12,4 +13,5 @@ __all__ = [
     "HiGHSSolver",
     "HiGHSDirectSolver",
     "GamsCplexSolver",
+    "PDLPSolver",
 ]
