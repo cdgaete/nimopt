@@ -182,7 +182,7 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
             start = var_start_idx[var.name]
             n = var.size
             if isinstance(coef, (int, float)):
-                c[start : start + n] = float(coef)
+                c[start : start + n] += float(coef)
             elif isinstance(coef, nb.Array):
                 # Need to broadcast coef to var's shape if dimensions differ
                 if var.sets and coef.shape != tuple(len(s) for s in var.sets):
@@ -191,9 +191,9 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
                     target_dims = [s.name for s in var.sets]
                     ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
                     broadcasted = coef * ones
-                    c[start : start + n] = broadcasted.values.flatten()
+                    c[start : start + n] += broadcasted.values.flatten()
                 else:
-                    c[start : start + n] = coef.values.flatten()
+                    c[start : start + n] += coef.values.flatten()
             elif hasattr(coef, "array"):
                 arr = coef.array
                 if var.sets and arr.shape != tuple(len(s) for s in var.sets):
@@ -202,11 +202,11 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
                     target_dims = [s.name for s in var.sets]
                     ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
                     broadcasted = arr * ones
-                    c[start : start + n] = broadcasted.values.flatten()
+                    c[start : start + n] += broadcasted.values.flatten()
                 else:
-                    c[start : start + n] = arr.values.flatten()
+                    c[start : start + n] += arr.values.flatten()
             else:
-                c[start : start + n] = float(coef)
+                c[start : start + n] += float(coef)
 
     # === Build variable bounds (vectorized) ===
     lb = np.full(n_vars, -np.inf, dtype=np.float64)
@@ -800,13 +800,13 @@ def _build_matrices(model: "Model") -> Dict:
     if model.objective:
         for var, coef, fixed, _lagged in model.objective.terms:
             if not var.sets:
-                c[var_idx[var.name]] = _get_scalar_coef(coef)
+                c[var_idx[var.name]] += _get_scalar_coef(coef)
             else:
                 for i, combo in enumerate(
                     itertools.product(*(s.elements for s in var.sets))
                 ):
                     vname = var.name + "_" + "_".join(str(e) for e in combo)
-                    c[var_idx[vname]] = _get_coef_for_combo(coef, var.sets, combo)
+                    c[var_idx[vname]] += _get_coef_for_combo(coef, var.sets, combo)
 
     lb = np.full(n_vars, -np.inf, dtype=np.float64)
     ub = np.full(n_vars, np.inf, dtype=np.float64)
