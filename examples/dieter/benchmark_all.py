@@ -211,6 +211,60 @@ def benchmark_pdlp_gpu(model, tolerance: float = 1e-4) -> BenchmarkResult:
     return result
 
 
+def benchmark_gams_cplex(model, use_rust: bool = True) -> BenchmarkResult:
+    """Benchmark GAMS/CPLEX solver."""
+    import os
+    
+    result = BenchmarkResult("GAMS/CPLEX")
+    
+    try:
+        from nimopt.solvers import GamsCplexSolver
+        
+        # Write LP file
+        lp_path = tempfile.mktemp(suffix='.lp')
+        t0 = time.time()
+        model.to_lp(lp_path, use_rust=use_rust)
+        write_time = time.time() - t0
+        
+        # Create solver and load
+        solver = GamsCplexSolver()
+        solver.set_model(model)
+        t0 = time.time()
+        solver.read_lp(lp_path)
+        read_time = time.time() - t0
+        
+        result.load_time = write_time + read_time
+        
+        # Solve
+        t0 = time.time()
+        solve_result = solver.solve()
+        result.solve_time = time.time() - t0
+        
+        # Extract solution
+        t0 = time.time()
+        primal = solver.get_variable_values()
+        dual_cons = solver.get_constraint_duals()
+        result.extract_time = time.time() - t0
+        
+        result.objective = solve_result.objective_value
+        result.status = solve_result.status.name if solve_result.status else "UNKNOWN"
+        result.iterations = solve_result.iterations or 0
+        result.n_primal = len(primal)
+        result.n_dual = len(dual_cons)
+        
+        # Clean up
+        os.unlink(lp_path)
+        
+    except FileNotFoundError as e:
+        result.error = f"GAMS not found: {e}"
+    except ImportError as e:
+        result.error = f"GAMS Python API not installed: {e}"
+    except Exception as e:
+        result.error = str(e)
+    
+    return result
+
+
 def print_results_table(results: list, build_time: float, n_vars: int, n_cons: int):
     """Print results in a formatted table."""
     
@@ -266,6 +320,8 @@ def main():
                         help='Skip LP file benchmark')
     parser.add_argument('--no-gpu', action='store_true',
                         help='Skip PDLP GPU benchmark')
+    parser.add_argument('--no-gams', action='store_true',
+                        help='Skip GAMS/CPLEX benchmark')
     parser.add_argument('--tolerance', type=float, default=1e-4,
                         help='PDLP tolerance (default: 1e-4)')
     args = parser.parse_args()
@@ -318,6 +374,12 @@ def main():
     if not args.no_gpu:
         print(f"\n      Testing PDLP GPU...")
         results.append(benchmark_pdlp_gpu(model, tolerance=args.tolerance))
+        print(f"      Done: {results[-1]}")
+    
+    # GAMS/CPLEX benchmark
+    if not args.no_gams:
+        print(f"\n      Testing GAMS/CPLEX...")
+        results.append(benchmark_gams_cplex(model))
         print(f"      Done: {results[-1]}")
     
     # Print results table
