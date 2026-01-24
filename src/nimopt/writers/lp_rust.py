@@ -283,12 +283,15 @@ def _write_multi_term_fast(
 ):
     """Fast path: generate variable names in Rust."""
     free_set_ids = {id(s): i for i, s in enumerate(free_sets)}
+    free_set_names = {s.name: i for i, s in enumerate(free_sets)}
 
     # Build term specs for Rust
     term_var_names = []
     term_dim_elements = []
     term_coefs = []
     term_is_free_dims = []
+    term_coef_shapes = []
+    term_coef_free_maps = []
 
     for term in lhs_terms:
         var, coef = term[0], term[1]
@@ -302,21 +305,37 @@ def _write_multi_term_fast(
         is_free = [id(s) in free_set_ids for s in var.sets]
         term_is_free_dims.append(is_free)
 
-        # Coefficient array
+        # Coefficient array - handle dimension mismatch
         if isinstance(coef, nb.Array):
             term_coefs.append(coef.values.flatten().astype(np.float64))
+            term_coef_shapes.append(list(coef.shape))
+            # Map coef dimensions to free set indices
+            coef_free_map = []
+            for dim in coef.dims:
+                if dim in free_set_names:
+                    coef_free_map.append(free_set_names[dim])
+                else:
+                    coef_free_map.append(-1)  # Not a free set
+            term_coef_free_maps.append(coef_free_map)
         elif hasattr(coef, "array"):
-            term_coefs.append(coef.array.values.flatten().astype(np.float64))
+            arr = coef.array
+            term_coefs.append(arr.values.flatten().astype(np.float64))
+            term_coef_shapes.append(list(arr.shape))
+            coef_free_map = []
+            for dim in arr.dims:
+                if dim in free_set_names:
+                    coef_free_map.append(free_set_names[dim])
+                else:
+                    coef_free_map.append(-1)
+            term_coef_free_maps.append(coef_free_map)
         elif isinstance(coef, (int, float)):
-            if var.sets:
-                size = 1
-                for s in var.sets:
-                    size *= len(s)
-                term_coefs.append(np.full(size, float(coef), dtype=np.float64))
-            else:
-                term_coefs.append(np.array([float(coef)], dtype=np.float64))
+            term_coefs.append(None)  # Scalar - Rust handles as 1.0 * coef
+            term_coef_shapes.append([])
+            term_coef_free_maps.append([])
         else:
             term_coefs.append(None)
+            term_coef_shapes.append([])
+            term_coef_free_maps.append([])
 
     # Free set sizes
     free_set_sizes = [len(s) for s in free_sets]
@@ -340,6 +359,8 @@ def _write_multi_term_fast(
         term_var_names,
         term_dim_elements,
         term_coefs,
+        term_coef_shapes,
+        term_coef_free_maps,
         term_is_free_dims,
         free_set_sizes,
         rhs_flat,

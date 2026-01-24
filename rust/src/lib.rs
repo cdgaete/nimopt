@@ -966,7 +966,7 @@ fn generate_var_names(
 /// free_set_sizes: sizes of the free sets (determines number of constraints)
 /// rhs_flat: RHS values, one per constraint
 #[pyfunction]
-#[pyo3(signature = (filename, con_name, sense, term_var_names, term_dim_elements, term_coefs, term_is_free_dims, free_set_sizes, rhs_flat))]
+#[pyo3(signature = (filename, con_name, sense, term_var_names, term_dim_elements, term_coefs, term_coef_shapes, term_coef_free_maps, term_is_free_dims, free_set_sizes, rhs_flat))]
 fn write_multi_term_constraints(
     py: Python<'_>,
     filename: &str,
@@ -975,6 +975,8 @@ fn write_multi_term_constraints(
     term_var_names: Vec<String>,
     term_dim_elements: Vec<Vec<Vec<String>>>,
     term_coefs: Vec<Option<PyReadonlyArray1<'_, f64>>>,
+    term_coef_shapes: Vec<Vec<usize>>,
+    term_coef_free_maps: Vec<Vec<i32>>,
     term_is_free_dims: Vec<Vec<bool>>,
     free_set_sizes: Vec<usize>,
     rhs_flat: PyReadonlyArray1<'_, f64>,
@@ -991,12 +993,12 @@ fn write_multi_term_constraints(
     // Calculate total number of constraints
     let n_cons: usize = free_set_sizes.iter().product();
     
-    // For each term, precompute strides for coefficient indexing
-    let term_coef_strides: Vec<Vec<usize>> = term_dim_elements.iter()
-        .map(|dims| {
-            let mut strides = vec![1usize; dims.len()];
-            for i in (0..dims.len().saturating_sub(1)).rev() {
-                strides[i] = strides[i + 1] * dims[i + 1].len();
+    // Precompute strides for coefficient arrays based on their own shapes
+    let term_coef_strides: Vec<Vec<usize>> = term_coef_shapes.iter()
+        .map(|shape| {
+            let mut strides = vec![1usize; shape.len()];
+            for i in (0..shape.len().saturating_sub(1)).rev() {
+                strides[i] = strides[i + 1] * shape[i + 1];
             }
             strides
         })
@@ -1027,6 +1029,7 @@ fn write_multi_term_constraints(
                 let dims = &term_dim_elements[t];
                 let is_free = &term_is_free_dims[t];
                 let coef_strides = &term_coef_strides[t];
+                let coef_free_map = &term_coef_free_maps[t];
                 
                 // Determine which dim indices are fixed vs summed
                 let mut fixed_dims: Vec<(usize, usize)> = Vec::new();
@@ -1051,7 +1054,7 @@ fn write_multi_term_constraints(
                 };
                 
                 for sum_combo in sum_combos {
-                    // Build full index
+                    // Build full index for variable
                     let mut full_idx = vec![0usize; dims.len()];
                     for &(d, idx) in &fixed_dims {
                         full_idx[d] = idx;
@@ -1067,11 +1070,14 @@ fn write_multi_term_constraints(
                         vname.push_str(&dims[d][idx]);
                     }
                     
-                    // Get coefficient
+                    // Get coefficient - use coef_free_map to index by free_indices
                     let c = if let Some(ref coef) = coef_data[t] {
                         let mut flat_idx = 0;
-                        for (d, &idx) in full_idx.iter().enumerate() {
-                            flat_idx += idx * coef_strides[d];
+                        for (cd, &free_set_idx) in coef_free_map.iter().enumerate() {
+                            if free_set_idx >= 0 {
+                                let idx_val = free_indices[free_set_idx as usize];
+                                flat_idx += idx_val * coef_strides[cd];
+                            }
                         }
                         coef.get(flat_idx).copied().unwrap_or(1.0)
                     } else {
