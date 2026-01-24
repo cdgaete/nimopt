@@ -167,7 +167,11 @@ def _write_objective(f: TextIO, model, var_names: Dict) -> None:
     """Write objective section."""
     f.write("Minimize\n" if model.sense == "minimize" else "Maximize\n")
     f.write(" obj: ")
-    first = True
+    
+    # Pre-accumulate coefficients for each variable to handle duplicates
+    # HiGHS LP parser doesn't sum duplicate variable appearances
+    coef_map: Dict[str, float] = {}
+    
     if model.objective:
         for var, coef, fixed, _lagged in model.objective.terms:
             if var.sets:
@@ -177,7 +181,13 @@ def _write_objective(f: TextIO, model, var_names: Dict) -> None:
             for combo in combos:
                 vname = var_names[(id(var), combo)]
                 cv = _get_coef(coef, var.sets, combo)
-                first = _write_term(f, vname, cv, first)
+                coef_map[vname] = coef_map.get(vname, 0.0) + cv
+    
+    # Write accumulated coefficients
+    first = True
+    for vname, cv in coef_map.items():
+        first = _write_term(f, vname, cv, first)
+    
     if first:
         f.write("0")
     f.write("\n\n")
