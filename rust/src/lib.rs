@@ -966,7 +966,7 @@ fn generate_var_names(
 /// free_set_sizes: sizes of the free sets (determines number of constraints)
 /// rhs_flat: RHS values, one per constraint
 #[pyfunction]
-#[pyo3(signature = (filename, con_name, sense, term_var_names, term_dim_elements, term_coefs, term_coef_shapes, term_coef_free_maps, term_is_free_dims, free_set_sizes, rhs_flat))]
+#[pyo3(signature = (filename, con_name, sense, term_var_names, term_dim_elements, term_coefs, term_coef_shapes, term_coef_free_maps, term_is_free_dims, free_set_sizes, rhs_flat, term_scalar_coefs))]
 fn write_multi_term_constraints(
     py: Python<'_>,
     filename: &str,
@@ -980,6 +980,7 @@ fn write_multi_term_constraints(
     term_is_free_dims: Vec<Vec<bool>>,
     free_set_sizes: Vec<usize>,
     rhs_flat: PyReadonlyArray1<'_, f64>,
+    term_scalar_coefs: Vec<f64>,
 ) -> PyResult<()> {
     let rhs_vals = rhs_flat.as_slice()?;
     let sense_str = match sense { "<=" => "<=", ">=" => ">=", _ => "=" };
@@ -1081,7 +1082,7 @@ fn write_multi_term_constraints(
                         }
                         coef.get(flat_idx).copied().unwrap_or(1.0)
                     } else {
-                        1.0
+                        term_scalar_coefs[t]
                     };
                     
                     if c != 0.0 {

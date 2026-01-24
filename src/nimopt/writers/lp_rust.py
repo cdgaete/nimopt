@@ -42,9 +42,8 @@ def _write_objective_fast(model, filename: str) -> None:
             f.write(" obj: 0\n\n")
         return
 
-    # Collect all variable names and coefficients for the entire objective
-    all_var_names = []
-    all_coefs = []
+    # Accumulate coefficients for each variable (handles duplicates)
+    coef_map = {}
 
     for term in model.objective.terms:
         var, coef, _ = term[0], term[1], term[2]
@@ -78,10 +77,10 @@ def _write_objective_fast(model, filename: str) -> None:
                     size *= len(s)
                 coefs_arr = np.full(size, float(coef), dtype=np.float64)
 
-            # Generate variable names for this term
+            # Generate variable names and accumulate coefficients
             var_names = nimopt_rust.generate_var_names(var.name, dim_elements)
-            all_var_names.extend(var_names)
-            all_coefs.extend(coefs_arr.tolist())
+            for vname, c in zip(var_names, coefs_arr):
+                coef_map[vname] = coef_map.get(vname, 0.0) + c
         else:
             # Scalar variable
             if isinstance(coef, (int, float)):
@@ -90,12 +89,12 @@ def _write_objective_fast(model, filename: str) -> None:
                 c = float(coef.values.flat[0])
             else:
                 c = float(coef)
-            all_var_names.append(var.name)
-            all_coefs.append(c)
+            coef_map[var.name] = coef_map.get(var.name, 0.0) + c
 
-    # Write objective with all terms at once
-    coefs_arr = np.array(all_coefs, dtype=np.float64)
-    nimopt_rust.write_objective(filename, all_var_names, coefs_arr)
+    # Write objective with accumulated coefficients
+    all_var_names = list(coef_map.keys())
+    all_coefs = np.array(list(coef_map.values()), dtype=np.float64)
+    nimopt_rust.write_objective(filename, all_var_names, all_coefs)
 
 
 def _get_objective_data(model):
@@ -163,6 +162,9 @@ def _write_constraints_rust(model, filename: str):
                 lhs_terms.append((var, _negate_coef(coef), fixed, lagged))
             if isinstance(con.rhs.const, (int, float)):
                 rhs_const = -con.rhs.const
+            elif isinstance(con.rhs.const, nb.Array):
+                # Array const becomes the RHS (NOT negated - unlike scalar)
+                rhs_const = con.rhs.const
         elif isinstance(con.rhs, (Variable, VarRef)):
             var = con.rhs if isinstance(con.rhs, Variable) else con.rhs.var
             lhs_terms.append((var, -1.0, [], []))
@@ -292,6 +294,7 @@ def _write_multi_term_fast(
     term_is_free_dims = []
     term_coef_shapes = []
     term_coef_free_maps = []
+    term_scalar_coefs = []  # Scalar coefficient for each term
 
     for term in lhs_terms:
         var, coef = term[0], term[1]
@@ -317,6 +320,7 @@ def _write_multi_term_fast(
                 else:
                     coef_free_map.append(-1)  # Not a free set
             term_coef_free_maps.append(coef_free_map)
+            term_scalar_coefs.append(1.0)  # Not used for array coefs
         elif hasattr(coef, "array"):
             arr = coef.array
             term_coefs.append(arr.values.flatten().astype(np.float64))
@@ -328,14 +332,17 @@ def _write_multi_term_fast(
                 else:
                     coef_free_map.append(-1)
             term_coef_free_maps.append(coef_free_map)
+            term_scalar_coefs.append(1.0)  # Not used for array coefs
         elif isinstance(coef, (int, float)):
-            term_coefs.append(None)  # Scalar - Rust handles as 1.0 * coef
+            term_coefs.append(None)  # Scalar - use term_scalar_coefs
             term_coef_shapes.append([])
             term_coef_free_maps.append([])
+            term_scalar_coefs.append(float(coef))
         else:
             term_coefs.append(None)
             term_coef_shapes.append([])
             term_coef_free_maps.append([])
+            term_scalar_coefs.append(float(coef) if coef is not None else 1.0)
 
     # Free set sizes
     free_set_sizes = [len(s) for s in free_sets]
@@ -345,12 +352,15 @@ def _write_multi_term_fast(
     for s in free_sets:
         n_cons *= len(s)
 
-    if hasattr(rhs_orig, "array"):
+    if isinstance(rhs_const, nb.Array):
+        # rhs_const is already an Array (e.g., negated demand)
+        rhs_flat = rhs_const.values.flatten().astype(np.float64)
+    elif hasattr(rhs_orig, "array"):
         rhs_flat = rhs_orig.array.values.flatten().astype(np.float64)
     elif hasattr(rhs_orig, "values"):
         rhs_flat = rhs_orig.values.flatten().astype(np.float64)
     else:
-        rhs_flat = np.full(n_cons, rhs_const, dtype=np.float64)
+        rhs_flat = np.full(n_cons, float(rhs_const), dtype=np.float64)
 
     nimopt_rust.write_multi_term_constraints(
         filename,
@@ -364,6 +374,7 @@ def _write_multi_term_fast(
         term_is_free_dims,
         free_set_sizes,
         rhs_flat,
+        term_scalar_coefs,
     )
 
 
