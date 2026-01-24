@@ -231,12 +231,19 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
     for eq_name, con in model._constraints.items():
         lhs_terms = list(con.lhs.terms)
         rhs_const = 0.0
+        rhs_const_array = None  # Track Array constant separately
 
         if isinstance(con.rhs, LinearExpr):
             for var, coef, fixed, lagged in con.rhs.terms:
                 lhs_terms.append((var, _negate_coef(coef), fixed, lagged))
             if isinstance(con.rhs.const, (int, float)):
-                rhs_const = -con.rhs.const
+                rhs_const = con.rhs.const  # Don't negate - stays on RHS
+            elif hasattr(con.rhs.const, "array"):
+                # Array constant (e.g., Load[Hours]) - keep for later
+                rhs_const_array = con.rhs.const.array
+            elif hasattr(con.rhs.const, "values"):
+                # nimblend Array - keep for later
+                rhs_const_array = con.rhs.const
         elif isinstance(con.rhs, VarRef):
             # VarRef may have fixed/lagged indices
             lhs_terms.append((
@@ -294,7 +301,8 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
 
         if can_use_multi_rust:
             result = _build_multi_term_csr_rust(
-                lhs_terms, free_sets, con.rhs, rhs_const, sense, var_start_idx
+                lhs_terms, free_sets, con.rhs, rhs_const, rhs_const_array,
+                sense, var_start_idx,
             )
             if result is not None:
                 indptr, indices, data, row_lower, row_upper = result
@@ -476,7 +484,7 @@ def _build_sum_csr_rust_fast(
 
 
 def _build_multi_term_csr_rust(
-    lhs_terms, free_sets, rhs_orig, rhs_const, sense, var_start_idx
+    lhs_terms, free_sets, rhs_orig, rhs_const, rhs_const_array, sense, var_start_idx
 ) -> Optional[Tuple]:
     """Build multi-term constraint CSR using Rust."""
     import nimblend as nb
@@ -487,6 +495,8 @@ def _build_multi_term_csr_rust(
     term_var_starts = []
     term_dim_sizes = []
     term_coefs = []
+    term_coef_sizes = []      # NEW: shape of coefficient array
+    term_coef_free_map = []   # NEW: maps coef dim -> free set index
     term_is_free_dims = []
 
     for var, coef, fixed, lagged in lhs_terms:
@@ -494,35 +504,56 @@ def _build_multi_term_csr_rust(
         term_dim_sizes.append([len(s) for s in var.sets])
         term_is_free_dims.append([id(s) in free_set_ids for s in var.sets])
 
-        # Coefficient - need to broadcast to var's shape
+        # Handle coefficient - keep it in its original shape for proper indexing
         if isinstance(coef, nb.Array):
-            if coef.shape != tuple(len(s) for s in var.sets):
-                target_shape = tuple(len(s) for s in var.sets)
-                target_coords = {s.name: np.array(s.elements) for s in var.sets}
-                target_dims = [s.name for s in var.sets]
-                ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
-                broadcasted = coef * ones
-                term_coefs.append(broadcasted.values.flatten().astype(np.float64))
-            else:
-                term_coefs.append(coef.values.flatten().astype(np.float64))
+            term_coefs.append(coef.values.flatten().astype(np.float64))
+            term_coef_sizes.append(list(coef.shape))
+            # Map each coef dimension to free set index
+            coef_free_map = []
+            for dim_name in coef.dims:
+                # Find which free set this dimension corresponds to
+                found = False
+                for i, fs in enumerate(free_sets):
+                    if fs.name == dim_name:
+                        coef_free_map.append(i)
+                        found = True
+                        break
+                if not found:
+                    coef_free_map.append(-1)  # Not a free set dimension
+            term_coef_free_map.append(coef_free_map)
         elif hasattr(coef, "array"):
             arr = coef.array
-            if arr.shape != tuple(len(s) for s in var.sets):
-                target_shape = tuple(len(s) for s in var.sets)
-                target_coords = {s.name: np.array(s.elements) for s in var.sets}
-                target_dims = [s.name for s in var.sets]
-                ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
-                broadcasted = arr * ones
-                term_coefs.append(broadcasted.values.flatten().astype(np.float64))
-            else:
-                term_coefs.append(arr.values.flatten().astype(np.float64))
+            term_coefs.append(arr.values.flatten().astype(np.float64))
+            term_coef_sizes.append(list(arr.shape))
+            coef_free_map = []
+            for dim_name in arr.dims:
+                found = False
+                for i, fs in enumerate(free_sets):
+                    if fs.name == dim_name:
+                        coef_free_map.append(i)
+                        found = True
+                        break
+                if not found:
+                    coef_free_map.append(-1)
+            term_coef_free_map.append(coef_free_map)
         elif isinstance(coef, (int, float)):
             size = 1
             for s in var.sets:
                 size *= len(s)
             term_coefs.append(np.full(size, float(coef), dtype=np.float64))
+            term_coef_sizes.append([len(s) for s in var.sets])
+            # For scalar coef broadcast to var shape, map var dims to free sets
+            coef_free_map = []
+            for s in var.sets:
+                if id(s) in free_set_ids:
+                    coef_free_map.append(free_set_ids[id(s)])
+                else:
+                    coef_free_map.append(-1)
+            term_coef_free_map.append(coef_free_map)
         else:
             term_coefs.append(None)
+            term_coef_sizes.append([])
+            term_coef_free_map.append([])
 
     # Free set sizes
     free_set_sizes = [len(s) for s in free_sets]
@@ -532,12 +563,18 @@ def _build_multi_term_csr_rust(
     for s in free_sets:
         n_cons *= len(s)
 
-    if hasattr(rhs_orig, "array"):
+    # Handle different RHS types - priority: rhs_const_array > rhs_orig > rhs_const
+    if rhs_const_array is not None:
+        # Array constant from LinearExpr.const (e.g., Load[Hours])
+        rhs_flat = rhs_const_array.values.flatten().astype(np.float64)
+    elif hasattr(rhs_orig, "array"):
         rhs_flat = rhs_orig.array.values.flatten().astype(np.float64)
     elif hasattr(rhs_orig, "values"):
         rhs_flat = rhs_orig.values.flatten().astype(np.float64)
-    else:
+    elif isinstance(rhs_const, (int, float)):
         rhs_flat = np.full(n_cons, rhs_const, dtype=np.float64)
+    else:
+        rhs_flat = np.full(n_cons, 0.0, dtype=np.float64)
 
     sense_str = "<=" if sense == "<=" else (">=" if sense == ">=" else "=")
 
@@ -545,6 +582,8 @@ def _build_multi_term_csr_rust(
         term_var_starts,
         term_dim_sizes,
         term_coefs,
+        term_coef_sizes,
+        term_coef_free_map,
         term_is_free_dims,
         free_set_sizes,
         rhs_flat,
@@ -831,7 +870,7 @@ def _build_matrices(model: "Model") -> Dict:
             for var, coef, fixed, lagged in con.rhs.terms:
                 lhs_terms.append((var, _negate_coef(coef), fixed, lagged))
             if isinstance(con.rhs.const, (int, float)):
-                rhs_const = -con.rhs.const
+                rhs_const = con.rhs.const  # Don't negate - stays on RHS
             elif isinstance(con.rhs.const, nb.Array):
                 rhs_const_array = con.rhs.const  # Keep the array for later
         elif isinstance(con.rhs, VarRef):

@@ -1125,6 +1125,8 @@ fn cartesian_indices(sizes: &[usize]) -> Vec<Vec<usize>> {
 /// - term_var_starts: starting index in global variable array for each term
 /// - term_dim_sizes: list of dimension sizes for each term
 /// - term_coefs: flattened coefficients for each term (None = all 1s)
+/// - term_coef_sizes: shape of coefficient array for each term (for proper indexing)
+/// - term_coef_free_map: for each term, maps coef dimension to free set index (-1 if not mapped)
 /// - term_is_free_dims: which dims are free (iterate constraints) vs sum
 /// - free_set_sizes: sizes of the free sets (determines number of constraints)
 /// - rhs_flat: RHS values, one per constraint
@@ -1132,12 +1134,14 @@ fn cartesian_indices(sizes: &[usize]) -> Vec<Vec<usize>> {
 ///
 /// Returns: (indptr, indices, data, row_lower, row_upper)
 #[pyfunction]
-#[pyo3(signature = (term_var_starts, term_dim_sizes, term_coefs, term_is_free_dims, free_set_sizes, rhs_flat, sense))]
+#[pyo3(signature = (term_var_starts, term_dim_sizes, term_coefs, term_coef_sizes, term_coef_free_map, term_is_free_dims, free_set_sizes, rhs_flat, sense))]
 fn build_multi_term_csr(
     py: Python<'_>,
     term_var_starts: Vec<i32>,
     term_dim_sizes: Vec<Vec<usize>>,
     term_coefs: Vec<Option<PyReadonlyArray1<'_, f64>>>,
+    term_coef_sizes: Vec<Vec<usize>>,      // NEW: shape of coef array for each term
+    term_coef_free_map: Vec<Vec<i32>>,     // NEW: coef dim -> free set index mapping
     term_is_free_dims: Vec<Vec<bool>>,
     free_set_sizes: Vec<usize>,
     rhs_flat: PyReadonlyArray1<'_, f64>,
@@ -1160,8 +1164,19 @@ fn build_multi_term_csr(
     // Calculate total number of constraints
     let n_cons: usize = free_set_sizes.iter().product();
 
-    // Precompute strides for each term
+    // Precompute strides for each term's variable dimensions
     let term_var_strides: Vec<Vec<usize>> = term_dim_sizes.iter()
+        .map(|sizes| {
+            let mut strides = vec![1usize; sizes.len()];
+            for i in (0..sizes.len().saturating_sub(1)).rev() {
+                strides[i] = strides[i + 1] * sizes[i + 1];
+            }
+            strides
+        })
+        .collect();
+
+    // Precompute strides for each term's coefficient dimensions
+    let term_coef_strides: Vec<Vec<usize>> = term_coef_sizes.iter()
         .map(|sizes| {
             let mut strides = vec![1usize; sizes.len()];
             for i in (0..sizes.len().saturating_sub(1)).rev() {
@@ -1267,22 +1282,34 @@ fn build_multi_term_csr(
                         var_flat_idx += idx * var_strides[d];
                     }
 
-                    // Get coefficient
+                    // Compute coefficient index using coef_free_map
+                    // coef_free_map[d] tells us which free_index to use for coef dim d
+                    // -1 means it's not mapped (use 0, shouldn't happen for valid coefs)
                     let c = if let Some(ref coef) = coef_data[t] {
-                        coef.get(var_flat_idx).copied().unwrap_or(1.0)
+                        let coef_free_map = &term_coef_free_map[t];
+                        let coef_strides = &term_coef_strides[t];
+                        
+                        let mut coef_flat_idx = 0usize;
+                        for (cd, &free_idx) in coef_free_map.iter().enumerate() {
+                            if free_idx >= 0 {
+                                let idx_val = free_indices[free_idx as usize];
+                                coef_flat_idx += idx_val * coef_strides[cd];
+                            }
+                        }
+                        coef.get(coef_flat_idx).copied().unwrap_or(1.0)
                     } else {
                         1.0
                     };
 
-                    if c != 0.0 {
-                        unsafe {
-                            let indices_ptr = indices.as_ptr() as *mut i32;
-                            let data_ptr = data.as_ptr() as *mut f64;
-                            *indices_ptr.add(pos) = var_start + var_flat_idx as i32;
-                            *data_ptr.add(pos) = c;
-                        }
-                        pos += 1;
+                    // Always write entry (including zeros) since we pre-allocated
+                    // based on structural sparsity. Solver handles explicit zeros.
+                    unsafe {
+                        let indices_ptr = indices.as_ptr() as *mut i32;
+                        let data_ptr = data.as_ptr() as *mut f64;
+                        *indices_ptr.add(pos) = var_start + var_flat_idx as i32;
+                        *data_ptr.add(pos) = c;
                     }
+                    pos += 1;
                 }
             }
         });
