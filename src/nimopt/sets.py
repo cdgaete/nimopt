@@ -38,12 +38,13 @@ class Set:
     True
     """
 
-    __slots__ = ("name", "elements", "_index_map")
+    __slots__ = ("name", "elements", "_index_map", "_hash")
 
     def __init__(self, name: str, elements: List[Any]):
         self.name = name
         self.elements = list(elements)
         self._index_map = {e: idx for idx, e in enumerate(self.elements)}
+        self._hash = hash((self.name, tuple(self.elements)))
 
     def __repr__(self):
         if len(self.elements) <= 5:
@@ -65,7 +66,7 @@ class Set:
         return False
 
     def __hash__(self):
-        return hash((self.name, tuple(self.elements)))
+        return self._hash
 
     def index(self, element: Any) -> int:
         """Get the integer index of an element."""
