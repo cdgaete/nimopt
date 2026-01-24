@@ -103,13 +103,25 @@ class Variable:
     def is_scalar(self) -> bool:
         return len(self.sets) == 0
 
-    def all_names(self) -> List[str]:
-        """Generate all concrete variable names for LP output."""
+    def all_names(self, sanitize: bool = False) -> List[str]:
+        """Generate all concrete variable names for LP output.
+
+        Args:
+            sanitize: If True, sanitize element names for LP format.
+        """
         if not self.sets:
             return [self.name]
         names = []
-        for combo in itertools.product(*(s.elements for s in self.sets)):
-            names.append(self.name + "_" + "_".join(str(e) for e in combo))
+        if sanitize:
+            from .writers import sanitize_lp_name
+
+            for combo in itertools.product(*(s.elements for s in self.sets)):
+                names.append(
+                    self.name + "_" + "_".join(sanitize_lp_name(e) for e in combo)
+                )
+        else:
+            for combo in itertools.product(*(s.elements for s in self.sets)):
+                names.append(self.name + "_" + "_".join(str(e) for e in combo))
         return names
 
     # Arithmetic operators for scalar variables
@@ -261,6 +273,12 @@ class VarRef:
         from .expression import LinearExpr
 
         return LinearExpr.from_term(self, 1.0) - other
+
+    def __rsub__(self, other):
+        from .expression import LinearExpr
+
+        # other - self = other + (-self)
+        return other + LinearExpr.from_term(self, -1.0)
 
     def __neg__(self):
         from .expression import LinearExpr

@@ -8,6 +8,7 @@ import nimblend as nb
 from ..expression import LinearExpr
 from ..sets import Set
 from ..variable import Variable, VarRef
+from . import sanitize_lp_name
 
 
 def write_lp(model, filename: str) -> None:
@@ -30,22 +31,46 @@ def _build_var_names(model) -> Dict[Tuple, str]:
             names[(id(var), ())] = var.name
         else:
             for combo in itertools.product(*(s.elements for s in var.sets)):
-                vname = var.name + "_" + "_".join(str(e) for e in combo)
+                vname = var.name + "_" + "_".join(sanitize_lp_name(e) for e in combo)
                 names[(id(var), combo)] = vname
     return names
 
 
 def _get_coef(coef, var_sets: List[Set], combo: tuple) -> float:
-    """Get coefficient value for a specific variable index."""
+    """Get coefficient value for a specific variable index.
+
+    Handles subset aliasing: when variable is indexed by a subset (e.g., Dispatchable)
+    but coefficient is indexed by superset (e.g., Technologies), looks up by element value.
+    """
     if isinstance(coef, (int, float)):
         return float(coef)
     elif isinstance(coef, nb.Array):
         indices = []
+        used_dims = set()
+
         for i, s in enumerate(var_sets):
-            if s.name in coef.dims:
-                elem = combo[i]
+            elem = combo[i]
+
+            # First try exact dimension name match
+            if s.name in coef.dims and s.name not in used_dims:
                 coord_list = list(coef.coords[s.name])
                 indices.append(coord_list.index(elem))
+                used_dims.add(s.name)
+            else:
+                # Try to find element in any unused dimension (subset aliasing)
+                found = False
+                for dim in coef.dims:
+                    if dim in used_dims:
+                        continue
+                    coord_list = list(coef.coords[dim])
+                    if elem in coord_list:
+                        indices.append(coord_list.index(elem))
+                        used_dims.add(dim)
+                        found = True
+                        break
+                # If not found in any dim, element might not be in coefficient
+                # (will cause index error or wrong lookup - handled below)
+
         if indices:
             return float(coef.values[tuple(indices)])
         return float(coef.values)
@@ -55,23 +80,60 @@ def _get_coef(coef, var_sets: List[Set], combo: tuple) -> float:
 
 
 def _get_rhs(rhs, bindings: Dict[Set, Any]) -> float:
-    """Get RHS value for constraint."""
+    """Get RHS value for constraint.
+
+    Handles subset aliasing: looks up by element value when set names don't match.
+    """
     if isinstance(rhs, (int, float)):
         return float(rhs)
     elif isinstance(rhs, nb.Array):
         indices = []
-        for s in bindings:
-            if s.name in rhs.dims:
+        used_dims = set()
+
+        for s, elem in bindings.items():
+            # First try exact dimension name match
+            if s.name in rhs.dims and s.name not in used_dims:
                 coord_list = list(rhs.coords[s.name])
-                indices.append(coord_list.index(bindings[s]))
+                indices.append(coord_list.index(elem))
+                used_dims.add(s.name)
+            else:
+                # Try to find element in any unused dimension (subset aliasing)
+                for dim in rhs.dims:
+                    if dim in used_dims:
+                        continue
+                    coord_list = list(rhs.coords[dim])
+                    if elem in coord_list:
+                        indices.append(coord_list.index(elem))
+                        used_dims.add(dim)
+                        break
+
         if indices:
             return float(rhs.values[tuple(indices)])
         return float(rhs.values.flat[0])
     elif hasattr(rhs, "array"):
-        indices = [s.index(bindings[s]) for s in rhs.sets if s in bindings]
+        # Handle ParamRef - use its underlying array
+        arr = rhs.array
+        indices = []
+        used_dims = set()
+
+        for s, elem in bindings.items():
+            if s.name in arr.dims and s.name not in used_dims:
+                coord_list = list(arr.coords[s.name])
+                indices.append(coord_list.index(elem))
+                used_dims.add(s.name)
+            else:
+                for dim in arr.dims:
+                    if dim in used_dims:
+                        continue
+                    coord_list = list(arr.coords[dim])
+                    if elem in coord_list:
+                        indices.append(coord_list.index(elem))
+                        used_dims.add(dim)
+                        break
+
         if indices:
-            return float(rhs.array.values[tuple(indices)])
-        return float(rhs.values.flat[0])
+            return float(arr.values[tuple(indices)])
+        return float(arr.values.flat[0])
     return 0.0
 
 
@@ -147,23 +209,35 @@ def _write_constraints(f: TextIO, model, var_names: Dict) -> None:
         free = con.free_sets
         if not free:
             f.write(f" {eq_name}: ")
-            _write_lhs(f, norm_lhs, var_names, {})
-            if hasattr(con.rhs, "array"):
+            if not _write_lhs(f, norm_lhs, var_names, {}):
+                # Lagged index out of bounds - remove partial write
+                f.seek(f.tell() - len(f" {eq_name}: "))
+                continue
+            if isinstance(con.rhs, nb.Array):
+                rv = _get_rhs(con.rhs, {})
+            elif hasattr(con.rhs, "array"):
                 rv = _get_rhs(con.rhs, {})
             else:
                 rv = rhs_const
             f.write(f" {sm[con.sense]} {rv}\n")
         else:
             combos = list(itertools.product(*(s.elements for s in free)))
-            for idx, combo in enumerate(combos):
+            con_idx = 0
+            for combo in combos:
                 bindings = dict(zip(free, combo))
-                f.write(f" {eq_name}_{idx}: ")
+                # Check if constraint should be skipped before writing name
+                if not _check_lag_bounds(norm_lhs, bindings):
+                    continue
+                f.write(f" {eq_name}_{con_idx}: ")
                 _write_lhs(f, norm_lhs, var_names, bindings)
-                if hasattr(con.rhs, "array"):
+                if isinstance(con.rhs, nb.Array):
+                    rv = _get_rhs(con.rhs, bindings)
+                elif hasattr(con.rhs, "array"):
                     rv = _get_rhs(con.rhs, bindings)
                 else:
                     rv = rhs_const
                 f.write(f" {sm[con.sense]} {rv}\n")
+                con_idx += 1
     f.write("\n")
 
 
@@ -176,16 +250,59 @@ def _negate_coef(coef):
     return coef
 
 
+def _check_lag_bounds(expr: LinearExpr, bindings: Dict[Set, Any]) -> bool:
+    """Check if any lagged indices are out of bounds.
+    
+    Returns True if constraint should be generated, False to skip.
+    """
+    for var, coef, fixed, lagged in expr.terms:
+        if lagged:
+            for pos, ls in lagged:
+                base_set = ls.base_set
+                if base_set in bindings:
+                    elem = bindings[base_set]
+                    lagged_elem = ls.get_lagged_element(elem)
+                    if lagged_elem is None:
+                        return False
+    return True
+
+
 def _write_lhs(
     f: TextIO, expr: LinearExpr, var_names: Dict, bindings: Dict[Set, Any]
-) -> None:
-    """Write LHS expression terms."""
+) -> bool:
+    """Write LHS expression terms.
+    
+    Returns False if constraint should be skipped (lagged index out of bounds).
+    """
+    from ..sets import LaggedSet
+    
+    # First pass: check if any lagged indices are out of bounds
+    for var, coef, fixed, lagged in expr.terms:
+        if lagged:
+            for pos, ls in lagged:
+                base_set = ls.base_set
+                if base_set in bindings:
+                    elem = bindings[base_set]
+                    lagged_elem = ls.get_lagged_element(elem)
+                    if lagged_elem is None:
+                        return False  # Skip this constraint
+
     first = True
-    for var, coef, fixed, _lagged in expr.terms:
+    for var, coef, fixed, lagged in expr.terms:
+        # Build lagged_map for quick lookup
+        lagged_map = {pos: ls for pos, ls in lagged} if lagged else {}
+        
         var_combos = []
-        for s in var.sets:
+        for i, s in enumerate(var.sets):
             if s in bindings:
                 var_combos.append([bindings[s]])
+            elif i in lagged_map:
+                # For lagged dims, use the binding for base set
+                base_set = lagged_map[i].base_set
+                if base_set in bindings:
+                    var_combos.append([bindings[base_set]])
+                else:
+                    var_combos.append(base_set.elements)
             else:
                 var_combos.append(s.elements)
 
@@ -195,19 +312,28 @@ def _write_lhs(
             combos = [()]
 
         for combo in combos:
-            vname = var_names[(id(var), combo)]
+            # Apply lag offset to get actual variable indices
+            actual_combo = list(combo)
+            for pos, ls in lagged_map.items():
+                elem = combo[pos]
+                lagged_elem = ls.get_lagged_element(elem)
+                actual_combo[pos] = lagged_elem
+            
+            vname = var_names[(id(var), tuple(actual_combo))]
             cv = _get_coef(coef, var.sets, combo)
             first = _write_term(f, vname, cv, first)
 
     if first:
         f.write("0")
+    
+    return True
 
 
 def _write_bounds(f: TextIO, model) -> None:
     """Write bounds section."""
     f.write("Bounds\n")
     for var in model.variables.values():
-        for vn in var.all_names():
+        for vn in var.all_names(sanitize=True):
             if var.lb is None and var.ub is None:
                 f.write(f" {vn} free\n")
             elif var.lb is None:
@@ -225,9 +351,9 @@ def _write_var_types(f: TextIO, model) -> None:
     bins = []
     for v in model.variables.values():
         if v.vtype == "integer":
-            ints.extend(v.all_names())
+            ints.extend(v.all_names(sanitize=True))
         elif v.vtype == "binary":
-            bins.extend(v.all_names())
+            bins.extend(v.all_names(sanitize=True))
 
     if ints:
         f.write("General\n")

@@ -27,7 +27,7 @@ Example
 from .expression import Constraint, LinearExpr
 from .functions import Sum, abs_, exp, log, power, sqrt
 from .model import Model
-from .param import Param
+from .param import Param, ParamRef
 from .sets import LaggedSet, Set
 from .solution_api import extract_solution, load_solution, to_csv
 from .variable import Variable, VarRef
@@ -38,6 +38,7 @@ __all__ = [
     "Set",
     "LaggedSet",
     "Param",
+    "ParamRef",
     "Variable",
     "VarRef",
     "LinearExpr",

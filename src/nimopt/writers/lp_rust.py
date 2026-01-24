@@ -6,6 +6,8 @@ from typing import List
 import nimblend as nb
 import numpy as np
 
+from . import sanitize_lp_name
+
 try:
     import nimopt_rust
 
@@ -43,7 +45,7 @@ def _write_objective_fast(model, filename: str) -> None:
     for term in model.objective.terms:
         var, coef, _ = term[0], term[1], term[2]
         if var.sets:
-            dim_elements = [[str(e) for e in s.elements] for s in var.sets]
+            dim_elements = [[sanitize_lp_name(e) for e in s.elements] for s in var.sets]
             if isinstance(coef, nb.Array):
                 coefs = coef.values.flatten().astype(np.float64)
             elif hasattr(coef, "array"):
@@ -81,7 +83,7 @@ def _get_objective_data(model):
             if var.sets:
                 combos = list(itertools.product(*(s.elements for s in var.sets)))
                 for combo in combos:
-                    suffix = "_" + "_".join(str(e) for e in combo)
+                    suffix = "_" + "_".join(sanitize_lp_name(e) for e in combo)
                     var_names.append(var.name + suffix)
             else:
                 var_names.append(var.name)
@@ -186,7 +188,7 @@ def _write_sum_constraints_fast(
 
     # Build var_dim_elements and is_free_dim in variable dimension order
     free_set_ids = {id(s) for s in free_sets}
-    var_dim_elements = [[str(e) for e in s.elements] for s in var.sets]
+    var_dim_elements = [[sanitize_lp_name(e) for e in s.elements] for s in var.sets]
     is_free_dim = [id(s) in free_set_ids for s in var.sets]
 
     # Coefficient array
@@ -256,7 +258,9 @@ def _write_batch_constraints_rust(
                     var_combos.append(s.elements)
 
             for combo in itertools.product(*var_combos) if var_combos else [()]:
-                suffix = "_" + "_".join(str(e) for e in combo) if combo else ""
+                suffix = (
+                    "_" + "_".join(sanitize_lp_name(e) for e in combo) if combo else ""
+                )
                 vname = var.name + suffix
                 cv = _get_coef_scalar(coef, var.sets, combo)
                 con_var_names.append(vname)
@@ -268,7 +272,20 @@ def _write_batch_constraints_rust(
         all_var_names.extend(con_var_names)
         all_coefs.extend(con_coefs)
 
-        if hasattr(rhs_orig, "array"):
+        if isinstance(rhs_orig, nb.Array):
+            # Direct nb.Array (e.g., from Param * Param)
+            indices = []
+            for dim in rhs_orig.dims:
+                for s, elem in bindings.items():
+                    if s.name == dim:
+                        coord_list = list(rhs_orig.coords[dim])
+                        indices.append(coord_list.index(elem))
+                        break
+            if indices:
+                rv = float(rhs_orig.values[tuple(indices)])
+            else:
+                rv = float(rhs_orig.values.flat[0])
+        elif hasattr(rhs_orig, "array"):
             indices = [s.index(bindings[s]) for s in rhs_orig.sets if s in bindings]
             if indices:
                 rv = float(rhs_orig.array.values[tuple(indices)])
@@ -357,7 +374,9 @@ def _write_single_constraint_py(
                     var_combos.append(s.elements)
 
             for combo in itertools.product(*var_combos) if var_combos else [()]:
-                suffix = "_" + "_".join(str(e) for e in combo) if combo else ""
+                suffix = (
+                    "_" + "_".join(sanitize_lp_name(e) for e in combo) if combo else ""
+                )
                 vname = var.name + suffix
                 cv = _get_coef_scalar(coef, var.sets, combo)
                 if cv == 0:
@@ -385,7 +404,11 @@ def _write_single_constraint_py(
         if first:
             f.write("0")
 
-        if hasattr(rhs_orig, "array"):
+        if isinstance(rhs_orig, nb.Array):
+            rv = float(rhs_orig.values.flat[0])
+        elif hasattr(rhs_orig, "array"):
+            rv = float(rhs_orig.values.flat[0])
+        elif hasattr(rhs_orig, "values"):
             rv = float(rhs_orig.values.flat[0])
         else:
             rv = rhs_const
@@ -408,7 +431,7 @@ def _write_bounds_fast(model, filename):
 
     for var in model.variables.values():
         if var.sets:
-            dim_elements = [[str(e) for e in s.elements] for s in var.sets]
+            dim_elements = [[sanitize_lp_name(e) for e in s.elements] for s in var.sets]
             nimopt_rust.write_bounds_fast(
                 filename, var.name, dim_elements, var.lb, var.ub
             )
@@ -431,7 +454,7 @@ def _get_bounds_data(model):
     lbs = []
     ubs = []
     for var in model.variables.values():
-        for vn in var.all_names():
+        for vn in var.all_names(sanitize=True):
             all_vars.append(vn)
             lbs.append(var.lb)
             ubs.append(var.ub)
@@ -444,7 +467,7 @@ def _get_var_types(model):
     bins = []
     for var in model.variables.values():
         if var.vtype == "integer":
-            ints.extend(var.all_names())
+            ints.extend(var.all_names(sanitize=True))
         elif var.vtype == "binary":
-            bins.extend(var.all_names())
+            bins.extend(var.all_names(sanitize=True))
     return ints, bins

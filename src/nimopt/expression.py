@@ -111,7 +111,21 @@ class LinearExpr:
         return NotImplemented
 
     def __mul__(self, other):
+        from .param import Param
+
+        # Convert Param to Array
+        if isinstance(other, Param):
+            other = other.array
+
         if isinstance(other, (int, float)):
+            new_terms = [
+                (t[0], _scale(t[1], other), t[2], t[3] if len(t) > 3 else [])
+                for t in self.terms
+            ]
+            new_const = _scale(self.const, other)
+            return LinearExpr(new_terms, new_const, self.free_sets.copy())
+        elif isinstance(other, nb.Array):
+            # Scale all coefficients by the Array
             new_terms = [
                 (t[0], _scale(t[1], other), t[2], t[3] if len(t) > 3 else [])
                 for t in self.terms

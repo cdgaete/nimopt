@@ -31,7 +31,7 @@ def sqrt(x: Union["Param", nb.Array, float]) -> Union["Param", nb.Array, float]:
 
     Parameters
     ----------
-    x : Param, nb.Array, or scalar
+    x : Param, ParamRef, nb.Array, or scalar
         Input value(s).
 
     Returns
@@ -43,9 +43,14 @@ def sqrt(x: Union["Param", nb.Array, float]) -> Union["Param", nb.Array, float]:
     >>> eff = Param('eff', [storages], [0.81, 0.9])
     >>> sqrt_eff = sqrt(eff)  # Returns Param with [0.9, 0.949...]
     """
-    from .param import Param
+    from .param import Param, ParamRef
 
-    if isinstance(x, Param):
+    if isinstance(x, ParamRef):
+        # Apply sqrt to underlying param, return ParamRef with same indices
+        new_data = np.sqrt(x.param.values)
+        new_param = Param(f"sqrt_{x.param.name}", x.param.sets, new_data)
+        return ParamRef(new_param, x.indices)
+    elif isinstance(x, Param):
         new_data = np.sqrt(x.values)
         return Param(f"sqrt_{x.name}", x.sets, new_data)
     elif isinstance(x, nb.Array):
@@ -56,9 +61,13 @@ def sqrt(x: Union["Param", nb.Array, float]) -> Union["Param", nb.Array, float]:
 
 def exp(x: Union["Param", nb.Array, float]) -> Union["Param", nb.Array, float]:
     """Exponential function - vectorized for parameters and arrays."""
-    from .param import Param
+    from .param import Param, ParamRef
 
-    if isinstance(x, Param):
+    if isinstance(x, ParamRef):
+        new_data = np.exp(x.param.values)
+        new_param = Param(f"exp_{x.param.name}", x.param.sets, new_data)
+        return ParamRef(new_param, x.indices)
+    elif isinstance(x, Param):
         new_data = np.exp(x.values)
         return Param(f"exp_{x.name}", x.sets, new_data)
     elif isinstance(x, nb.Array):
@@ -69,9 +78,13 @@ def exp(x: Union["Param", nb.Array, float]) -> Union["Param", nb.Array, float]:
 
 def log(x: Union["Param", nb.Array, float]) -> Union["Param", nb.Array, float]:
     """Natural logarithm - vectorized for parameters and arrays."""
-    from .param import Param
+    from .param import Param, ParamRef
 
-    if isinstance(x, Param):
+    if isinstance(x, ParamRef):
+        new_data = np.log(x.param.values)
+        new_param = Param(f"log_{x.param.name}", x.param.sets, new_data)
+        return ParamRef(new_param, x.indices)
+    elif isinstance(x, Param):
         new_data = np.log(x.values)
         return Param(f"log_{x.name}", x.sets, new_data)
     elif isinstance(x, nb.Array):
@@ -86,9 +99,13 @@ def abs_(x: Union["Param", nb.Array, float]) -> Union["Param", nb.Array, float]:
 
     Note: Named abs_ to avoid shadowing builtin abs().
     """
-    from .param import Param
+    from .param import Param, ParamRef
 
-    if isinstance(x, Param):
+    if isinstance(x, ParamRef):
+        new_data = np.abs(x.param.values)
+        new_param = Param(f"abs_{x.param.name}", x.param.sets, new_data)
+        return ParamRef(new_param, x.indices)
+    elif isinstance(x, Param):
         new_data = np.abs(x.values)
         return Param(f"abs_{x.name}", x.sets, new_data)
     elif isinstance(x, nb.Array):
@@ -101,9 +118,13 @@ def power(
     x: Union["Param", nb.Array, float], n: float
 ) -> Union["Param", nb.Array, float]:
     """Power function - vectorized for parameters and arrays."""
-    from .param import Param
+    from .param import Param, ParamRef
 
-    if isinstance(x, Param):
+    if isinstance(x, ParamRef):
+        new_data = np.power(x.param.values, n)
+        new_param = Param(f"pow_{x.param.name}_{n}", x.param.sets, new_data)
+        return ParamRef(new_param, x.indices)
+    elif isinstance(x, Param):
         new_data = np.power(x.values, n)
         return Param(f"pow_{x.name}_{n}", x.sets, new_data)
     elif isinstance(x, nb.Array):
@@ -203,9 +224,9 @@ def _sum_linear(sets: list, expr: LinearExpr) -> LinearExpr:
     new_const = expr.const
     if isinstance(new_const, nb.Array):
         for s in sets:
-            if s.name in new_const.dims:
+            if isinstance(new_const, nb.Array) and s.name in new_const.dims:
                 new_const = new_const.sum(s.name)
-        if not new_const.dims:
+        if isinstance(new_const, nb.Array) and not new_const.dims:
             new_const = float(new_const.values)
 
     return LinearExpr(

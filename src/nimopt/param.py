@@ -5,12 +5,92 @@ Parameters store constant data indexed by Sets. Internally uses
 nimblend for labeled N-dimensional arrays with automatic broadcasting.
 """
 
-from typing import Any, List, Union
+from typing import Any, List, Tuple, Union
 
 import nimblend as nb
 import numpy as np
 
-from .sets import Set
+from .sets import LaggedSet, Set
+
+
+class ParamRef:
+    """
+    Reference to a parameter with symbolic indexing.
+
+    Similar to VarRef, tracks which sets were used for indexing.
+    This allows proper free_set detection when subsets are used
+    to index parameters defined over supersets.
+    """
+
+    __slots__ = ("param", "indices")
+
+    def __init__(self, param: "Param", indices: Tuple):
+        self.param = param
+        self.indices = indices
+
+    def __repr__(self):
+        parts = []
+        for s in self.indices:
+            if isinstance(s, Set):
+                parts.append(s.name)
+            elif isinstance(s, LaggedSet):
+                sign = "-" if s.offset < 0 else "+"
+                parts.append(f"{s.base_set.name}{sign}{abs(s.offset)}")
+            else:
+                parts.append(repr(s))
+        return f"{self.param.name}[{', '.join(parts)}]"
+
+    @property
+    def name(self):
+        return self.param.name
+
+    @property
+    def array(self):
+        """Return underlying nimblend array for coefficient extraction."""
+        return self.param.array
+
+    @property
+    def sets(self) -> List[Set]:
+        """Return the SYMBOLIC sets used for indexing (not underlying param sets)."""
+        result = []
+        for idx in self.indices:
+            if isinstance(idx, Set):
+                result.append(idx)
+            elif isinstance(idx, LaggedSet):
+                result.append(idx.base_set)
+        return result
+
+    @property
+    def values(self):
+        return self.param.values
+
+    # Arithmetic - delegate to param's array
+    def __add__(self, other):
+        return self.param.array + other
+
+    def __radd__(self, other):
+        return other + self.param.array
+
+    def __sub__(self, other):
+        return self.param.array - other
+
+    def __rsub__(self, other):
+        return other - self.param.array
+
+    def __mul__(self, other):
+        return self.param.array * other
+
+    def __rmul__(self, other):
+        return other * self.param.array
+
+    def __truediv__(self, other):
+        return self.param.array / other
+
+    def __rtruediv__(self, other):
+        return other / self.param.array
+
+    def __neg__(self):
+        return -self.param.array
 
 
 class Param:
@@ -62,11 +142,11 @@ class Param:
         dims = ", ".join(s.name for s in self.sets)
         return f"Param('{self.name}', [{dims}], shape={self.array.shape})"
 
-    def __getitem__(self, indices) -> Union[float, "Param"]:
+    def __getitem__(self, indices) -> Union[float, "ParamRef"]:
         """
         Index the parameter.
 
-        Returns scalar if all indices concrete, or view if partial.
+        Returns scalar if all indices concrete, or ParamRef if any symbolic.
         """
         if not isinstance(indices, tuple):
             indices = (indices,)
@@ -76,12 +156,16 @@ class Param:
                 f"Param '{self.name}' has {len(self.sets)} dims, got {len(indices)}"
             )
 
-        # Check if all concrete (not Set objects)
+        # Check if any indices are symbolic (Set or LaggedSet objects)
+        has_symbolic = any(isinstance(idx, (Set, LaggedSet)) for idx in indices)
+
+        if has_symbolic:
+            # Return ParamRef that tracks the symbolic indices
+            return ParamRef(self, indices)
+
+        # All concrete - return scalar value
         int_indices = []
         for idx, s in zip(indices, self.sets):
-            if isinstance(idx, Set):
-                # Symbolic - return self for expression building
-                return self
             int_indices.append(s.index(idx))
 
         return float(self.array.values[tuple(int_indices)])
