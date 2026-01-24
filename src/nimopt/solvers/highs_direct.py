@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
+import nimblend as nb
 import numpy as np
 
 from .base import Solver, SolverResult, SolverStatus
@@ -183,9 +184,27 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
             if isinstance(coef, (int, float)):
                 c[start : start + n] = float(coef)
             elif isinstance(coef, nb.Array):
-                c[start : start + n] = coef.values.flatten()
+                # Need to broadcast coef to var's shape if dimensions differ
+                if var.sets and coef.shape != tuple(len(s) for s in var.sets):
+                    target_shape = tuple(len(s) for s in var.sets)
+                    target_coords = {s.name: np.array(s.elements) for s in var.sets}
+                    target_dims = [s.name for s in var.sets]
+                    ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
+                    broadcasted = coef * ones
+                    c[start : start + n] = broadcasted.values.flatten()
+                else:
+                    c[start : start + n] = coef.values.flatten()
             elif hasattr(coef, "array"):
-                c[start : start + n] = coef.array.values.flatten()
+                arr = coef.array
+                if var.sets and arr.shape != tuple(len(s) for s in var.sets):
+                    target_shape = tuple(len(s) for s in var.sets)
+                    target_coords = {s.name: np.array(s.elements) for s in var.sets}
+                    target_dims = [s.name for s in var.sets]
+                    ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
+                    broadcasted = arr * ones
+                    c[start : start + n] = broadcasted.values.flatten()
+                else:
+                    c[start : start + n] = arr.values.flatten()
             else:
                 c[start : start + n] = float(coef)
 
@@ -260,6 +279,31 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
                 all_row_lower.append(row_lower)
                 all_row_upper.append(row_upper)
                 con_names.extend(eq_name + "_" + s for s in suffixes)
+                total_nnz += len(indices)
+                continue
+
+        # Multi-term Rust fast path: multiple terms, free sets, no lagged indices
+        can_use_multi_rust = (
+            free_sets
+            and not has_lagged
+            and all(not term[2] for term in lhs_terms)  # no fixed indices
+            and all(term[0].sets for term in lhs_terms)  # all vars indexed
+        )
+
+        if can_use_multi_rust:
+            result = _build_multi_term_csr_rust(
+                lhs_terms, free_sets, con.rhs, rhs_const, sense, var_start_idx
+            )
+            if result is not None:
+                indptr, indices, data, row_lower, row_upper = result
+                n_rows = len(indptr) - 1
+                for ptr in indptr[1:]:
+                    all_indptr.append(ptr + total_nnz)
+                all_indices.append(indices)
+                all_data.append(data)
+                all_row_lower.append(row_lower)
+                all_row_upper.append(row_upper)
+                con_names.extend(f"{eq_name}_{i}" for i in range(n_rows))
                 total_nnz += len(indices)
                 continue
 
@@ -426,6 +470,91 @@ def _build_sum_csr_rust_fast(
         np.asarray(row_lower),
         np.asarray(row_upper),
         suffixes,
+    )
+
+
+def _build_multi_term_csr_rust(
+    lhs_terms, free_sets, rhs_orig, rhs_const, sense, var_start_idx
+) -> Optional[Tuple]:
+    """Build multi-term constraint CSR using Rust."""
+    import nimblend as nb
+
+    free_set_ids = {id(s): i for i, s in enumerate(free_sets)}
+
+    # Build term specs
+    term_var_starts = []
+    term_dim_sizes = []
+    term_coefs = []
+    term_is_free_dims = []
+
+    for var, coef, fixed, lagged in lhs_terms:
+        term_var_starts.append(var_start_idx[var.name])
+        term_dim_sizes.append([len(s) for s in var.sets])
+        term_is_free_dims.append([id(s) in free_set_ids for s in var.sets])
+
+        # Coefficient - need to broadcast to var's shape
+        if isinstance(coef, nb.Array):
+            if coef.shape != tuple(len(s) for s in var.sets):
+                target_shape = tuple(len(s) for s in var.sets)
+                target_coords = {s.name: np.array(s.elements) for s in var.sets}
+                target_dims = [s.name for s in var.sets]
+                ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
+                broadcasted = coef * ones
+                term_coefs.append(broadcasted.values.flatten().astype(np.float64))
+            else:
+                term_coefs.append(coef.values.flatten().astype(np.float64))
+        elif hasattr(coef, "array"):
+            arr = coef.array
+            if arr.shape != tuple(len(s) for s in var.sets):
+                target_shape = tuple(len(s) for s in var.sets)
+                target_coords = {s.name: np.array(s.elements) for s in var.sets}
+                target_dims = [s.name for s in var.sets]
+                ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
+                broadcasted = arr * ones
+                term_coefs.append(broadcasted.values.flatten().astype(np.float64))
+            else:
+                term_coefs.append(arr.values.flatten().astype(np.float64))
+        elif isinstance(coef, (int, float)):
+            size = 1
+            for s in var.sets:
+                size *= len(s)
+            term_coefs.append(np.full(size, float(coef), dtype=np.float64))
+        else:
+            term_coefs.append(None)
+
+    # Free set sizes
+    free_set_sizes = [len(s) for s in free_sets]
+
+    # RHS array
+    n_cons = 1
+    for s in free_sets:
+        n_cons *= len(s)
+
+    if hasattr(rhs_orig, "array"):
+        rhs_flat = rhs_orig.array.values.flatten().astype(np.float64)
+    elif hasattr(rhs_orig, "values"):
+        rhs_flat = rhs_orig.values.flatten().astype(np.float64)
+    else:
+        rhs_flat = np.full(n_cons, rhs_const, dtype=np.float64)
+
+    sense_str = "<=" if sense == "<=" else (">=" if sense == ">=" else "=")
+
+    indptr, indices, data, row_lower, row_upper = nimopt_rust.build_multi_term_csr(
+        term_var_starts,
+        term_dim_sizes,
+        term_coefs,
+        term_is_free_dims,
+        free_set_sizes,
+        rhs_flat,
+        sense_str,
+    )
+
+    return (
+        np.asarray(indptr),
+        np.asarray(indices),
+        np.asarray(data),
+        np.asarray(row_lower),
+        np.asarray(row_upper),
     )
 
 
@@ -677,7 +806,7 @@ def _build_matrices(model: "Model") -> Dict:
                     itertools.product(*(s.elements for s in var.sets))
                 ):
                     vname = var.name + "_" + "_".join(str(e) for e in combo)
-                    c[var_idx[vname]] = _get_array_coef(coef, i)
+                    c[var_idx[vname]] = _get_coef_for_combo(coef, var.sets, combo)
 
     lb = np.full(n_vars, -np.inf, dtype=np.float64)
     ub = np.full(n_vars, np.inf, dtype=np.float64)
@@ -694,12 +823,15 @@ def _build_matrices(model: "Model") -> Dict:
     for eq_name, con in model._constraints.items():
         lhs_terms = list(con.lhs.terms)
         rhs_const = 0.0
+        rhs_const_array = None  # Track array const separately
 
         if isinstance(con.rhs, LinearExpr):
             for var, coef, fixed, lagged in con.rhs.terms:
                 lhs_terms.append((var, _negate_coef(coef), fixed, lagged))
             if isinstance(con.rhs.const, (int, float)):
                 rhs_const = -con.rhs.const
+            elif isinstance(con.rhs.const, nb.Array):
+                rhs_const_array = con.rhs.const  # Keep the array for later
         elif isinstance(con.rhs, VarRef):
             # VarRef may have fixed/lagged indices
             lhs_terms.append((
@@ -720,7 +852,10 @@ def _build_matrices(model: "Model") -> Dict:
             result = _expand_constraint(lhs_terms, {}, var_idx)
             if result is not None:
                 idx_list, val_list = result
-                rhs_val = _get_rhs_value(con.rhs, {}, rhs_const)
+                if rhs_const_array is not None:
+                    rhs_val = float(rhs_const_array.values.flat[0])
+                else:
+                    rhs_val = _get_rhs_value(con.rhs, {}, rhs_const)
                 row_data.append((idx_list, val_list, sense, rhs_val))
                 con_names.append(eq_name)
         else:
@@ -730,7 +865,13 @@ def _build_matrices(model: "Model") -> Dict:
                 if result is None:
                     continue
                 idx_list, val_list = result
-                rhs_val = _get_rhs_value(con.rhs, bindings, rhs_const)
+                if rhs_const_array is not None:
+                    # Index into the array using bindings
+                    rhs_val = _get_array_value_for_bindings(
+                        rhs_const_array, free_sets, combo
+                    )
+                else:
+                    rhs_val = _get_rhs_value(con.rhs, bindings, rhs_const)
                 row_data.append((idx_list, val_list, sense, rhs_val))
                 con_names.append(eq_name + "_" + "_".join(str(e) for e in combo))
 
@@ -745,9 +886,9 @@ def _build_matrices(model: "Model") -> Dict:
     ptr = 0
     for i, (col_idx, col_val, sense, rhs) in enumerate(row_data):
         indptr[i] = ptr
-        for j, (c, v) in enumerate(zip(col_idx, col_val)):
-            indices[ptr + j] = c
-            data[ptr + j] = v
+        for j, (ci, vi) in enumerate(zip(col_idx, col_val)):
+            indices[ptr + j] = ci
+            data[ptr + j] = vi
         ptr += len(col_idx)
         if sense == "<=":
             row_lower[i] = -np.inf
@@ -835,11 +976,42 @@ def _expand_constraint(lhs_terms, bindings, var_idx):
                 vname = var.name + "_" + "_".join(str(e) for e in actual_combo)
                 idx = var_idx.get(vname)
                 if idx is not None:
-                    cv = _get_coef_for_combo(coef, var.sets, combo)
+                    # Build full index dict: var_sets combo + outer bindings
+                    full_bindings = dict(bindings)
+                    for s, elem in zip(var.sets, combo):
+                        full_bindings[s] = elem
+                    cv = _get_coef_for_bindings(coef, full_bindings)
                     if cv != 0.0:
                         indices.append(idx)
                         values.append(cv)
     return indices, values
+
+
+def _get_coef_for_bindings(coef, bindings) -> float:
+    """Get coefficient value using bindings dict (maps Set -> element)."""
+    if isinstance(coef, (int, float)):
+        return float(coef)
+    elif isinstance(coef, nb.Array):
+        indices = []
+        for dim in coef.dims:
+            # Find binding for this dim
+            for s, elem in bindings.items():
+                if s.name == dim:
+                    coord_list = list(coef.coords[dim])
+                    try:
+                        indices.append(coord_list.index(elem))
+                    except ValueError:
+                        return 0.0
+                    break
+            else:
+                # No binding for this dim - skip index
+                pass
+        if indices:
+            return float(coef.values[tuple(indices)])
+        return float(coef.values.flat[0])
+    elif hasattr(coef, "array"):
+        return _get_coef_for_bindings(coef.array, bindings)
+    return float(coef)
 
 
 def _get_scalar_coef(coef) -> float:
@@ -906,6 +1078,21 @@ def _get_rhs_value(rhs, bindings, const) -> float:
     elif hasattr(rhs, "values"):
         return float(rhs.values.flat[0])
     return const
+
+
+def _get_array_value_for_bindings(arr, free_sets, combo) -> float:
+    """Get a value from a nimblend Array using free_sets and combo bindings."""
+    indices = []
+    for i, s in enumerate(free_sets):
+        if s.name in arr.dims:
+            coord_list = list(arr.coords[s.name])
+            try:
+                indices.append(coord_list.index(combo[i]))
+            except ValueError:
+                return 0.0
+    if indices:
+        return float(arr.values[tuple(indices)])
+    return float(arr.values.flat[0])
 
 
 def _negate_coef(coef):
