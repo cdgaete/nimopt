@@ -42,34 +42,60 @@ def _write_objective_fast(model, filename: str) -> None:
             f.write(" obj: 0\n\n")
         return
 
+    # Collect all variable names and coefficients for the entire objective
+    all_var_names = []
+    all_coefs = []
+
     for term in model.objective.terms:
         var, coef, _ = term[0], term[1], term[2]
         if var.sets:
             dim_elements = [[sanitize_lp_name(e) for e in s.elements] for s in var.sets]
+            target_shape = tuple(len(s) for s in var.sets)
+
             if isinstance(coef, nb.Array):
-                coefs = coef.values.flatten().astype(np.float64)
+                # Need to broadcast coef to var's shape
+                target_coords = {s.name: np.array(s.elements) for s in var.sets}
+                target_dims = [s.name for s in var.sets]
+                ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
+                broadcasted = coef * ones
+                coefs_arr = broadcasted.values.flatten().astype(np.float64)
             elif hasattr(coef, "array"):
-                coefs = coef.array.values.flatten().astype(np.float64)
+                # ParamRef - broadcast the underlying array
+                arr = coef.array
+                target_coords = {s.name: np.array(s.elements) for s in var.sets}
+                target_dims = [s.name for s in var.sets]
+                ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
+                broadcasted = arr * ones
+                coefs_arr = broadcasted.values.flatten().astype(np.float64)
             elif isinstance(coef, (int, float)):
                 size = 1
                 for s in var.sets:
                     size *= len(s)
-                coefs = np.full(size, float(coef), dtype=np.float64)
+                coefs_arr = np.full(size, float(coef), dtype=np.float64)
             else:
                 size = 1
                 for s in var.sets:
                     size *= len(s)
-                coefs = np.full(size, float(coef), dtype=np.float64)
-            nimopt_rust.write_objective_fast(filename, var.name, dim_elements, coefs)
+                coefs_arr = np.full(size, float(coef), dtype=np.float64)
+
+            # Generate variable names for this term
+            var_names = nimopt_rust.generate_var_names(var.name, dim_elements)
+            all_var_names.extend(var_names)
+            all_coefs.extend(coefs_arr.tolist())
         else:
-            # Scalar variable - use old method
+            # Scalar variable
             if isinstance(coef, (int, float)):
                 c = float(coef)
             elif hasattr(coef, "values"):
                 c = float(coef.values.flat[0])
             else:
                 c = float(coef)
-            nimopt_rust.write_objective(filename, [var.name], np.array([c]))
+            all_var_names.append(var.name)
+            all_coefs.append(c)
+
+    # Write objective with all terms at once
+    coefs_arr = np.array(all_coefs, dtype=np.float64)
+    nimopt_rust.write_objective(filename, all_var_names, coefs_arr)
 
 
 def _get_objective_data(model):
@@ -234,7 +260,96 @@ def _write_sum_constraints_fast(
 def _write_batch_constraints_rust(
     filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig, model
 ):
-    """Write a batch of constraints using Rust (fallback path)."""
+    """Write constraints using Rust - fast path with name generation in Rust."""
+    # Try the fast path first: all terms have no lagged indices
+    has_lagged = any(len(term) > 3 and term[3] for term in lhs_terms)
+
+    if not has_lagged:
+        try:
+            return _write_multi_term_fast(
+                filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig
+            )
+        except Exception:
+            pass  # Fall back to slow path
+
+    # Slow path: build variable names in Python
+    return _write_batch_constraints_rust_slow(
+        filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig, model
+    )
+
+
+def _write_multi_term_fast(
+    filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig
+):
+    """Fast path: generate variable names in Rust."""
+    free_set_ids = {id(s): i for i, s in enumerate(free_sets)}
+
+    # Build term specs for Rust
+    term_var_names = []
+    term_dim_elements = []
+    term_coefs = []
+    term_is_free_dims = []
+
+    for term in lhs_terms:
+        var, coef = term[0], term[1]
+        term_var_names.append(var.name)
+
+        # Dimension elements (sanitized)
+        dim_elems = [[sanitize_lp_name(e) for e in s.elements] for s in var.sets]
+        term_dim_elements.append(dim_elems)
+
+        # Is each dimension free?
+        is_free = [id(s) in free_set_ids for s in var.sets]
+        term_is_free_dims.append(is_free)
+
+        # Coefficient array
+        if isinstance(coef, nb.Array):
+            term_coefs.append(coef.values.flatten().astype(np.float64))
+        elif hasattr(coef, "array"):
+            term_coefs.append(coef.array.values.flatten().astype(np.float64))
+        elif isinstance(coef, (int, float)):
+            if var.sets:
+                size = 1
+                for s in var.sets:
+                    size *= len(s)
+                term_coefs.append(np.full(size, float(coef), dtype=np.float64))
+            else:
+                term_coefs.append(np.array([float(coef)], dtype=np.float64))
+        else:
+            term_coefs.append(None)
+
+    # Free set sizes
+    free_set_sizes = [len(s) for s in free_sets]
+
+    # RHS array
+    n_cons = 1
+    for s in free_sets:
+        n_cons *= len(s)
+
+    if hasattr(rhs_orig, "array"):
+        rhs_flat = rhs_orig.array.values.flatten().astype(np.float64)
+    elif hasattr(rhs_orig, "values"):
+        rhs_flat = rhs_orig.values.flatten().astype(np.float64)
+    else:
+        rhs_flat = np.full(n_cons, rhs_const, dtype=np.float64)
+
+    nimopt_rust.write_multi_term_constraints(
+        filename,
+        eq_name,
+        sense,
+        term_var_names,
+        term_dim_elements,
+        term_coefs,
+        term_is_free_dims,
+        free_set_sizes,
+        rhs_flat,
+    )
+
+
+def _write_batch_constraints_rust_slow(
+    filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig, model
+):
+    """Slow path: build variable names in Python (for lagged indices)."""
     all_var_names = []
     all_coefs = []
     all_rhs = []

@@ -956,6 +956,365 @@ fn generate_var_names(
     Ok(names)
 }
 
+/// Write multi-term constraints with variable names generated in Rust.
+/// 
+/// Each term is specified by (var_name, dim_elements, coef_flat, is_free_dim).
+/// For each constraint row (determined by free_sets), we build all variable names
+/// and collect their coefficients.
+///
+/// term_specs: Vec of (var_name, dim_elements, coef_flat, is_free_dim) for each term
+/// free_set_sizes: sizes of the free sets (determines number of constraints)
+/// rhs_flat: RHS values, one per constraint
+#[pyfunction]
+#[pyo3(signature = (filename, con_name, sense, term_var_names, term_dim_elements, term_coefs, term_is_free_dims, free_set_sizes, rhs_flat))]
+fn write_multi_term_constraints(
+    py: Python<'_>,
+    filename: &str,
+    con_name: &str,
+    sense: &str,
+    term_var_names: Vec<String>,
+    term_dim_elements: Vec<Vec<Vec<String>>>,
+    term_coefs: Vec<Option<PyReadonlyArray1<'_, f64>>>,
+    term_is_free_dims: Vec<Vec<bool>>,
+    free_set_sizes: Vec<usize>,
+    rhs_flat: PyReadonlyArray1<'_, f64>,
+) -> PyResult<()> {
+    let rhs_vals = rhs_flat.as_slice()?;
+    let sense_str = match sense { "<=" => "<=", ">=" => ">=", _ => "=" };
+    let n_terms = term_var_names.len();
+    
+    // Convert coefficient arrays to owned Vecs
+    let coef_data: Vec<Option<Vec<f64>>> = term_coefs.into_iter()
+        .map(|opt| opt.map(|arr| arr.as_slice().unwrap().to_vec()))
+        .collect();
+    
+    // Calculate total number of constraints
+    let n_cons: usize = free_set_sizes.iter().product();
+    
+    // For each term, precompute strides for coefficient indexing
+    let term_coef_strides: Vec<Vec<usize>> = term_dim_elements.iter()
+        .map(|dims| {
+            let mut strides = vec![1usize; dims.len()];
+            for i in (0..dims.len().saturating_sub(1)).rev() {
+                strides[i] = strides[i + 1] * dims[i + 1].len();
+            }
+            strides
+        })
+        .collect();
+    
+    // Compute free set strides for decoding constraint index
+    let mut free_strides = vec![1usize; free_set_sizes.len()];
+    for i in (0..free_set_sizes.len().saturating_sub(1)).rev() {
+        free_strides[i] = free_strides[i + 1] * free_set_sizes[i + 1];
+    }
+    
+    let lines: Vec<String> = py.allow_threads(|| {
+        (0..n_cons).into_par_iter().map(|con_idx| {
+            // Decode con_idx into free dimension indices
+            let mut free_indices = vec![0usize; free_set_sizes.len()];
+            let mut remaining = con_idx;
+            for (fi, &stride) in free_strides.iter().enumerate() {
+                free_indices[fi] = remaining / stride;
+                remaining %= stride;
+            }
+            
+            let mut s = format!(" {}_{}: ", con_name, con_idx);
+            let mut first = true;
+            
+            // Process each term
+            for t in 0..n_terms {
+                let var_name = &term_var_names[t];
+                let dims = &term_dim_elements[t];
+                let is_free = &term_is_free_dims[t];
+                let coef_strides = &term_coef_strides[t];
+                
+                // Determine which dim indices are fixed vs summed
+                let mut fixed_dims: Vec<(usize, usize)> = Vec::new();
+                let mut sum_dims: Vec<usize> = Vec::new();
+                let mut free_idx_counter = 0;
+                
+                for (d, &is_f) in is_free.iter().enumerate() {
+                    if is_f {
+                        fixed_dims.push((d, free_indices[free_idx_counter]));
+                        free_idx_counter += 1;
+                    } else {
+                        sum_dims.push(d);
+                    }
+                }
+                
+                // Generate all combinations of summed dimensions
+                let sum_combos = if sum_dims.is_empty() {
+                    vec![vec![]]
+                } else {
+                    let sum_sizes: Vec<usize> = sum_dims.iter().map(|&d| dims[d].len()).collect();
+                    cartesian_indices(&sum_sizes)
+                };
+                
+                for sum_combo in sum_combos {
+                    // Build full index
+                    let mut full_idx = vec![0usize; dims.len()];
+                    for &(d, idx) in &fixed_dims {
+                        full_idx[d] = idx;
+                    }
+                    for (si, &d) in sum_dims.iter().enumerate() {
+                        full_idx[d] = sum_combo[si];
+                    }
+                    
+                    // Build variable name
+                    let mut vname = var_name.clone();
+                    for (d, &idx) in full_idx.iter().enumerate() {
+                        vname.push('_');
+                        vname.push_str(&dims[d][idx]);
+                    }
+                    
+                    // Get coefficient
+                    let c = if let Some(ref coef) = coef_data[t] {
+                        let mut flat_idx = 0;
+                        for (d, &idx) in full_idx.iter().enumerate() {
+                            flat_idx += idx * coef_strides[d];
+                        }
+                        coef.get(flat_idx).copied().unwrap_or(1.0)
+                    } else {
+                        1.0
+                    };
+                    
+                    if c != 0.0 {
+                        append_term(&mut s, c, &vname, first);
+                        first = false;
+                    }
+                }
+            }
+            
+            if first { s.push_str("0"); }
+            let rval = rhs_vals.get(con_idx).copied().unwrap_or(0.0);
+            s.push_str(&format!(" {} {}\n", sense_str, rval));
+            s
+        }).collect()
+    });
+    
+    let file = File::options().append(true).open(filename)?;
+    let mut w = BufWriter::with_capacity(8 * 1024 * 1024, file);
+    for line in lines { w.write_all(line.as_bytes())?; }
+    w.flush()?;
+    Ok(())
+}
+
+fn cartesian_indices(sizes: &[usize]) -> Vec<Vec<usize>> {
+    if sizes.is_empty() { return vec![vec![]]; }
+    let mut result = vec![vec![]];
+    for &size in sizes {
+        let mut new_result = Vec::with_capacity(result.len() * size);
+        for combo in &result {
+            for idx in 0..size {
+                let mut new_combo = combo.clone();
+                new_combo.push(idx);
+                new_result.push(new_combo);
+            }
+        }
+        result = new_result;
+    }
+    result
+}
+
+/// Build CSR matrix for multi-term constraints (e.g., G[T,H] - N[T] <= 0)
+///
+/// Each term is specified by its var_start_idx, dim_sizes, coef, and is_free_dim.
+/// This handles multiple variables in the same constraint row.
+///
+/// Parameters:
+/// - term_var_starts: starting index in global variable array for each term
+/// - term_dim_sizes: list of dimension sizes for each term
+/// - term_coefs: flattened coefficients for each term (None = all 1s)
+/// - term_is_free_dims: which dims are free (iterate constraints) vs sum
+/// - free_set_sizes: sizes of the free sets (determines number of constraints)
+/// - rhs_flat: RHS values, one per constraint
+/// - sense: constraint sense
+///
+/// Returns: (indptr, indices, data, row_lower, row_upper)
+#[pyfunction]
+#[pyo3(signature = (term_var_starts, term_dim_sizes, term_coefs, term_is_free_dims, free_set_sizes, rhs_flat, sense))]
+fn build_multi_term_csr(
+    py: Python<'_>,
+    term_var_starts: Vec<i32>,
+    term_dim_sizes: Vec<Vec<usize>>,
+    term_coefs: Vec<Option<PyReadonlyArray1<'_, f64>>>,
+    term_is_free_dims: Vec<Vec<bool>>,
+    free_set_sizes: Vec<usize>,
+    rhs_flat: PyReadonlyArray1<'_, f64>,
+    sense: &str,
+) -> PyResult<(
+    Py<PyArray1<i32>>,        // indptr
+    Py<PyArray1<i32>>,        // indices
+    Py<PyArray1<f64>>,        // data
+    Py<PyArray1<f64>>,        // row_lower
+    Py<PyArray1<f64>>,        // row_upper
+)> {
+    let rhs_vals = rhs_flat.as_slice()?;
+    let n_terms = term_var_starts.len();
+
+    // Convert coefficient arrays to owned Vecs
+    let coef_data: Vec<Option<Vec<f64>>> = term_coefs.into_iter()
+        .map(|opt| opt.map(|arr| arr.as_slice().unwrap().to_vec()))
+        .collect();
+
+    // Calculate total number of constraints
+    let n_cons: usize = free_set_sizes.iter().product();
+
+    // Precompute strides for each term
+    let term_var_strides: Vec<Vec<usize>> = term_dim_sizes.iter()
+        .map(|sizes| {
+            let mut strides = vec![1usize; sizes.len()];
+            for i in (0..sizes.len().saturating_sub(1)).rev() {
+                strides[i] = strides[i + 1] * sizes[i + 1];
+            }
+            strides
+        })
+        .collect();
+
+    // Compute free set strides for decoding constraint index
+    let mut free_strides = vec![1usize; free_set_sizes.len()];
+    for i in (0..free_set_sizes.len().saturating_sub(1)).rev() {
+        free_strides[i] = free_strides[i + 1] * free_set_sizes[i + 1];
+    }
+
+    // Count total non-zeros per row (for pre-allocation)
+    let mut nnz_per_row = vec![0usize; n_cons];
+    for t in 0..n_terms {
+        let is_free = &term_is_free_dims[t];
+        let sizes = &term_dim_sizes[t];
+        let mut sum_count = 1usize;
+        for (d, &is_f) in is_free.iter().enumerate() {
+            if !is_f {
+                sum_count *= sizes[d];
+            }
+        }
+        for row in &mut nnz_per_row {
+            *row += sum_count;
+        }
+    }
+
+    let total_nnz: usize = nnz_per_row.iter().sum();
+
+    // Pre-allocate CSR arrays
+    let mut indptr = vec![0i32; n_cons + 1];
+    let mut indices = vec![0i32; total_nnz];
+    let mut data = vec![0f64; total_nnz];
+    let mut row_lower = vec![0f64; n_cons];
+    let mut row_upper = vec![0f64; n_cons];
+
+    // Build indptr
+    for i in 0..n_cons {
+        indptr[i + 1] = indptr[i] + nnz_per_row[i] as i32;
+    }
+
+    // Fill CSR in parallel
+    py.allow_threads(|| {
+        (0..n_cons).into_par_iter().for_each(|con_idx| {
+            // Decode con_idx into free dimension indices
+            let mut free_indices = vec![0usize; free_set_sizes.len()];
+            let mut remaining = con_idx;
+            for (fi, &stride) in free_strides.iter().enumerate() {
+                free_indices[fi] = remaining / stride;
+                remaining %= stride;
+            }
+
+            let row_start = indptr[con_idx] as usize;
+            let mut pos = row_start;
+
+            // Process each term
+            for t in 0..n_terms {
+                let var_start = term_var_starts[t];
+                let sizes = &term_dim_sizes[t];
+                let is_free = &term_is_free_dims[t];
+                let var_strides = &term_var_strides[t];
+
+                // Separate fixed (from free sets) and sum dimensions
+                let mut sum_dims: Vec<usize> = Vec::new();
+                let mut free_idx_counter = 0;
+
+                // Build fixed indices from free sets
+                let mut fixed_vals: Vec<(usize, usize)> = Vec::new();
+                for (d, &is_f) in is_free.iter().enumerate() {
+                    if is_f {
+                        fixed_vals.push((d, free_indices[free_idx_counter]));
+                        free_idx_counter += 1;
+                    } else {
+                        sum_dims.push(d);
+                    }
+                }
+
+                // Generate all combinations of summed dimensions
+                let sum_combos = if sum_dims.is_empty() {
+                    vec![vec![]]
+                } else {
+                    let sum_sizes: Vec<usize> = sum_dims.iter().map(|&d| sizes[d]).collect();
+                    cartesian_indices(&sum_sizes)
+                };
+
+                for sum_combo in sum_combos {
+                    // Build full index
+                    let mut full_idx = vec![0usize; sizes.len()];
+                    for &(d, idx) in &fixed_vals {
+                        full_idx[d] = idx;
+                    }
+                    for (si, &d) in sum_dims.iter().enumerate() {
+                        full_idx[d] = sum_combo[si];
+                    }
+
+                    // Compute flat variable index
+                    let mut var_flat_idx = 0usize;
+                    for (d, &idx) in full_idx.iter().enumerate() {
+                        var_flat_idx += idx * var_strides[d];
+                    }
+
+                    // Get coefficient
+                    let c = if let Some(ref coef) = coef_data[t] {
+                        coef.get(var_flat_idx).copied().unwrap_or(1.0)
+                    } else {
+                        1.0
+                    };
+
+                    if c != 0.0 {
+                        unsafe {
+                            let indices_ptr = indices.as_ptr() as *mut i32;
+                            let data_ptr = data.as_ptr() as *mut f64;
+                            *indices_ptr.add(pos) = var_start + var_flat_idx as i32;
+                            *data_ptr.add(pos) = c;
+                        }
+                        pos += 1;
+                    }
+                }
+            }
+        });
+
+        // Fill bounds
+        for (i, rhs) in rhs_vals.iter().enumerate() {
+            match sense {
+                "<=" => {
+                    row_lower[i] = f64::NEG_INFINITY;
+                    row_upper[i] = *rhs;
+                }
+                ">=" => {
+                    row_lower[i] = *rhs;
+                    row_upper[i] = f64::INFINITY;
+                }
+                _ => {
+                    row_lower[i] = *rhs;
+                    row_upper[i] = *rhs;
+                }
+            }
+        }
+    });
+
+    Ok((
+        indptr.to_pyarray_bound(py).into(),
+        indices.to_pyarray_bound(py).into(),
+        data.to_pyarray_bound(py).into(),
+        row_lower.to_pyarray_bound(py).into(),
+        row_upper.to_pyarray_bound(py).into(),
+    ))
+}
+
 #[pymodule]
 fn nimopt_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(write_lp_header, m)?)?;
@@ -975,5 +1334,7 @@ fn nimopt_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(build_sum_constraint_csr, m)?)?;
     m.add_function(wrap_pyfunction!(build_sum_csr_fast, m)?)?;
     m.add_function(wrap_pyfunction!(generate_var_names, m)?)?;
+    m.add_function(wrap_pyfunction!(write_multi_term_constraints, m)?)?;
+    m.add_function(wrap_pyfunction!(build_multi_term_csr, m)?)?;
     Ok(())
 }
