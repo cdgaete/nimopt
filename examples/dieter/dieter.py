@@ -474,10 +474,13 @@ def main():
                         help='Use Rust acceleration (default: True)')
     parser.add_argument('--no-rust', action='store_false', dest='rust',
                         help='Disable Rust acceleration')
+    parser.add_argument('--lp', action='store_true', default=False,
+                        help='Solve via LP file instead of direct solver')
     args = parser.parse_args()
     
     n_hours = args.hours
     use_rust = args.rust
+    use_lp = args.lp
     
     # Correction factor for investment costs when using subsampling
     corr_factor = n_hours / 8760
@@ -488,6 +491,7 @@ def main():
     print(f"Hours: {n_hours} ({n_hours/24:.1f} days)")
     print(f"Correction factor: {corr_factor:.4f}")
     print(f"Rust acceleration: {use_rust}")
+    print(f"Solver mode: {'LP file' if use_lp else 'Direct'}")
     
     # Load data
     print("\nLoading data...")
@@ -506,24 +510,60 @@ def main():
     
     # Solve
     print("\nSolving...")
-    t0 = time.time()
-    solver = HiGHSDirectSolver(use_rust=use_rust)
-    solver.load_model(model)
-    t_load_solver = time.time() - t0
-    print(f"  Solver loading: {t_load_solver:.2f}s")
     
-    t0 = time.time()
-    result = solver.solve()
-    t_solve = time.time() - t0
-    print(f"  Optimization: {t_solve:.2f}s")
-    
-    print(f"\nStatus: {result.status.name}")
-    print(f"Objective: €{result.objective_value:,.0f}")
-    
-    if result.status.name == 'OPTIMAL':
-        analyze_solution(solver, sets, params)
-    
-    return result
+    if use_lp:
+        # Solve via LP file
+        import tempfile
+        import highspy
+        
+        lp_path = tempfile.mktemp(suffix='.lp')
+        t0 = time.time()
+        model.to_lp(lp_path, use_rust=use_rust)
+        t_write = time.time() - t0
+        print(f"  LP writing: {t_write:.2f}s")
+        
+        t0 = time.time()
+        h = highspy.Highs()
+        h.setOptionValue('output_flag', False)
+        h.readModel(lp_path)
+        t_load_solver = time.time() - t0
+        print(f"  LP reading: {t_load_solver:.2f}s")
+        
+        t0 = time.time()
+        h.run()
+        t_solve = time.time() - t0
+        print(f"  Optimization: {t_solve:.2f}s")
+        
+        status = h.getModelStatus()
+        obj = h.getObjectiveValue()
+        print(f"\nStatus: {status.name}")
+        print(f"Objective: €{obj:,.0f}")
+        
+        # Clean up
+        import os
+        os.unlink(lp_path)
+        
+        return None  # No solution analysis for LP mode
+    else:
+        # Direct solver
+        t0 = time.time()
+        solver = HiGHSDirectSolver(use_rust=use_rust)
+        solver.load_model(model)
+        t_load_solver = time.time() - t0
+        print(f"  Solver loading: {t_load_solver:.2f}s")
+        
+        t0 = time.time()
+        result = solver.solve()
+        t_solve = time.time() - t0
+        print(f"  Optimization: {t_solve:.2f}s")
+        
+        print(f"\nStatus: {result.status.name}")
+        print(f"Objective: €{result.objective_value:,.0f}")
+        
+        if result.status.name == 'OPTIMAL':
+            analyze_solution(solver, sets, params)
+        
+        return result
 
 
 if __name__ == '__main__':
