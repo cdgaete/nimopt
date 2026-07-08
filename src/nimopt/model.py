@@ -82,19 +82,67 @@ class Model:
         return total
 
     def to_lp(self, filename: str, use_rust: bool = True) -> None:
-        """Export model to LP format."""
+        """Export model to LP format.
+
+        use_rust=True (default) requires the nimopt_rust extension and
+        raises ImportError if it is not installed - there is no silent
+        fallback. Pass use_rust=False explicitly to use the pure-Python
+        reference writer.
+        """
         if use_rust:
             try:
                 from .writers.lp_rust import write_lp_rust
-
-                write_lp_rust(self, filename)
-                return
-            except ImportError:
-                pass
+            except ImportError as e:
+                raise ImportError(_RUST_MISSING_MSG) from e
+            write_lp_rust(self, filename)
+            return
         from .writers.lp import write_lp
 
         write_lp(self, filename)
 
+    def solve(
+        self,
+        time_limit: Optional[float] = None,
+        gap: Optional[float] = None,
+        options: Optional[Dict] = None,
+    ):
+        """Solve the model with the direct HiGHS interface (no LP file).
+
+        The problem is built in memory as sparse matrices by nimopt_rust
+        and passed straight to HiGHS; columns follow variable insertion
+        order by construction. Requires nimopt_rust (raises ImportError
+        otherwise).
+
+        Returns:
+            (SolverResult, Solution | None) - Solution is None unless the
+            model solved to optimality.
+        """
+        from .solvers.base import SolverStatus
+        from .solvers.highs_direct import HiGHSDirectSolver
+
+        solver = HiGHSDirectSolver()
+        if time_limit is not None:
+            solver.set_option("time_limit", time_limit)
+        if gap is not None:
+            solver.set_option("mip_rel_gap", gap)
+        for k, v in (options or {}).items():
+            solver.set_option(k, v)
+
+        solver.load_model(self)
+        result = solver.solve()
+        solution = (
+            solver.get_solution() if result.status == SolverStatus.OPTIMAL else None
+        )
+        return result, solution
+
     def __repr__(self):
         n_vars = sum(v.size for v in self.variables.values())
         return f"Model('{self.name}', {n_vars} vars, {self.n_constraints} cons)"
+
+
+_RUST_MISSING_MSG = (
+    "nimopt_rust extension is not installed. nimopt requires its Rust core "
+    "for LP writing and direct solving (no Python fallback). Install a "
+    "prebuilt wheel (pip install nimopt-rust) or build it locally with: "
+    "cd rust && maturin build --release && pip install target/wheels/*.whl"
+)

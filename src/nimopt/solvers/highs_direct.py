@@ -35,13 +35,19 @@ class HiGHSDirectSolver(Solver):
     def __init__(self, use_rust: bool = True):
         if not HAS_HIGHS:
             raise ImportError("highspy not installed. Run: pip install highspy")
+        if use_rust and not HAS_RUST:
+            from ..model import _RUST_MISSING_MSG
+
+            raise ImportError(_RUST_MISSING_MSG)
         self._h = highspy.Highs()
         self._h.setOptionValue("output_flag", False)
         self._model: Optional[Model] = None
         self._var_names: Optional[List[str]] = None
         self._con_names: Optional[List[str]] = None
         self._var_info: Optional[List] = None  # For lazy name generation
-        self._use_rust = use_rust and HAS_RUST
+        # use_rust=False is an explicit opt-in to the pure-Python reference
+        # builder (used in tests) - it is never selected silently.
+        self._use_rust = use_rust
 
     def read_lp(self, path: str | Path) -> None:
         self._h.readModel(str(path))
@@ -66,6 +72,30 @@ class HiGHSDirectSolver(Solver):
         n_vars = matrices["n_vars"]
         self._h.addVars(n_vars, matrices["lb"], matrices["ub"])
         self._h.changeColsCost(n_vars, np.arange(n_vars, dtype=np.int32), matrices["c"])
+
+        # Integer / binary variables (LP writer handles this via the
+        # General/Binary sections; the direct path must set integrality
+        # explicitly or MIPs would silently be solved as relaxations).
+        int_idx = []
+        offset = 0
+        for var in model.variables.values():
+            if var.vtype in ("integer", "binary"):
+                int_idx.extend(range(offset, offset + var.size))
+                if var.vtype == "binary":
+                    idx = np.arange(offset, offset + var.size, dtype=np.int32)
+                    self._h.changeColsBounds(
+                        var.size,
+                        idx,
+                        np.maximum(matrices["lb"][idx], 0.0),
+                        np.minimum(matrices["ub"][idx], 1.0),
+                    )
+            offset += var.size
+        if int_idx:
+            idx = np.array(int_idx, dtype=np.int32)
+            kind = np.full(
+                len(int_idx), highspy.HighsVarType.kInteger, dtype=np.int32
+            )
+            self._h.changeColsIntegrality(len(int_idx), idx, kind)
 
         if model.sense == "maximize":
             self._h.changeObjectiveSense(highspy.ObjSense.kMaximize)
@@ -155,8 +185,6 @@ def _generate_var_names_from_info(var_info: List) -> List[str]:
 
 def _build_matrices_rust_fast(model: "Model") -> Dict:
     """Build matrices with minimal Python overhead - Rust fast path."""
-    import nimblend as nb
-
     from ..expression import LinearExpr
     from ..variable import Variable, VarRef
 
@@ -178,35 +206,12 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
     # === Build objective vector (vectorized) ===
     c = np.zeros(n_vars, dtype=np.float64)
     if model.objective:
+        from ..writers.lp_rust import _coef_flat_for_var
+
         for var, coef, fixed, _lagged in model.objective.terms:
             start = var_start_idx[var.name]
             n = var.size
-            if isinstance(coef, (int, float)):
-                c[start : start + n] += float(coef)
-            elif isinstance(coef, nb.Array):
-                # Need to broadcast coef to var's shape if dimensions differ
-                if var.sets and coef.shape != tuple(len(s) for s in var.sets):
-                    target_shape = tuple(len(s) for s in var.sets)
-                    target_coords = {s.name: np.array(s.elements) for s in var.sets}
-                    target_dims = [s.name for s in var.sets]
-                    ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
-                    broadcasted = coef * ones
-                    c[start : start + n] += broadcasted.values.flatten()
-                else:
-                    c[start : start + n] += coef.values.flatten()
-            elif hasattr(coef, "array"):
-                arr = coef.array
-                if var.sets and arr.shape != tuple(len(s) for s in var.sets):
-                    target_shape = tuple(len(s) for s in var.sets)
-                    target_coords = {s.name: np.array(s.elements) for s in var.sets}
-                    target_dims = [s.name for s in var.sets]
-                    ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
-                    broadcasted = arr * ones
-                    c[start : start + n] += broadcasted.values.flatten()
-                else:
-                    c[start : start + n] += arr.values.flatten()
-            else:
-                c[start : start + n] += float(coef)
+            c[start : start + n] += _coef_flat_for_var(coef, var)
 
     # === Build variable bounds (vectorized) ===
     lb = np.full(n_vars, -np.inf, dtype=np.float64)
@@ -450,17 +455,10 @@ def _build_sum_csr_rust_fast(
     else:
         coef_flat = None
 
-    # Get RHS array
-    n_free = 1
-    for s in free_sets:
-        n_free *= len(s)
+    # Get RHS array - broadcast/align to free set order
+    from ..writers.lp_rust import _rhs_flat_for_free_sets
 
-    if hasattr(rhs_orig, "array"):
-        rhs_flat = rhs_orig.array.values.flatten().astype(np.float64)
-    elif hasattr(rhs_orig, "values"):
-        rhs_flat = rhs_orig.values.flatten().astype(np.float64)
-    else:
-        rhs_flat = np.full(n_free, rhs_const, dtype=np.float64)
+    rhs_flat = _rhs_flat_for_free_sets(rhs_orig, rhs_const, free_sets)
 
     sense_str = "<=" if sense == "<=" else (">=" if sense == ">=" else "=")
 
@@ -558,23 +556,14 @@ def _build_multi_term_csr_rust(
     # Free set sizes
     free_set_sizes = [len(s) for s in free_sets]
 
-    # RHS array
-    n_cons = 1
-    for s in free_sets:
-        n_cons *= len(s)
+    # RHS array - broadcast/align to free set order
+    # Priority: rhs_const_array > rhs_orig > rhs_const
+    from ..writers.lp_rust import _rhs_flat_for_free_sets
 
-    # Handle different RHS types - priority: rhs_const_array > rhs_orig > rhs_const
-    if rhs_const_array is not None:
-        # Array constant from LinearExpr.const (e.g., Load[Hours])
-        rhs_flat = rhs_const_array.values.flatten().astype(np.float64)
-    elif hasattr(rhs_orig, "array"):
-        rhs_flat = rhs_orig.array.values.flatten().astype(np.float64)
-    elif hasattr(rhs_orig, "values"):
-        rhs_flat = rhs_orig.values.flatten().astype(np.float64)
-    elif isinstance(rhs_const, (int, float)):
-        rhs_flat = np.full(n_cons, rhs_const, dtype=np.float64)
-    else:
-        rhs_flat = np.full(n_cons, 0.0, dtype=np.float64)
+    base_const = rhs_const if isinstance(rhs_const, (int, float)) else 0.0
+    rhs_flat = _rhs_flat_for_free_sets(
+        rhs_orig, base_const, free_sets, rhs_const_array=rhs_const_array
+    )
 
     sense_str = "<=" if sense == "<=" else (">=" if sense == ">=" else "=")
 
@@ -720,13 +709,10 @@ def _build_lagged_constraint_vectorized(
     indices_list = []
     data_list = []
 
-    # Build RHS array
-    if hasattr(rhs_orig, "array"):
-        rhs_flat = rhs_orig.array.values.flatten().astype(np.float64)
-    elif hasattr(rhs_orig, "values"):
-        rhs_flat = rhs_orig.values.flatten().astype(np.float64)
-    else:
-        rhs_flat = np.full(n_rows, rhs_const, dtype=np.float64)
+    # Build RHS array - broadcast/align to free set order
+    from ..writers.lp_rust import _rhs_flat_for_free_sets
+
+    rhs_flat = _rhs_flat_for_free_sets(rhs_orig, rhs_const, free_sets)
 
     # Fill CSR arrays
     row_lower = np.zeros(n_valid, dtype=np.float64)

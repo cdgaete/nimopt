@@ -103,10 +103,12 @@ class HiGHSSolver(Solver):
     def get_solution(self) -> "Solution":
         """Extract solution as nimblend Arrays.
 
-        Requires set_model() to be called first.
+        Requires set_model() to be called first. Uses name-based
+        alignment because LP-loaded column order follows first textual
+        appearance, not model insertion order.
         """
         from ..solution import extract_solution_python
 
         if self._model is None:
             raise RuntimeError("No model set. Call set_model(model) first.")
-        return extract_solution_python(self, self._model)
+        return extract_solution_python(self, self._model, align_by_names=True)

@@ -81,11 +81,23 @@ class Solution:
         return self.constraints[name].to_array()
 
 
-def extract_solution_python(solver: "Solver", model: "Model") -> Solution:
+def extract_solution_python(
+    solver: "Solver", model: "Model", align_by_names: bool = False
+) -> Solution:
     """Extract solution from solver using model metadata.
 
-    Uses model structure to map solver values directly to arrays.
-    No string parsing - uses same iteration order as LP generation.
+    By default assumes the solver's column/row order matches the model's
+    insertion order (true for the direct HiGHS interface, which builds
+    the matrices itself).
+
+    align_by_names=True must be used for LP-file-loaded models: the LP
+    format has no column declaration, so the solver assigns column
+    indices by first textual appearance (objective first) - variables
+    with zero objective coefficient end up wherever a constraint first
+    mentions them. In that mode the solver's column/row names are
+    aligned to the model's expected names with a vectorized permutation
+    before slicing; if names are unavailable or ambiguous, positional
+    order is kept.
     """
     sol = Solution()
 
@@ -100,6 +112,23 @@ def extract_solution_python(solver: "Solver", model: "Model") -> Solution:
     var_values = np.array(solver.get_variable_values(), dtype=np.float64)
     var_duals = np.array(solver.get_variable_duals(), dtype=np.float64)
     con_duals = np.array(solver.get_constraint_duals(), dtype=np.float64)
+
+    if align_by_names:
+        col_perm = _name_permutation(
+            _expected_col_names(model),
+            solver.get_variable_names(),
+            var_values.size,
+        )
+        row_perm = _name_permutation(
+            _expected_row_names(model),
+            solver.get_constraint_names(),
+            con_duals.size,
+        )
+        if col_perm is not None:
+            var_values = var_values[col_perm]
+            var_duals = var_duals[col_perm]
+        if row_perm is not None:
+            con_duals = con_duals[row_perm]
 
     # Variables: use model metadata to map directly
     var_offset = 0
@@ -150,6 +179,77 @@ def extract_solution_python(solver: "Solver", model: "Model") -> Solution:
         )
 
     return sol
+
+
+def _expected_col_names(model: "Model"):
+    """Expected LP column names (numpy str array) in variable insertion
+    order, built vectorized with np.char. Matches
+    Variable.all_names(sanitize=True)."""
+    from .writers import sanitize_lp_name
+
+    blocks = []
+    for var in model.variables.values():
+        if not var.sets:
+            blocks.append(np.array([var.name]))
+            continue
+        names = np.array([var.name], dtype=object)
+        for s in var.sets:
+            elems = np.array([sanitize_lp_name(e) for e in s.elements], dtype=object)
+            names = np.char.add(
+                np.char.add(names[:, None].astype(str), "_"),
+                elems[None, :].astype(str),
+            ).ravel()
+        blocks.append(names)
+    return np.concatenate(blocks) if blocks else None
+
+
+def _expected_row_names(model: "Model"):
+    """Expected LP row names (numpy str array) in constraint insertion
+    order, matching the Rust LP writer:
+    ``{name}_{elem1}_{elem2}...`` over the free sets in C-order
+    (elements sanitized), or the bare name for scalar constraints."""
+    from .writers import sanitize_lp_name
+
+    blocks = []
+    for con_name, con in model._constraints.items():
+        base = sanitize_lp_name(con_name)
+        if not con.free_sets:
+            blocks.append(np.array([base]))
+            continue
+        names = np.array([base], dtype=object)
+        for s in con.free_sets:
+            elems = np.array([sanitize_lp_name(e) for e in s.elements], dtype=object)
+            names = np.char.add(
+                np.char.add(names[:, None].astype(str), "_"),
+                elems[None, :].astype(str),
+            ).ravel()
+        blocks.append(names)
+    return np.concatenate(blocks) if blocks else None
+
+
+def _name_permutation(expected_names, solver_names, n: int):
+    """Index array perm with perm[model_flat_index] = solver_index.
+
+    Vectorized via argsort alignment. Returns None (caller keeps
+    positional order) if names are unavailable, sizes disagree, names
+    don't match, or names are duplicated (mapping would be ambiguous).
+    Fast-path: if orders already agree, returns None too."""
+    if expected_names is None or len(solver_names) != n or len(expected_names) != n:
+        return None
+    exp = np.asarray(expected_names, dtype=str)
+    sol = np.asarray(solver_names, dtype=str)
+    if np.array_equal(exp, sol):
+        return None  # already in model order - positional slicing is correct
+    eo = np.argsort(exp, kind="stable")
+    so = np.argsort(sol, kind="stable")
+    exp_sorted = exp[eo]
+    if not np.array_equal(exp_sorted, sol[so]):
+        return None
+    if n > 1 and (exp_sorted[1:] == exp_sorted[:-1]).any():
+        return None
+    perm = np.empty(n, dtype=np.intp)
+    perm[eo] = so
+    return perm
 
 
 def write_solution_csv(

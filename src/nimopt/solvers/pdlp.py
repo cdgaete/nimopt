@@ -72,7 +72,11 @@ class PDLPSolver(Solver):
         verbose: bool = False,
     ):
         self._backend = self._select_backend(backend)
-        self._use_rust = use_rust and HAS_RUST
+        if use_rust and not HAS_RUST:
+            from ..model import _RUST_MISSING_MSG
+
+            raise ImportError(_RUST_MISSING_MSG)
+        self._use_rust = use_rust
         self._time_limit = time_limit
         self._tolerance = tolerance
         self._verbose = verbose

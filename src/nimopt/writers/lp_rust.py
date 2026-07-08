@@ -19,11 +19,15 @@ from ..sets import Set
 
 
 def write_lp_rust(model, filename: str) -> None:
-    """Write LP using Rust-accelerated functions."""
-    if not HAS_RUST:
-        from .lp import write_lp
+    """Write LP using Rust-accelerated functions.
 
-        return write_lp(model, filename)
+    Raises ImportError if nimopt_rust is not installed - no silent
+    Python fallback. Use writers.lp.write_lp explicitly if needed.
+    """
+    if not HAS_RUST:
+        from ..model import _RUST_MISSING_MSG
+
+        raise ImportError(_RUST_MISSING_MSG)
 
     nimopt_rust.write_lp_header(filename, model.name, model.sense)
     _write_objective_fast(model, filename)
@@ -49,33 +53,7 @@ def _write_objective_fast(model, filename: str) -> None:
         var, coef, _ = term[0], term[1], term[2]
         if var.sets:
             dim_elements = [[sanitize_lp_name(e) for e in s.elements] for s in var.sets]
-            target_shape = tuple(len(s) for s in var.sets)
-
-            if isinstance(coef, nb.Array):
-                # Need to broadcast coef to var's shape
-                target_coords = {s.name: np.array(s.elements) for s in var.sets}
-                target_dims = [s.name for s in var.sets]
-                ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
-                broadcasted = coef * ones
-                coefs_arr = broadcasted.values.flatten().astype(np.float64)
-            elif hasattr(coef, "array"):
-                # ParamRef - broadcast the underlying array
-                arr = coef.array
-                target_coords = {s.name: np.array(s.elements) for s in var.sets}
-                target_dims = [s.name for s in var.sets]
-                ones = nb.Array(np.ones(target_shape), target_coords, target_dims)
-                broadcasted = arr * ones
-                coefs_arr = broadcasted.values.flatten().astype(np.float64)
-            elif isinstance(coef, (int, float)):
-                size = 1
-                for s in var.sets:
-                    size *= len(s)
-                coefs_arr = np.full(size, float(coef), dtype=np.float64)
-            else:
-                size = 1
-                for s in var.sets:
-                    size *= len(s)
-                coefs_arr = np.full(size, float(coef), dtype=np.float64)
+            coefs_arr = _coef_flat_for_var(coef, var)
 
             # Generate variable names and accumulate coefficients
             var_names = nimopt_rust.generate_var_names(var.name, dim_elements)
@@ -234,17 +212,8 @@ def _write_sum_constraints_fast(
         coef_flat = None
         coef_shape = []
 
-    # RHS array - need to compute in free set order
-    n_free = 1
-    for s in free_sets:
-        n_free *= len(s)
-
-    if hasattr(rhs_orig, "array"):
-        rhs_flat = rhs_orig.array.values.flatten().astype(np.float64)
-    elif hasattr(rhs_orig, "values"):
-        rhs_flat = rhs_orig.values.flatten().astype(np.float64)
-    else:
-        rhs_flat = np.full(n_free, rhs_const, dtype=np.float64)
+    # RHS array - broadcast/align to free set order
+    rhs_flat = _rhs_flat_for_free_sets(rhs_orig, rhs_const, free_sets)
 
     nimopt_rust.write_sum_constraints(
         filename,
@@ -347,20 +316,14 @@ def _write_multi_term_fast(
     # Free set sizes
     free_set_sizes = [len(s) for s in free_sets]
 
-    # RHS array
-    n_cons = 1
-    for s in free_sets:
-        n_cons *= len(s)
-
+    # RHS array - broadcast/align to free set order
     if isinstance(rhs_const, nb.Array):
         # rhs_const is already an Array (e.g., negated demand)
-        rhs_flat = rhs_const.values.flatten().astype(np.float64)
-    elif hasattr(rhs_orig, "array"):
-        rhs_flat = rhs_orig.array.values.flatten().astype(np.float64)
-    elif hasattr(rhs_orig, "values"):
-        rhs_flat = rhs_orig.values.flatten().astype(np.float64)
+        rhs_flat = _rhs_flat_for_free_sets(
+            None, 0.0, free_sets, rhs_const_array=rhs_const
+        )
     else:
-        rhs_flat = np.full(n_cons, float(rhs_const), dtype=np.float64)
+        rhs_flat = _rhs_flat_for_free_sets(rhs_orig, float(rhs_const), free_sets)
 
     nimopt_rust.write_multi_term_constraints(
         filename,
@@ -453,6 +416,75 @@ def _write_batch_constraints_rust_slow(
     )
 
 
+def _rhs_flat_for_free_sets(rhs_orig, rhs_const, free_sets, rhs_const_array=None):
+    """RHS values aligned to the constraint's C-order flat row index.
+
+    Broadcasts partial-dimension RHS arrays (e.g. cap[G] for a
+    constraint free over [G, T]) to the free sets' full shape and dim
+    order via nimblend before flattening. Flattening without this check
+    silently mis-sizes/mis-orders row bounds and can make models
+    infeasible or wrong.
+    """
+    n = 1
+    for s in free_sets:
+        n *= len(s)
+    arr = None
+    if rhs_const_array is not None:
+        arr = (
+            rhs_const_array.array
+            if hasattr(rhs_const_array, "array")
+            else rhs_const_array
+        )
+    elif hasattr(rhs_orig, "array"):
+        arr = rhs_orig.array
+    elif hasattr(rhs_orig, "values"):
+        arr = rhs_orig
+    if arr is None or not hasattr(arr, "dims"):
+        return np.full(n, float(rhs_const), dtype=np.float64)
+    dims = [s.name for s in free_sets]
+    shape = tuple(len(s) for s in free_sets)
+    if list(arr.dims) != dims or arr.shape != shape:
+        coords = {s.name: np.array(s.elements) for s in free_sets}
+        ones = nb.Array(np.ones(shape), coords, dims)
+        arr = arr * ones
+        if list(arr.dims) != dims:
+            arr = arr.transpose(*dims)
+    return arr.values.reshape(-1).astype(np.float64)
+
+
+def _coef_flat_for_var(coef, var) -> np.ndarray:
+    """Coefficient values aligned to the variable's C-order flat index.
+
+    Broadcasts lower-dimensional coefficient arrays (e.g. ef[G] against
+    p[G,T]) to the variable's full shape and dim order via nimblend
+    before flattening. Assuming coef.shape == var.shape without checking
+    silently corrupts constraints when a param covers only a subset of
+    the variable's dimensions.
+    """
+    n = var.size
+    if not var.sets:
+        if isinstance(coef, (int, float)):
+            return np.array([float(coef)])
+        arr = coef.array if hasattr(coef, "array") else coef
+        if hasattr(arr, "values"):
+            return np.array([float(arr.values.flat[0])])
+        return np.array([float(coef)])
+    if isinstance(coef, (int, float)):
+        return np.full(n, float(coef), dtype=np.float64)
+    arr = coef.array if hasattr(coef, "array") else coef
+    if not isinstance(arr, nb.Array):
+        return np.full(n, float(coef), dtype=np.float64)
+    var_dims = [s.name for s in var.sets]
+    var_shape = tuple(len(s) for s in var.sets)
+    if list(arr.dims) != var_dims or arr.shape != var_shape:
+        coords = {s.name: np.array(s.elements) for s in var.sets}
+        ones = nb.Array(np.ones(var_shape), coords, var_dims)
+        arr = arr * ones
+        if list(arr.dims) != var_dims:
+            arr = arr.transpose(*var_dims)
+    return arr.values.reshape(-1).astype(np.float64)
+
+
 def _write_single_constraint_fast(
     filename, eq_name, sense, lhs_terms, rhs_const, rhs_orig
 ):
@@ -475,16 +507,8 @@ def _write_single_constraint_fast(
         var_names = var.all_names()
         all_var_names.extend(var_names)
 
-        # Get coefficients - vectorized if possible
-        if isinstance(coef, (int, float)):
-            all_coefs.extend([float(coef)] * len(var_names))
-        elif isinstance(coef, nb.Array):
-            # Flatten in the same order as itertools.product
-            all_coefs.extend(coef.values.flatten().tolist())
-        elif hasattr(coef, "array"):
-            all_coefs.extend(coef.array.values.flatten().tolist())
-        else:
-            all_coefs.extend([float(coef)] * len(var_names))
+        # Coefficients aligned/broadcast to the variable's flat order
+        all_coefs.extend(_coef_flat_for_var(coef, var).tolist())
 
     # Get RHS value
     if hasattr(rhs_orig, "array"):
