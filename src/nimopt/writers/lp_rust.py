@@ -485,6 +485,62 @@ def _coef_flat_for_var(coef, var) -> np.ndarray:
     return arr.values.reshape(-1).astype(np.float64)
 
 
+def _fixed_names_and_coefs(var, coef, fixed):
+    """Concrete names/coefs for a term with literal (fixed) element indices.
+
+    Positions listed in ``fixed`` are pinned to their named element; any
+    remaining dimensions expand over their set.
+
+    Vectorized: builds the variable's full C-order coefficient array via the
+    same nimblend broadcast used for un-fixed terms (``_coef_flat_for_var``),
+    then keeps the flat positions whose fixed coordinates match the pinned
+    elements using a boolean mask. No per-combination Python loop or per-cell
+    selection, so cost matches the non-fixed export path even when only a
+    subset of a large variable's dimensions is fixed.
+    """
+    fixed_map = {pos: val for pos, val in fixed}
+
+    # Validate fixed elements up front.
+    for i, s in enumerate(var.sets):
+        if i in fixed_map and fixed_map[i] not in s.elements:
+            raise ValueError(
+                f"Fixed index '{fixed_map[i]}' on variable '{var.name}' is not "
+                f"an element of set '{s.name}'"
+            )
+
+    # Full C-order coefficient array aligned to the variable's flat index
+    # (nimblend broadcast, vectorized).
+    coefs_full = _coef_flat_for_var(coef, var)
+
+    shape = tuple(len(s) for s in var.sets)
+
+    # Flat C-order positions to keep: take the cartesian product of index
+    # ranges, but pin each fixed dimension to its single element index so the
+    # product ranges only over the kept sub-grid (size == kept, not full).
+    idx_ranges = []
+    for i, s in enumerate(var.sets):
+        if i in fixed_map:
+            idx_ranges.append([list(s.elements).index(fixed_map[i])])
+        else:
+            idx_ranges.append(range(shape[i]))
+
+    strides = [1] * len(shape)
+    for i in range(len(shape) - 2, -1, -1):
+        strides[i] = strides[i + 1] * shape[i + 1]
+
+    elems_per_dim = [list(s.elements) for s in var.sets]
+    names, keep_flat = [], []
+    for coord in itertools.product(*idx_ranges):
+        keep_flat.append(sum(c * st for c, st in zip(coord, strides)))
+        names.append(
+            var.name + "_"
+            + "_".join(sanitize_lp_name(elems_per_dim[d][c])
+                       for d, c in enumerate(coord))
+        )
+    coefs = coefs_full[np.array(keep_flat, dtype=np.int64)].tolist()
+    return names, coefs
+
+
 def _write_single_constraint_fast(
     filename, eq_name, sense, lhs_terms, rhs_const, rhs_orig
 ):
@@ -493,7 +549,7 @@ def _write_single_constraint_fast(
     all_coefs = []
 
     for term in lhs_terms:
-        var, coef, _ = term[0], term[1], term[2]
+        var, coef, fixed = term[0], term[1], term[2]
         if not var.sets:
             all_var_names.append(var.name)
             if isinstance(coef, (int, float)):
@@ -501,6 +557,14 @@ def _write_single_constraint_fast(
             else:
                 c = float(coef.values.flat[0])
             all_coefs.append(c)
+            continue
+
+        if fixed:
+            # Literal element indices (e.g. b[silica]): emit only the pinned
+            # variable(s), not every element of the dimension set.
+            names, coefs = _fixed_names_and_coefs(var, coef, fixed)
+            all_var_names.extend(names)
+            all_coefs.extend(coefs)
             continue
 
         # Generate all variable names efficiently
@@ -536,10 +600,19 @@ def _write_single_constraint_py(
         f.write(f" {eq_name}: ")
         first = True
         for term in lhs_terms:
-            var, coef, _ = term[0], term[1], term[2]
+            var, coef, fixed = term[0], term[1], term[2]
+            fixed_map = {pos: val for pos, val in fixed} if fixed else {}
             var_combos = []
-            for s in var.sets:
-                if s in bindings:
+            for i, s in enumerate(var.sets):
+                if i in fixed_map:
+                    elem = fixed_map[i]
+                    if elem not in s.elements:
+                        raise ValueError(
+                            f"Fixed index '{elem}' on variable '{var.name}' is "
+                            f"not an element of set '{s.name}'"
+                        )
+                    var_combos.append([elem])
+                elif s in bindings:
                     var_combos.append([bindings[s]])
                 else:
                     var_combos.append(s.elements)

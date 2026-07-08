@@ -268,6 +268,13 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
         # Check if any term has lagged indices
         has_lagged = any(term[3] for term in lhs_terms)
 
+        # A duplicate column index within one CSR row can only arise when two
+        # terms reference the same variable (same var -> same column block),
+        # e.g. Sum(BND, b[BND]) - b[opc], or x[I] + x[I]. This cheap O(terms)
+        # gate lets clean constraints skip row canonicalization entirely; only
+        # the same-variable-twice family pays the (vectorized) merge cost.
+        may_dupe = len({t[0].name for t in lhs_terms}) != len(lhs_terms)
+
         # Rust fast path: single indexed var, has free sets, no fixed/lagged indices
         can_use_rust = (
             HAS_RUST
@@ -311,6 +318,10 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
             )
             if result is not None:
                 indptr, indices, data, row_lower, row_upper = result
+                if may_dupe:
+                    indices, data, indptr = _canonicalize_csr_block(
+                        indices, data, indptr
+                    )
                 n_rows = len(indptr) - 1
                 for ptr in indptr[1:]:
                     all_indptr.append(ptr + total_nnz)
@@ -330,6 +341,10 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
             )
             if result is not None:
                 indptr, indices, data, row_lower, row_upper, names = result
+                if may_dupe:
+                    indices, data, indptr = _canonicalize_csr_block(
+                        indices, data, indptr
+                    )
                 for ptr in indptr[1:]:
                     all_indptr.append(ptr + total_nnz)
                 all_indices.append(indices)
@@ -945,6 +960,54 @@ def _build_matrices(model: "Model") -> Dict:
     }
 
 
+def _canonicalize_csr_block(indices, data, indptr):
+    """Merge duplicate column indices within each row of a CSR block.
+
+    Two terms that reference the same variable can emit the same solver column
+    into one constraint row -- e.g. a Sum over a set plus a literal element of
+    that set (``Sum(BND, b[BND]) - b[opc]``), or ``x[I] + x[I]``. HiGHS rejects
+    a row that repeats a column index: it silently drops the whole row, which
+    later surfaces as a length-0 dual slice and a ``reshape(0 -> (n,))`` crash
+    in extract_solution. Summing the contributions per (row, column) and
+    dropping exact zeros yields a row with unique columns; a row that fully
+    cancels becomes a valid empty row (a real ``0 <= rhs`` constraint).
+
+    This is the single canonicalization applied to every block-producing path
+    (Rust single-sum / multi-term, vectorized-lagged); the per-row
+    ``_expand_constraint`` fallback accumulates per column directly. Callers
+    gate on a cheap "does any variable appear in >=2 terms" test, so clean
+    constraints never reach here. When they do, the work is fully vectorized
+    (no per-row Python loop): rows are encoded into a single (row, column) key,
+    ``np.unique`` + ``np.add.at`` accumulates, and the row pointer is rebuilt
+    from per-row counts. The row count is preserved so row bounds/names stay
+    aligned.
+    """
+    indices = np.asarray(indices)
+    data = np.asarray(data, dtype=np.float64)
+    indptr = np.asarray(indptr)
+    n_rows = len(indptr) - 1
+    if n_rows <= 0 or indices.size == 0:
+        return indices.astype(np.int32), data, indptr.astype(np.int32)
+
+    row_ids = np.repeat(np.arange(n_rows, dtype=np.int64), np.diff(indptr))
+    ncol = int(indices.max()) + 1
+    keys = row_ids * np.int64(ncol) + indices.astype(np.int64)
+    uk, inv = np.unique(keys, return_inverse=True)
+    inv = inv.reshape(-1)  # some numpy versions return a column vector
+    acc = np.zeros(len(uk), dtype=np.float64)
+    np.add.at(acc, inv, data)
+
+    nz = acc != 0.0
+    uk = uk[nz]
+    acc = acc[nz]
+    u_row = uk // ncol
+    u_col = (uk % ncol).astype(np.int32)
+
+    counts = np.bincount(u_row, minlength=n_rows)
+    new_indptr = np.concatenate(([0], np.cumsum(counts))).astype(np.int32)
+    return u_col, acc, new_indptr
+
+
 def _expand_constraint(lhs_terms, bindings, var_idx):
     """Expand constraint terms for given bindings.
 
@@ -966,20 +1029,50 @@ def _expand_constraint(lhs_terms, bindings, var_idx):
                         # Out of bounds - skip entire constraint
                         return None
 
-    # Second pass: build constraint row
-    indices = []
-    values = []
+    # Second pass: build constraint row.
+    #
+    # Accumulate coefficients into a per-column structure keyed by the
+    # resolved column index. A single constraint row can reference the same
+    # column from more than one term -- e.g. a Sum expanding b[BND] over the
+    # whole set contributes b_opc, and a literal b[opc] term contributes it
+    # again. HiGHS rejects a CSR row that repeats a column index (it silently
+    # drops the whole row -> numRow mismatch -> a length-0 dual slice blows up
+    # in extract_solution). Summing every contribution per column first, and
+    # only dropping exact zeros at the very end, makes cancellation (+1, -1 ->
+    # dropped), doubling (+1, +1 -> +2) and single-column-meets-block all fall
+    # out of one accumulation with no duplicate index ever reaching the solver.
+    # dict preserves first-seen column order, which CSR does not require to be
+    # sorted -- only unique.
+    col_coeffs: Dict[int, float] = {}
+
+    def _accumulate(col_idx: int, cv: float) -> None:
+        col_coeffs[col_idx] = col_coeffs.get(col_idx, 0.0) + cv
+
     for var, coef, fixed, lagged in lhs_terms:
         if not var.sets:
-            indices.append(var_idx[var.name])
-            values.append(_get_scalar_coef(coef))
+            # Binding-aware: a scalar variable may still carry an indexed
+            # coefficient (e.g. capb[BND]*TB inside a free-BND constraint).
+            # Resolve the coef against the current free-set bindings instead
+            # of collapsing to its first element.
+            _accumulate(var_idx[var.name], _get_coef_for_bindings(coef, bindings))
         else:
             # Build lagged_map: position -> LaggedSet for quick lookup
             lagged_map = {pos: ls for pos, ls in lagged} if lagged else {}
+            # Honor fixed (literal) indices, e.g. b[silica]: pin that
+            # dimension to the named element instead of expanding over the set.
+            fixed_map = {pos: val for pos, val in fixed} if fixed else {}
 
             var_combos = []
             for i, s in enumerate(var.sets):
-                if s in bindings:
+                if i in fixed_map:
+                    elem = fixed_map[i]
+                    if elem not in s.elements:
+                        raise ValueError(
+                            f"Fixed index '{elem}' on variable '{var.name}' "
+                            f"is not an element of set '{s.name}'"
+                        )
+                    var_combos.append([elem])
+                elif s in bindings:
                     var_combos.append([bindings[s]])
                 elif i in lagged_map:
                     # For lagged dims, use the binding for base set
@@ -1008,48 +1101,74 @@ def _expand_constraint(lhs_terms, bindings, var_idx):
                     for s, elem in zip(var.sets, combo):
                         full_bindings[s] = elem
                     cv = _get_coef_for_bindings(coef, full_bindings)
-                    if cv != 0.0:
-                        indices.append(idx)
-                        values.append(cv)
+                    # Do not drop zeros here: a later term may add a nonzero
+                    # contribution to this same column, or vice versa. Zeros
+                    # are dropped once, after all terms are accumulated.
+                    _accumulate(idx, cv)
+
+    # Drop exact zeros only at the end so genuine cancellation collapses the
+    # column instead of emitting a stale index. A row that fully cancels to
+    # zero terms returns empty lists; the caller emits a valid trivial row
+    # (0 <= rhs), which is a real constraint row and never a length-0 array
+    # reaching a reshape.
+    indices = [idx for idx, cv in col_coeffs.items() if cv != 0.0]
+    values = [cv for cv in col_coeffs.values() if cv != 0.0]
     return indices, values
 
 
 def _get_coef_for_bindings(coef, bindings) -> float:
-    """Get coefficient value using bindings dict (maps Set -> element)."""
+    """Resolve a coefficient to a scalar for the given bindings (Set -> element).
+
+    Delegates label selection to nimblend's Array.sel so there is a single
+    selection code path shared with the rest of the stack. sel() returns a
+    Python scalar when every dimension is selected and raises on a missing
+    label (rather than silently returning 0.0).
+    """
     if isinstance(coef, (int, float)):
         return float(coef)
     elif isinstance(coef, nb.Array):
-        indices = []
+        # Map only the dims this array actually has to their bound element.
+        sel = {}
         for dim in coef.dims:
-            # Find binding for this dim
             for s, elem in bindings.items():
                 if s.name == dim:
-                    coord_list = list(coef.coords[dim])
-                    try:
-                        indices.append(coord_list.index(elem))
-                    except ValueError:
-                        return 0.0
+                    sel[dim] = elem
                     break
-            else:
-                # No binding for this dim - skip index
-                pass
-        if indices:
-            return float(coef.values[tuple(indices)])
-        return float(coef.values.flat[0])
+        if not sel:
+            # Genuinely scalar coefficient (0-d / single value).
+            if coef.values.size != 1:
+                raise ValueError(
+                    f"Coefficient has dims {list(coef.dims)} but no matching "
+                    f"free-set bindings were provided; cannot resolve to a "
+                    f"scalar. This is an internal nimopt bug."
+                )
+            return float(coef.values.item())
+        return float(coef.sel(sel))
     elif hasattr(coef, "array"):
         return _get_coef_for_bindings(coef.array, bindings)
     return float(coef)
 
 
 def _get_scalar_coef(coef) -> float:
-    import nimblend as nb
+    """Resolve a genuinely scalar coefficient.
 
+    Fail-fast: if handed a multi-element array, the caller reached here with a
+    coefficient that carries unresolved indices, which previously produced a
+    silently wrong constraint matrix. Raise instead so the bug is loud.
+    """
     if isinstance(coef, (int, float)):
         return float(coef)
     elif isinstance(coef, nb.Array):
-        return float(coef.values.flat[0])
+        if coef.values.size != 1:
+            raise ValueError(
+                f"_get_scalar_coef received a {coef.values.shape} array with "
+                f"dims {list(coef.dims)}; this term needs binding-aware "
+                f"resolution via _get_coef_for_bindings. This is an internal "
+                f"nimopt bug (unresolved indexed coefficient on a scalar term)."
+            )
+        return float(coef.values.item())
     elif hasattr(coef, "array"):
-        return float(coef.array.values.flat[0])
+        return _get_scalar_coef(coef.array)
     return float(coef)
 
 
