@@ -84,6 +84,14 @@ class LinearExpr:
             new_free = _merge_sets(self.free_sets, other.free_sets)
             new_const = _add_const(self.const, other.const)
             return LinearExpr(new_terms, new_const, new_free)
+        elif isinstance(other, nb.Array):
+            # Bare param/array additive term (e.g. `param[I] + var[I]`, where the
+            # ParamRef delegates to a raw nb.Array). Fold it into the constant.
+            return LinearExpr(
+                self.terms.copy(),
+                _add_const(self.const, other),
+                self.free_sets.copy(),
+            )
         elif hasattr(other, "array"):
             return LinearExpr(
                 self.terms.copy(),
@@ -108,7 +116,23 @@ class LinearExpr:
                 _add_const(self.const, _negate(other.const)),
                 _merge_sets(self.free_sets, other.free_sets),
             )
+        elif isinstance(other, nb.Array):
+            return LinearExpr(
+                self.terms.copy(),
+                _add_const(self.const, _negate(other)),
+                self.free_sets.copy(),
+            )
+        elif hasattr(other, "array"):
+            return LinearExpr(
+                self.terms.copy(),
+                _add_const(self.const, _negate(other.array)),
+                self.free_sets.copy(),
+            )
         return NotImplemented
+
+    def __rsub__(self, other):
+        # other - self  ==  (-self) + other
+        return self.__neg__().__add__(other)
 
     def __mul__(self, other):
         from .param import Param

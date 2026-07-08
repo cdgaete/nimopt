@@ -209,7 +209,10 @@ def _write_constraints(f: TextIO, model, var_names: Dict) -> None:
                 neg_coef = _negate_coef(coef)
                 lhs_terms.append((var, neg_coef, fixed, lagged))
             if isinstance(con.rhs.const, (int, float)):
-                rhs_const = -con.rhs.const
+                # Un-negated: moving RHS var terms to the LHS leaves the RHS
+                # constant on the RHS (`x == y + 5` -> `x - y = 5`). Matches the
+                # direct solver build path.
+                rhs_const = con.rhs.const
             elif isinstance(con.rhs.const, nb.Array):
                 # Array const - handled separately during constraint iteration
                 rhs_const_array = con.rhs.const

@@ -139,9 +139,12 @@ def _write_constraints_rust(model, filename: str):
                 lagged = term[3] if len(term) > 3 else []
                 lhs_terms.append((var, _negate_coef(coef), fixed, lagged))
             if isinstance(con.rhs.const, (int, float)):
-                rhs_const = -con.rhs.const
+                # Moving the RHS variable terms to the LHS leaves the RHS
+                # constant on the RHS unchanged: `x == y + 5` -> `x - y = 5`.
+                # (Do NOT negate -- matches the direct solver's build path.)
+                rhs_const = con.rhs.const
             elif isinstance(con.rhs.const, nb.Array):
-                # Array const becomes the RHS (NOT negated - unlike scalar)
+                # Array const becomes the RHS (also un-negated).
                 rhs_const = con.rhs.const
         elif isinstance(con.rhs, (Variable, VarRef)):
             var = con.rhs if isinstance(con.rhs, Variable) else con.rhs.var
@@ -341,6 +344,17 @@ def _write_multi_term_fast(
     )
 
 
+def _lag_bounds_ok(lhs_terms, bindings) -> bool:
+    """False if any lagged index in this binding is out of bounds (skip row)."""
+    for term in lhs_terms:
+        lagged = term[3] if len(term) > 3 else []
+        for pos, ls in lagged:
+            base_set = ls.base_set
+            if base_set in bindings and ls.get_lagged_element(bindings[base_set]) is None:
+                return False
+    return True
+
+
 def _write_batch_constraints_rust_slow(
     filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig, model
 ):
@@ -352,49 +366,76 @@ def _write_batch_constraints_rust_slow(
 
     free_combos = list(itertools.product(*(s.elements for s in free_sets)))
 
-    for free_idx, free_combo in enumerate(free_combos):
+    for free_combo in free_combos:
         bindings = dict(zip(free_sets, free_combo))
+
+        # Skip a constraint instance whose lagged index falls out of bounds
+        # (non-cyclic lag/lead at the time-series boundary), so `s[T-1]` yields
+        # no row at T = first element instead of a bogus self-reference.
+        if not _lag_bounds_ok(lhs_terms, bindings):
+            continue
+
         con_var_names = []
         con_coefs = []
 
         for term in lhs_terms:
             var, coef, _ = term[0], term[1], term[2]
-            # lagged = term[3] if len(term) > 3 else []  # TODO: handle lag
+            lagged = term[3] if len(term) > 3 else []
+            lagged_map = {pos: ls for pos, ls in lagged}
+
             var_combos = []
-            for s in var.sets:
+            for i, s in enumerate(var.sets):
                 if s in bindings:
                     var_combos.append([bindings[s]])
+                elif i in lagged_map and lagged_map[i].base_set in bindings:
+                    var_combos.append([bindings[lagged_map[i].base_set]])
                 else:
                     var_combos.append(s.elements)
 
             for combo in itertools.product(*var_combos) if var_combos else [()]:
+                # Apply the lag/lead offset to resolve the *actual* variable
+                # element referenced (e.g. combo T=2 -> lagged element 1), while
+                # the coefficient is still indexed by the un-lagged combo.
+                actual = list(combo)
+                for pos, ls in lagged_map.items():
+                    actual[pos] = ls.get_lagged_element(combo[pos])
                 suffix = (
-                    "_" + "_".join(sanitize_lp_name(e) for e in combo) if combo else ""
+                    "_" + "_".join(sanitize_lp_name(e) for e in actual)
+                    if actual
+                    else ""
                 )
                 vname = var.name + suffix
                 cv = _get_coef_scalar(coef, var.sets, combo)
                 con_var_names.append(vname)
                 con_coefs.append(cv)
 
-        if free_idx == 0:
+        if vars_per_con == 0:
             vars_per_con = len(con_var_names)
 
         all_var_names.extend(con_var_names)
         all_coefs.extend(con_coefs)
 
-        if isinstance(rhs_orig, nb.Array):
-            # Direct nb.Array (e.g., from Param * Param)
+        # When the RHS is a LinearExpr (e.g. `soc[H-1] + xfix[H]`), its variable
+        # terms were moved to the LHS and the Array constant landed in
+        # `rhs_const`; index that array per binding rather than emitting the
+        # whole array as one row's RHS (which np.array then rejects).
+        rhs_array = rhs_orig if isinstance(rhs_orig, nb.Array) else None
+        if rhs_array is None and isinstance(rhs_const, nb.Array):
+            rhs_array = rhs_const
+
+        if rhs_array is not None:
+            # Direct nb.Array (e.g., from Param * Param, or an Array RHS const)
             indices = []
-            for dim in rhs_orig.dims:
+            for dim in rhs_array.dims:
                 for s, elem in bindings.items():
                     if s.name == dim:
-                        coord_list = list(rhs_orig.coords[dim])
+                        coord_list = list(rhs_array.coords[dim])
                         indices.append(coord_list.index(elem))
                         break
             if indices:
-                rv = float(rhs_orig.values[tuple(indices)])
+                rv = float(rhs_array.values[tuple(indices)])
             else:
-                rv = float(rhs_orig.values.flat[0])
+                rv = float(rhs_array.values.flat[0])
         elif hasattr(rhs_orig, "array"):
             indices = [s.index(bindings[s]) for s in rhs_orig.sets if s in bindings]
             if indices:

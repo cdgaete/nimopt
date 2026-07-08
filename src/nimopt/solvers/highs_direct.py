@@ -233,6 +233,12 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
     con_names: List[str] = []
     total_nnz = 0
 
+    # Name->column map for the non-vectorized fallback path. Built lazily on the
+    # first fallback constraint and scoped to THIS build, so it always reflects
+    # the model's current variable layout (a persistent, mutated model must not
+    # reuse a column map from a previous build with different variables).
+    var_idx: Optional[Dict[str, int]] = None
+
     for eq_name, con in model._constraints.items():
         lhs_terms = list(con.lhs.terms)
         rhs_const = 0.0
@@ -261,6 +267,27 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
             lhs_terms.append((con.rhs, -1.0, [], []))
         elif isinstance(con.rhs, (int, float)):
             rhs_const = float(con.rhs)
+        elif hasattr(con.rhs, "array"):
+            # Bare param on the RHS, e.g. `... == c[I]`.
+            rhs_const_array = con.rhs.array
+        elif hasattr(con.rhs, "values"):
+            rhs_const_array = con.rhs
+
+        # A constant on the LHS (e.g. from `param[I] + x[I] == ...`, where the
+        # param folds into the LHS expression's constant) moves to the RHS.
+        # `lhs_has_const` disqualifies the single-term fast path, which cannot
+        # combine a LHS constant with the RHS.
+        lhs_const = con.lhs.const
+        lhs_has_const = not (isinstance(lhs_const, (int, float)) and lhs_const == 0)
+        if isinstance(lhs_const, (int, float)):
+            rhs_const -= lhs_const
+        else:
+            lhs_arr = getattr(lhs_const, "array", lhs_const)
+            if hasattr(lhs_arr, "values"):
+                if rhs_const_array is None:
+                    rhs_const_array = lhs_arr * -1.0
+                else:
+                    rhs_const_array = rhs_const_array - lhs_arr
 
         free_sets = con.free_sets
         sense = con.sense
@@ -275,14 +302,22 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
         # the same-variable-twice family pays the (vectorized) merge cost.
         may_dupe = len({t[0].name for t in lhs_terms}) != len(lhs_terms)
 
-        # Rust fast path: single indexed var, has free sets, no fixed/lagged indices
+        # Rust fast path: single indexed var, has free sets, no fixed/lagged indices.
+        # Requires every free set to be one of the variable's own dims -- this
+        # builder derives the constraint layout from the variable's shape, so a
+        # free axis that lives only in the coefficient (e.g. Sum(j, a[i,j]*x[j]),
+        # free i) is not representable here and is routed to the multi-term path.
         can_use_rust = (
             HAS_RUST
             and len(lhs_terms) == 1
             and lhs_terms[0][0].sets
             and free_sets
+            and not lhs_has_const  # fast path can't fold a LHS constant into RHS
             and not lhs_terms[0][2]  # no fixed indices
             and not lhs_terms[0][3]  # no lagged indices
+            and all(
+                id(fs) in {id(s) for s in lhs_terms[0][0].sets} for fs in free_sets
+            )
         )
 
         if can_use_rust:
@@ -329,7 +364,24 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
                 all_data.append(data)
                 all_row_lower.append(row_lower)
                 all_row_upper.append(row_upper)
-                con_names.extend(f"{eq_name}_{i}" for i in range(n_rows))
+                # Name rows by element (C-order over free sets), matching every
+                # other build path and the element-based names the solution
+                # extractor expects. Positional names (bal_0, bal_1, ...) broke
+                # dual extraction for multi-term (e.g. equality) constraints.
+                import itertools
+
+                from ..writers import sanitize_lp_name
+
+                combos = list(itertools.product(*(s.elements for s in free_sets)))
+                if len(combos) == n_rows:
+                    con_names.extend(
+                        eq_name
+                        + "_"
+                        + "_".join(sanitize_lp_name(e) for e in combo)
+                        for combo in combos
+                    )
+                else:
+                    con_names.extend(f"{eq_name}_{i}" for i in range(n_rows))
                 total_nnz += len(indices)
                 continue
 
@@ -337,7 +389,7 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
         if has_lagged and free_sets:
             result = _build_lagged_constraint_vectorized(
                 lhs_terms, free_sets, con.rhs, rhs_const, sense,
-                var_start_idx, eq_name
+                var_start_idx, eq_name, rhs_const_array=rhs_const_array,
             )
             if result is not None:
                 indptr, indices, data, row_lower, row_upper, names = result
@@ -355,8 +407,9 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
                 total_nnz += len(indices)
                 continue
 
-        # Fallback needs var_idx - build it lazily
-        var_idx = _build_var_idx_lazy(model, var_start_idx)
+        # Fallback needs var_idx - build it lazily, once per build
+        if var_idx is None:
+            var_idx = _build_var_idx(model, var_start_idx)
 
         if not free_sets:
             result = _expand_constraint(lhs_terms, {}, var_idx)
@@ -421,16 +474,13 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
     }
 
 
-_var_idx_cache: Dict[int, Dict[str, int]] = {}
+def _build_var_idx(model, var_start_idx) -> Dict[str, int]:
+    """Build a name->column map for the current variable layout.
 
-
-def _build_var_idx_lazy(model, var_start_idx) -> Dict[str, int]:
-    """Build var_idx dict only when needed (fallback path)."""
+    Not cached across builds: the caller scopes it to a single matrix build so a
+    persistent, mutated model never reuses a column map from a previous build.
+    """
     import itertools
-
-    model_id = id(model)
-    if model_id in _var_idx_cache:
-        return _var_idx_cache[model_id]
 
     var_idx = {}
     for var in model.variables.values():
@@ -444,7 +494,6 @@ def _build_var_idx_lazy(model, var_start_idx) -> Dict[str, int]:
                 var_idx[vname] = idx
                 idx += 1
 
-    _var_idx_cache[model_id] = var_idx
     return var_idx
 
 
@@ -508,14 +557,33 @@ def _build_multi_term_csr_rust(
     term_var_starts = []
     term_dim_sizes = []
     term_coefs = []
-    term_coef_sizes = []      # NEW: shape of coefficient array
-    term_coef_free_map = []   # NEW: maps coef dim -> free set index
+    term_coef_sizes = []      # shape of coefficient array
+    term_coef_free_map = []   # maps coef dim -> free set index (-1 if not free)
+    term_coef_sum_map = []    # maps coef dim -> variable summed-axis position (-1 if not summed)
     term_is_free_dims = []
+
+    free_set_names = {fs.name: i for i, fs in enumerate(free_sets)}
 
     for var, coef, fixed, lagged in lhs_terms:
         term_var_starts.append(var_start_idx[var.name])
         term_dim_sizes.append([len(s) for s in var.sets])
         term_is_free_dims.append([id(s) in free_set_ids for s in var.sets])
+
+        # Position of each of the variable's summed axes, in variable-dim order.
+        # This must match the sum_combo ordering used by build_multi_term_csr,
+        # which iterates the variable's dims and pushes the non-free ones.
+        sum_pos_by_name = {}
+        for s in var.sets:
+            if id(s) not in free_set_ids:
+                sum_pos_by_name[s.name] = len(sum_pos_by_name)
+
+        def _sum_map_for_dims(dims):
+            # A coef dim is a summed axis iff it names one of the variable's
+            # summed sets (and is not itself a free set).
+            return [
+                sum_pos_by_name[d] if (d not in free_set_names and d in sum_pos_by_name) else -1
+                for d in dims
+            ]
 
         # Handle coefficient - keep it in its original shape for proper indexing
         if isinstance(coef, nb.Array):
@@ -534,6 +602,7 @@ def _build_multi_term_csr_rust(
                 if not found:
                     coef_free_map.append(-1)  # Not a free set dimension
             term_coef_free_map.append(coef_free_map)
+            term_coef_sum_map.append(_sum_map_for_dims(coef.dims))
         elif hasattr(coef, "array"):
             arr = coef.array
             term_coefs.append(arr.values.flatten().astype(np.float64))
@@ -549,6 +618,7 @@ def _build_multi_term_csr_rust(
                 if not found:
                     coef_free_map.append(-1)
             term_coef_free_map.append(coef_free_map)
+            term_coef_sum_map.append(_sum_map_for_dims(arr.dims))
         elif isinstance(coef, (int, float)):
             size = 1
             for s in var.sets:
@@ -563,10 +633,14 @@ def _build_multi_term_csr_rust(
                 else:
                     coef_free_map.append(-1)
             term_coef_free_map.append(coef_free_map)
+            # Scalar coef is broadcast to var shape (every entry identical), so
+            # the summed axis need not be indexed -- all -1.
+            term_coef_sum_map.append([-1] * len(var.sets))
         else:
             term_coefs.append(None)
             term_coef_sizes.append([])
             term_coef_free_map.append([])
+            term_coef_sum_map.append([])
 
     # Free set sizes
     free_set_sizes = [len(s) for s in free_sets]
@@ -588,6 +662,7 @@ def _build_multi_term_csr_rust(
         term_coefs,
         term_coef_sizes,
         term_coef_free_map,
+        term_coef_sum_map,
         term_is_free_dims,
         free_set_sizes,
         rhs_flat,
@@ -604,7 +679,8 @@ def _build_multi_term_csr_rust(
 
 
 def _build_lagged_constraint_vectorized(
-    lhs_terms, free_sets, rhs_orig, rhs_const, sense, var_start_indices, eq_name
+    lhs_terms, free_sets, rhs_orig, rhs_const, sense, var_start_indices, eq_name,
+    rhs_const_array=None,
 ) -> Optional[Tuple]:
     """
     Build lagged constraint CSR using vectorized nimblend operations.
@@ -727,7 +803,9 @@ def _build_lagged_constraint_vectorized(
     # Build RHS array - broadcast/align to free set order
     from ..writers.lp_rust import _rhs_flat_for_free_sets
 
-    rhs_flat = _rhs_flat_for_free_sets(rhs_orig, rhs_const, free_sets)
+    rhs_flat = _rhs_flat_for_free_sets(
+        rhs_orig, rhs_const, free_sets, rhs_const_array=rhs_const_array
+    )
 
     # Fill CSR arrays
     row_lower = np.zeros(n_valid, dtype=np.float64)
@@ -886,6 +964,27 @@ def _build_matrices(model: "Model") -> Dict:
             lhs_terms.append((con.rhs, -1.0, [], []))
         elif isinstance(con.rhs, (int, float)):
             rhs_const = float(con.rhs)
+        elif hasattr(con.rhs, "array"):
+            # Bare param on the RHS, e.g. `... == c[I]`.
+            rhs_const_array = con.rhs.array
+        elif hasattr(con.rhs, "values"):
+            rhs_const_array = con.rhs
+
+        # A constant on the LHS (e.g. from `param[I] + x[I] == ...`, where the
+        # param folds into the LHS expression's constant) moves to the RHS.
+        # `lhs_has_const` disqualifies the single-term fast path, which cannot
+        # combine a LHS constant with the RHS.
+        lhs_const = con.lhs.const
+        lhs_has_const = not (isinstance(lhs_const, (int, float)) and lhs_const == 0)
+        if isinstance(lhs_const, (int, float)):
+            rhs_const -= lhs_const
+        else:
+            lhs_arr = getattr(lhs_const, "array", lhs_const)
+            if hasattr(lhs_arr, "values"):
+                if rhs_const_array is None:
+                    rhs_const_array = lhs_arr * -1.0
+                else:
+                    rhs_const_array = rhs_const_array - lhs_arr
 
         free_sets = con.free_sets
         sense = con.sense
@@ -1208,7 +1307,11 @@ def _get_coef_for_combo(coef, var_sets, combo) -> float:
 
 def _get_rhs_value(rhs, bindings, const) -> float:
     if isinstance(rhs, (int, float)):
-        return float(rhs)
+        # `const` already folds the numeric rhs together with any LHS constant
+        # moved across (const == float(rhs) - lhs_const). Returning float(rhs)
+        # here would silently drop that LHS-constant adjustment, so `z + 3 <= 9`
+        # would be built as `z <= 9` instead of `z <= 6`.
+        return float(const)
     elif hasattr(rhs, "array"):
         arr = rhs.array
         if not bindings:

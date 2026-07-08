@@ -1141,14 +1141,15 @@ fn cartesian_indices(sizes: &[usize]) -> Vec<Vec<usize>> {
 ///
 /// Returns: (indptr, indices, data, row_lower, row_upper)
 #[pyfunction]
-#[pyo3(signature = (term_var_starts, term_dim_sizes, term_coefs, term_coef_sizes, term_coef_free_map, term_is_free_dims, free_set_sizes, rhs_flat, sense))]
+#[pyo3(signature = (term_var_starts, term_dim_sizes, term_coefs, term_coef_sizes, term_coef_free_map, term_coef_sum_map, term_is_free_dims, free_set_sizes, rhs_flat, sense))]
 fn build_multi_term_csr(
     py: Python<'_>,
     term_var_starts: Vec<i32>,
     term_dim_sizes: Vec<Vec<usize>>,
     term_coefs: Vec<Option<PyReadonlyArray1<'_, f64>>>,
-    term_coef_sizes: Vec<Vec<usize>>,      // NEW: shape of coef array for each term
-    term_coef_free_map: Vec<Vec<i32>>,     // NEW: coef dim -> free set index mapping
+    term_coef_sizes: Vec<Vec<usize>>,      // shape of coef array for each term
+    term_coef_free_map: Vec<Vec<i32>>,     // coef dim -> free set index (-1 if not a free dim)
+    term_coef_sum_map: Vec<Vec<i32>>,      // coef dim -> variable summed-axis position (-1 if not a summed dim)
     term_is_free_dims: Vec<Vec<bool>>,
     free_set_sizes: Vec<usize>,
     rhs_flat: PyReadonlyArray1<'_, f64>,
@@ -1289,18 +1290,25 @@ fn build_multi_term_csr(
                         var_flat_idx += idx * var_strides[d];
                     }
 
-                    // Compute coefficient index using coef_free_map
-                    // coef_free_map[d] tells us which free_index to use for coef dim d
-                    // -1 means it's not mapped (use 0, shouldn't happen for valid coefs)
+                    // Compute coefficient index. Each coef dim is either a free
+                    // axis (indexed by the constraint's free_indices) or one of
+                    // the variable's summed axes (indexed by sum_combo). Pinning a
+                    // summed axis to 0 -- the old bug -- turned Sum(j, a[i,j]*x[j])
+                    // into a[i,0]*Sum(j, x[j]).
                     let c = if let Some(ref coef) = coef_data[t] {
                         let coef_free_map = &term_coef_free_map[t];
+                        let coef_sum_map = &term_coef_sum_map[t];
                         let coef_strides = &term_coef_strides[t];
-                        
+
                         let mut coef_flat_idx = 0usize;
                         for (cd, &free_idx) in coef_free_map.iter().enumerate() {
                             if free_idx >= 0 {
-                                let idx_val = free_indices[free_idx as usize];
-                                coef_flat_idx += idx_val * coef_strides[cd];
+                                coef_flat_idx += free_indices[free_idx as usize] * coef_strides[cd];
+                            } else {
+                                let sum_pos = coef_sum_map[cd];
+                                if sum_pos >= 0 {
+                                    coef_flat_idx += sum_combo[sum_pos as usize] * coef_strides[cd];
+                                }
                             }
                         }
                         coef.get(coef_flat_idx).copied().unwrap_or(1.0)

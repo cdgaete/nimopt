@@ -113,14 +113,26 @@ def extract_solution_python(
     var_duals = np.array(solver.get_variable_duals(), dtype=np.float64)
     con_duals = np.array(solver.get_constraint_duals(), dtype=np.float64)
 
+    # Actual rows present per constraint (lagged constraints emit fewer rows
+    # than product(free sizes)); drives both the row permutation and the
+    # per-constraint dual slicing below so they stay consistent.
+    con_rows = _present_con_rows(model, solver)
+
     if align_by_names:
         col_perm = _name_permutation(
             _expected_col_names(model),
             solver.get_variable_names(),
             var_values.size,
         )
+        if con_rows is not None:
+            present_names = [nm for _, _, _, nms in con_rows for nm in nms]
+            expected_row_names = (
+                np.asarray(present_names, dtype=object) if present_names else None
+            )
+        else:
+            expected_row_names = _expected_row_names(model)
         row_perm = _name_permutation(
-            _expected_row_names(model),
+            expected_row_names,
             solver.get_constraint_names(),
             con_duals.size,
         )
@@ -152,24 +164,38 @@ def extract_solution_python(
         )
 
     # Constraints: use model metadata
+    present_by_con = (
+        {cn: combos for cn, _c, combos, _nms in con_rows} if con_rows is not None else None
+    )
     con_offset = 0
     for con_name, constraint in model._constraints.items():
         free_sets = constraint.free_sets
+        full_size = 1
+        for s in free_sets:
+            full_size *= len(s)
+
+        # Number of rows actually emitted for this constraint. Equals full_size
+        # for ordinary constraints; smaller for lagged ones with dropped rows.
+        combos = present_by_con.get(con_name) if present_by_con is not None else None
+        actual = len(combos) if combos is not None else full_size
+
         if not free_sets:
-            size = 1
             shape = (1,)
             dims = []
             elements = []
-        else:
-            size = 1
-            for s in free_sets:
-                size *= len(s)
+        elif actual == full_size:
             shape = tuple(len(s) for s in free_sets)
             dims = [s.name for s in free_sets]
             elements = [list(s.elements) for s in free_sets]
+        else:
+            # Partial (lagged) constraint: report the present rows flat, with the
+            # actual per-row index combos rather than a full N-D grid.
+            shape = (actual,)
+            dims = [s.name for s in free_sets]
+            elements = [list(c) for c in combos]
 
-        duals = con_duals[con_offset : con_offset + size].reshape(shape)
-        con_offset += size
+        duals = con_duals[con_offset : con_offset + actual].reshape(shape)
+        con_offset += actual
 
         sol.constraints[con_name] = ConstraintSolution(
             name=con_name,
@@ -225,6 +251,70 @@ def _expected_row_names(model: "Model"):
             ).ravel()
         blocks.append(names)
     return np.concatenate(blocks) if blocks else None
+
+
+def _model_has_lag(model) -> bool:
+    """True if any constraint references a lagged/lead index.
+
+    Only lagged constraints can drop rows, so this gates the (per-row, O(rows))
+    presence scan in `_present_con_rows`. A lag can sit in an LHS term, an RHS
+    LinearExpr term, or a bare RHS VarRef's `lagged_indices`."""
+
+    def _terms_lagged(expr) -> bool:
+        terms = getattr(expr, "terms", None)
+        return bool(terms) and any(len(t) > 3 and t[3] for t in terms)
+
+    for con in model._constraints.values():
+        if _terms_lagged(con.lhs):
+            return True
+        rhs = con.rhs
+        if _terms_lagged(rhs) or getattr(rhs, "lagged_indices", None):
+            return True
+    return False
+
+
+def _present_con_rows(model, solver):
+    """Per constraint, the free-index combos whose row is actually present.
+
+    A lagged constraint drops out-of-range rows (e.g. `soc[H-1]` has no row for
+    the first H), so it generates fewer than product(free sizes) rows. Returns
+    a list of (con_name, con, combos, names) in model order, restricted to rows
+    that appear in solver.get_constraint_names(). Returns None if the solver
+    exposes no names (caller keeps the naive product-sized behaviour)."""
+    import itertools
+
+    from .writers import sanitize_lp_name
+
+    # Fast path: with no lagged constraints every constraint emits its full
+    # product(free sizes) rows, so the naive slicing in the caller is exact and
+    # correct. Skip the O(total rows) name-building scan entirely -- it used to
+    # run on every solve and dominated solution extraction for large models.
+    if not _model_has_lag(model):
+        return None
+
+    try:
+        solver_names = set(solver.get_constraint_names())
+    except Exception:
+        return None
+    if not solver_names:
+        return None
+
+    blocks = []
+    for con_name, con in model._constraints.items():
+        base = sanitize_lp_name(con_name)
+        if not con.free_sets:
+            combos, names = [()], [base]
+        else:
+            combos, names = [], []
+            for combo in itertools.product(*(s.elements for s in con.free_sets)):
+                nm = base
+                for e in combo:
+                    nm = nm + "_" + sanitize_lp_name(e)
+                combos.append(combo)
+                names.append(nm)
+        keep = [(c, nm) for c, nm in zip(combos, names) if nm in solver_names]
+        blocks.append((con_name, con, [c for c, _ in keep], [nm for _, nm in keep]))
+    return blocks
 
 
 def _name_permutation(expected_names, solver_names, n: int):
