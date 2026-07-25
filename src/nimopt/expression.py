@@ -39,13 +39,18 @@ class LinearExpr:
     @classmethod
     def from_term(cls, var_ref: "VarRef", coef: Any) -> "LinearExpr":
         """Create expression from single term: coef * var_ref."""
-        from .param import Param
+        from .param import Param, ParamRef
 
-        free_sets = var_ref.free_sets
+        free_sets = list(var_ref.free_sets)
         fixed = var_ref.fixed_indices
         lagged = var_ref.lagged_indices
 
-        if isinstance(coef, Param):
+        coef_sets = None
+        if isinstance(coef, ParamRef):
+            coef_sets = coef.sets
+            coef_val = coef.array
+        elif isinstance(coef, Param):
+            coef_sets = coef.sets
             coef_val = coef.array
         elif isinstance(coef, (int, float)):
             coef_val = float(coef)
@@ -53,6 +58,19 @@ class LinearExpr:
             coef_val = coef
         else:
             coef_val = coef
+
+        # A parameter coefficient may carry free dimensions the variable is not
+        # indexed by - e.g. Sum(t, member[g, grp] * x[g, t]) is free over grp,
+        # which lives only in the coefficient. Such sets must join the
+        # expression's free sets; otherwise they are silently dropped whenever
+        # the RHS does not reintroduce them (a bare ``== 0``), which corrupts
+        # the constraint's row expansion (fewer rows, mis-indexed coefficients).
+        if coef_sets:
+            have = {s.name for s in free_sets}
+            for s in coef_sets:
+                if s.name not in have:
+                    free_sets.append(s)
+                    have.add(s.name)
 
         return cls(
             terms=[(var_ref.var, coef_val, fixed, lagged)],

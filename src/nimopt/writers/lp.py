@@ -80,6 +80,45 @@ def _get_coef(
     return float(coef)
 
 
+def _index_array_by_bindings(arr, bindings: Dict[Set, Any]) -> float:
+    """Value of ``arr`` at the coordinates named by ``bindings``.
+
+    Indices are assembled in the array's OWN dimension order - not the order
+    ``bindings`` happens to iterate. A name match wins; any remaining array
+    dimension is resolved by locating the element in it (subset aliasing).
+    Assembling indices in binding order silently transposed them whenever the
+    constraint's free-set order differed from the array's dim order, indexing
+    the wrong axis (and, when sizes differ, raising IndexError).
+    """
+    idx_by_dim: Dict[str, int] = {}
+
+    # Exact dimension-name matches first.
+    for dim in arr.dims:
+        for s, elem in bindings.items():
+            if s.name == dim:
+                idx_by_dim[dim] = list(arr.coords[dim]).index(elem)
+                break
+
+    # Subset aliasing for still-unmatched dims: consume each binding at most once.
+    used = {id(s) for s in bindings if s.name in idx_by_dim}
+    for dim in arr.dims:
+        if dim in idx_by_dim:
+            continue
+        coord_list = list(arr.coords[dim])
+        for s, elem in bindings.items():
+            if id(s) in used:
+                continue
+            if elem in coord_list:
+                idx_by_dim[dim] = coord_list.index(elem)
+                used.add(id(s))
+                break
+
+    indices = tuple(idx_by_dim[dim] for dim in arr.dims if dim in idx_by_dim)
+    if len(indices) == len(arr.dims):
+        return float(arr.values[indices])
+    return float(arr.values.flat[0])
+
+
 def _get_rhs(rhs, bindings: Dict[Set, Any]) -> float:
     """Get RHS value for constraint.
 
@@ -88,53 +127,10 @@ def _get_rhs(rhs, bindings: Dict[Set, Any]) -> float:
     if isinstance(rhs, (int, float)):
         return float(rhs)
     elif isinstance(rhs, nb.Array):
-        indices = []
-        used_dims = set()
-
-        for s, elem in bindings.items():
-            # First try exact dimension name match
-            if s.name in rhs.dims and s.name not in used_dims:
-                coord_list = list(rhs.coords[s.name])
-                indices.append(coord_list.index(elem))
-                used_dims.add(s.name)
-            else:
-                # Try to find element in any unused dimension (subset aliasing)
-                for dim in rhs.dims:
-                    if dim in used_dims:
-                        continue
-                    coord_list = list(rhs.coords[dim])
-                    if elem in coord_list:
-                        indices.append(coord_list.index(elem))
-                        used_dims.add(dim)
-                        break
-
-        if indices:
-            return float(rhs.values[tuple(indices)])
-        return float(rhs.values.flat[0])
+        return _index_array_by_bindings(rhs, bindings)
     elif hasattr(rhs, "array"):
         # Handle ParamRef - use its underlying array
-        arr = rhs.array
-        indices = []
-        used_dims = set()
-
-        for s, elem in bindings.items():
-            if s.name in arr.dims and s.name not in used_dims:
-                coord_list = list(arr.coords[s.name])
-                indices.append(coord_list.index(elem))
-                used_dims.add(s.name)
-            else:
-                for dim in arr.dims:
-                    if dim in used_dims:
-                        continue
-                    coord_list = list(arr.coords[dim])
-                    if elem in coord_list:
-                        indices.append(coord_list.index(elem))
-                        used_dims.add(dim)
-                        break
-
-        if indices:
-            return float(arr.values[tuple(indices)])
-        return float(arr.values.flat[0])
+        return _index_array_by_bindings(rhs.array, bindings)
     return 0.0
 
 
@@ -224,6 +220,20 @@ def _write_constraints(f: TextIO, model, var_names: Dict) -> None:
 
         norm_lhs = LinearExpr(lhs_terms, 0.0, con.lhs.free_sets)
 
+        # A constant folded into the LHS expression (e.g. `z + 3 <= 9` or the
+        # bare `ufix[A]` in `4*Sum(B, y[A,B]) + ufix[A] <= 1`) moves to the RHS
+        # as RHS' = RHS - lhs.const. Track it as a separate offset so the
+        # existing RHS sign handling below is left untouched; it is subtracted
+        # per row (numeric part always, array part indexed by the row bindings).
+        lhs_const = con.lhs.const
+        lhs_off_num = 0.0
+        lhs_off_arr = None
+        if not (isinstance(lhs_const, (int, float)) and lhs_const == 0):
+            if isinstance(lhs_const, (int, float)):
+                lhs_off_num = float(lhs_const)
+            else:
+                lhs_off_arr = getattr(lhs_const, "array", lhs_const)
+
         free = con.free_sets
         if not free:
             f.write(f" {eq_name}: ")
@@ -239,6 +249,9 @@ def _write_constraints(f: TextIO, model, var_names: Dict) -> None:
                 rv = _get_rhs(con.rhs, {})
             else:
                 rv = rhs_const
+            rv -= lhs_off_num
+            if lhs_off_arr is not None:
+                rv -= float(lhs_off_arr.values.flat[0])
             f.write(f" {sm[con.sense]} {rv}\n")
         else:
             combos = list(itertools.product(*(s.elements for s in free)))
@@ -258,6 +271,9 @@ def _write_constraints(f: TextIO, model, var_names: Dict) -> None:
                     rv = _get_rhs(con.rhs, bindings)
                 else:
                     rv = rhs_const
+                rv -= lhs_off_num
+                if lhs_off_arr is not None:
+                    rv -= _index_array_by_bindings(lhs_off_arr, bindings)
                 f.write(f" {sm[con.sense]} {rv}\n")
                 con_idx += 1
     f.write("\n")

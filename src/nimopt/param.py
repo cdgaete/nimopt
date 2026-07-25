@@ -78,9 +78,26 @@ class ParamRef:
         return other - self.param.array
 
     def __mul__(self, other):
+        # Multiplying a variable reference builds a linear term. Route through
+        # from_term with *self* (the ParamRef, which still knows its Set
+        # objects) rather than eagerly collapsing to a raw array, so a free set
+        # carried only by this coefficient is preserved. param*param, *array
+        # and *scalar keep the plain array algebra.
+        from .variable import VarRef
+
+        if isinstance(other, VarRef):
+            from .expression import LinearExpr
+
+            return LinearExpr.from_term(other, self)
         return self.param.array * other
 
     def __rmul__(self, other):
+        from .variable import VarRef
+
+        if isinstance(other, VarRef):
+            from .expression import LinearExpr
+
+            return LinearExpr.from_term(other, self)
         return other * self.param.array
 
     def __truediv__(self, other):

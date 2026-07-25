@@ -368,7 +368,9 @@ def _write_solution_csv_rust(sol: Solution, directory: Path, nimopt_rust) -> Non
         nimopt_rust.write_var_solution_csv(
             path,
             var_sol.dims,
-            var_sol.elements,
+            # Stringify: set elements may be ints (e.g. integer time indices),
+            # but the Rust writer takes Vec<Vec<String>>.
+            [[str(e) for e in dim] for dim in var_sol.elements],
             var_sol.values.flatten().astype("float64"),
             var_sol.duals.flatten().astype("float64"),
         )
@@ -378,7 +380,7 @@ def _write_solution_csv_rust(sol: Solution, directory: Path, nimopt_rust) -> Non
         nimopt_rust.write_con_solution_csv(
             path,
             con_sol.dims,
-            con_sol.elements,
+            [[str(e) for e in dim] for dim in con_sol.elements],
             con_sol.duals.flatten().astype("float64"),
         )
 

@@ -315,9 +315,16 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
             and not lhs_has_const  # fast path can't fold a LHS constant into RHS
             and not lhs_terms[0][2]  # no fixed indices
             and not lhs_terms[0][3]  # no lagged indices
-            and all(
-                id(fs) in {id(s) for s in lhs_terms[0][0].sets} for fs in free_sets
-            )
+            # The variable's free dims must be exactly the constraint's free
+            # sets, in order: this builder matches free axes positionally, so a
+            # coefficient-only free set or a reordered/partial subset must be
+            # routed to the multi-term path.
+            and [
+                id(s)
+                for s in lhs_terms[0][0].sets
+                if id(s) in {id(fs) for fs in free_sets}
+            ]
+            == [id(fs) for fs in free_sets]
         )
 
         if can_use_rust:
@@ -509,15 +516,40 @@ def _build_sum_csr_rust_fast(
     free_set_ids = {id(s) for s in free_sets}
     is_free_dim = [id(s) in free_set_ids for s in var.sets]
 
-    # Get coefficient array
-    if isinstance(coef, nb.Array):
-        coef_flat = coef.values.flatten().astype(np.float64)
-    elif isinstance(coef, (int, float)):
+    # Get coefficient array. A scalar coefficient must still be materialised to
+    # the variable's full flat shape: the Rust kernel reads coef_flat=None as
+    # "all coefficients are 1.0", so passing None for a non-unit literal (e.g.
+    # the 4 in Sum(B, 4*y[A,B])) silently assembled the row as 1*y. Only a
+    # genuine unit coefficient may use the allocation-free None path. This
+    # mirrors how the multi-term builder (the working equality path) and every
+    # param coefficient already flow through as a flattened array.
+    #
+    # Array coefficients must be *broadcast* to the variable's full dims, not
+    # flattened as-is: in Sum(G, inertia[G] * status[G,T]) free over [T] the
+    # coefficient spans only the summed set G while the variable spans [G,T].
+    # Flattening gave the kernel |G| values where it expects |G|*|T|, and the
+    # kernel pads a short array with 1.0 -- so every free-set element after the
+    # first silently got 1.0 coefficients. _coef_flat_for_var applies the same
+    # nimblend broadcast the LP writers and the objective builder already use.
+    from ..writers.lp_rust import _coef_flat_for_var
+
+    if isinstance(coef, (int, float)) and coef == 1.0:
         coef_flat = None
-    elif hasattr(coef, "array"):
-        coef_flat = coef.array.values.flatten().astype(np.float64)
     else:
-        coef_flat = None
+        coef_flat = _coef_flat_for_var(coef, var)
+
+    # The kernel cannot detect a short coefficient array -- it pads with 1.0 and
+    # returns a plausible, wrong row. Fail loudly instead.
+    if coef_flat is not None:
+        expected = 1
+        for s in var.sets:
+            expected *= len(s)
+        if coef_flat.size != expected:
+            raise ValueError(
+                f"coefficient array for variable {var.name!r} has "
+                f"{coef_flat.size} entries, expected {expected} "
+                f"(dims {[s.name for s in var.sets]})"
+            )
 
     # Get RHS array - broadcast/align to free set order
     from ..writers.lp_rust import _rhs_flat_for_free_sets
@@ -560,14 +592,19 @@ def _build_multi_term_csr_rust(
     term_coef_sizes = []      # shape of coefficient array
     term_coef_free_map = []   # maps coef dim -> free set index (-1 if not free)
     term_coef_sum_map = []    # maps coef dim -> variable summed-axis position (-1 if not summed)
-    term_is_free_dims = []
+    term_var_free_maps = []   # maps var dim -> free set index (-1 if summed)
 
     free_set_names = {fs.name: i for i, fs in enumerate(free_sets)}
 
     for var, coef, fixed, lagged in lhs_terms:
         term_var_starts.append(var_start_idx[var.name])
         term_dim_sizes.append([len(s) for s in var.sets])
-        term_is_free_dims.append([id(s) in free_set_ids for s in var.sets])
+        # Map each var dim to its free set by identity (-1 if summed). A
+        # positional free-index counter in the Rust builder assumed the
+        # variable's free dims lined up with the constraint's free sets in
+        # order, which silently corrupted (or made infeasible) any term free
+        # over a non-aligned subset, e.g. sdisC[SC,PS] in a [NC,PS] balance.
+        term_var_free_maps.append([free_set_ids.get(id(s), -1) for s in var.sets])
 
         # Position of each of the variable's summed axes, in variable-dim order.
         # This must match the sum_combo ordering used by build_multi_term_csr,
@@ -663,7 +700,7 @@ def _build_multi_term_csr_rust(
         term_coef_sizes,
         term_coef_free_map,
         term_coef_sum_map,
-        term_is_free_dims,
+        term_var_free_maps,
         free_set_sizes,
         rhs_flat,
         sense_str,
@@ -994,7 +1031,10 @@ def _build_matrices(model: "Model") -> Dict:
             if result is not None:
                 idx_list, val_list = result
                 if rhs_const_array is not None:
-                    rhs_val = float(rhs_const_array.values.flat[0])
+                    # Offset the folded array constant by any numeric RHS const
+                    # (e.g. `... + ufix <= 1` -> array=-ufix, const=1); dropping
+                    # the scalar built the wrong bound.
+                    rhs_val = float(rhs_const_array.values.flat[0]) + float(rhs_const)
                 else:
                     rhs_val = _get_rhs_value(con.rhs, {}, rhs_const)
                 row_data.append((idx_list, val_list, sense, rhs_val))
@@ -1007,10 +1047,11 @@ def _build_matrices(model: "Model") -> Dict:
                     continue
                 idx_list, val_list = result
                 if rhs_const_array is not None:
-                    # Index into the array using bindings
+                    # Index into the array using bindings, then offset by any
+                    # numeric RHS const (see scalar branch above).
                     rhs_val = _get_array_value_for_bindings(
                         rhs_const_array, free_sets, combo
-                    )
+                    ) + float(rhs_const)
                 else:
                     rhs_val = _get_rhs_value(con.rhs, bindings, rhs_const)
                 row_data.append((idx_list, val_list, sense, rhs_val))

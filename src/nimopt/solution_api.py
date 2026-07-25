@@ -130,7 +130,9 @@ def _lazy_to_csv(sol: LazySolution, directory: Path) -> None:
             nimopt_rust.write_var_solution_csv(
                 path,
                 var.dims,
-                var.elements,
+                # Set elements may be ints (e.g. integer time indices); the Rust
+                # writer takes Vec<Vec<String>>.
+                [[str(e) for e in dim] for dim in var.elements],
                 var.values.flatten().astype("float64"),
                 var.duals.flatten().astype("float64"),
             )
@@ -145,7 +147,7 @@ def _lazy_to_csv(sol: LazySolution, directory: Path) -> None:
             nimopt_rust.write_con_solution_csv(
                 path,
                 con.dims,
-                con.elements,
+                [[str(e) for e in dim] for dim in con.elements],
                 con.duals.flatten().astype("float64"),
             )
         else:

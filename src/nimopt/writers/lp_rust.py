@@ -106,21 +106,40 @@ def _get_objective_data(model):
     return var_names, np.array(coefs, dtype=np.float64)
 
 
-def _get_coef_scalar(coef, var_sets: List[Set], combo: tuple) -> float:
-    """Get scalar coefficient value for a variable index."""
+def _get_coef_scalar(coef, var_sets: List[Set], combo: tuple, bindings=None) -> float:
+    """Get scalar coefficient value for a variable index.
+
+    A term's coefficient array may span dimensions beyond the variable's own
+    sets - specifically the constraint's free (bound) sets, e.g. an incidence
+    or cross-tier term whose coef is indexed by [NC, CONV, PS, TS] while the
+    variable is only [CONV, TS]. Those extra dims must be resolved from
+    ``bindings`` (the current free-set combination); indexing by the variable
+    dims alone leaves trailing axes and ``float()`` raises. Mirrors the
+    binding-aware lookup in ``writers.lp._get_coef``.
+    """
     if isinstance(coef, (int, float)):
         return float(coef)
     elif isinstance(coef, nb.Array):
+        # Full coordinate map: variable dims from combo, extra dims from bindings.
+        full = {s.name: combo[i] for i, s in enumerate(var_sets)}
+        if bindings:
+            for s, elem in bindings.items():
+                full.setdefault(s.name, elem)
         indices = []
-        for i, s in enumerate(var_sets):
-            if s.name in coef.dims:
-                coord_list = list(coef.coords[s.name])
-                indices.append(coord_list.index(combo[i]))
+        for dim in coef.dims:
+            if dim not in full:
+                # Unresolved dim - fall back to the scalar cell if unambiguous.
+                return float(coef.values.flat[0])
+            coord_list = list(coef.coords[dim])
+            try:
+                indices.append(coord_list.index(full[dim]))
+            except ValueError:
+                return 0.0
         if indices:
             return float(coef.values[tuple(indices)])
         return float(coef.values.flat[0])
     elif hasattr(coef, "array"):
-        return _get_coef_scalar(coef.array, var_sets, combo)
+        return _get_coef_scalar(coef.array, var_sets, combo, bindings)
     return float(coef)
 
 
@@ -152,6 +171,26 @@ def _write_constraints_rust(model, filename: str):
         elif isinstance(con.rhs, (int, float)):
             rhs_const = float(con.rhs)
 
+        # Move any constant on the LHS to the RHS: RHS' = RHS - lhs.const. The
+        # dispatch above only ever routes RHS material into `rhs_const` (numeric
+        # or nb.Array), so a bare param/const folded into the LHS expression --
+        # e.g. `4*Sum(B, y[A,B]) + ufix[A] <= 1` or `z + 3 <= 9` -- was silently
+        # dropped from the exported row. Mirror the direct solver's handling.
+        lhs_const = con.lhs.const
+        if not (isinstance(lhs_const, (int, float)) and lhs_const == 0):
+            if isinstance(lhs_const, (int, float)):
+                if isinstance(rhs_const, nb.Array):
+                    rhs_const = rhs_const + (-lhs_const)
+                else:
+                    rhs_const = rhs_const - lhs_const
+            else:
+                lhs_arr = getattr(lhs_const, "array", lhs_const)
+                neg = lhs_arr * -1.0
+                if isinstance(rhs_const, nb.Array):
+                    rhs_const = rhs_const + neg
+                else:
+                    rhs_const = neg + float(rhs_const)
+
         free_sets = con.free_sets
         sense = "<=" if con.sense == "<=" else (">=" if con.sense == ">=" else "=")
 
@@ -177,15 +216,25 @@ def _write_constraints_rust(model, filename: str):
 
 
 def _can_use_sum_constraints(lhs_terms, free_sets) -> bool:
-    """Check if we can use the optimized sum constraints path."""
+    """Check if we can use the optimized single-variable sum path.
+
+    That path derives the constraint layout from the variable's own shape and
+    matches free dimensions positionally, so it is correct only when the
+    variable's free dims are exactly the constraint's free sets, in order. A
+    free set that lives only in the coefficient (e.g. ``Sum(g, emis[g]*x[g])``
+    free over an ``AREA`` the variable is not indexed by) or a reordered/partial
+    subset must go through the multi-term path instead.
+    """
     if len(lhs_terms) != 1:
         return False
     term = lhs_terms[0]
-    _, _, fixed = term[0], term[1], term[2]
+    var, _, fixed = term[0], term[1], term[2]
     lagged = term[3] if len(term) > 3 else []
     if fixed or lagged:
         return False
-    return True
+    free_ids = {id(s) for s in free_sets}
+    var_free_ids = [id(s) for s in var.sets if id(s) in free_ids]
+    return var_free_ids == [id(s) for s in free_sets]
 
 
 def _write_sum_constraints_fast(
@@ -200,13 +249,25 @@ def _write_sum_constraints_fast(
     var_dim_elements = [[sanitize_lp_name(e) for e in s.elements] for s in var.sets]
     is_free_dim = [id(s) in free_set_ids for s in var.sets]
 
-    # Coefficient array
+    # Coefficient array. A non-unit scalar literal must be materialised to the
+    # variable's full flat shape (with coef_shape set to the variable's dims so
+    # the Rust strides index it correctly): the Rust writer reads
+    # coef_flat=None as "all coefficients are 1.0", so a bare None dropped the
+    # literal (e.g. the 4 in Sum(B, 4*y[A,B]) was written as 1*y). Only a
+    # genuine unit coefficient uses the allocation-free None path.
     if isinstance(coef, nb.Array):
         coef_shape = list(coef.shape)
         coef_flat = coef.values.flatten().astype(np.float64)
     elif isinstance(coef, (int, float)):
-        coef_flat = None
-        coef_shape = []
+        if coef == 1.0:
+            coef_flat = None
+            coef_shape = []
+        else:
+            coef_shape = [len(s) for s in var.sets]
+            size = 1
+            for n in coef_shape:
+                size *= n
+            coef_flat = np.full(size, float(coef), dtype=np.float64)
     elif hasattr(coef, "array"):
         arr = coef.array
         coef_shape = list(arr.shape)
@@ -215,8 +276,16 @@ def _write_sum_constraints_fast(
         coef_flat = None
         coef_shape = []
 
-    # RHS array - broadcast/align to free set order
-    rhs_flat = _rhs_flat_for_free_sets(rhs_orig, rhs_const, free_sets)
+    # RHS array - broadcast/align to free set order. `rhs_const` may be an
+    # nb.Array once a folded LHS/RHS constant array has been moved across (e.g.
+    # `4*Sum(B, y) + ufix[A] <= 1` -> per-row RHS 1 - ufix[A]); route it through
+    # as the array RHS just like the multi-term path.
+    if isinstance(rhs_const, nb.Array):
+        rhs_flat = _rhs_flat_for_free_sets(
+            None, 0.0, free_sets, rhs_const_array=rhs_const
+        )
+    else:
+        rhs_flat = _rhs_flat_for_free_sets(rhs_orig, rhs_const, free_sets)
 
     nimopt_rust.write_sum_constraints(
         filename,
@@ -243,7 +312,11 @@ def _write_batch_constraints_rust(
             return _write_multi_term_fast(
                 filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig
             )
-        except Exception:
+        except BaseException:
+            # NOTE: pyo3 surfaces a Rust panic as PanicException, which
+            # subclasses BaseException (not Exception) - `except Exception`
+            # would let it escape and wedge the server. Catch broadly and
+            # fall back to the correct Python slow path.
             pass  # Fall back to slow path
 
     # Slow path: build variable names in Python
@@ -263,9 +336,10 @@ def _write_multi_term_fast(
     term_var_names = []
     term_dim_elements = []
     term_coefs = []
-    term_is_free_dims = []
+    term_var_free_maps = []   # var dim -> free set index (-1 if summed)
     term_coef_shapes = []
     term_coef_free_maps = []
+    term_coef_sum_maps = []   # coef dim -> variable summed-axis position (-1 if not)
     term_scalar_coefs = []  # Scalar coefficient for each term
 
     for term in lhs_terms:
@@ -276,9 +350,24 @@ def _write_multi_term_fast(
         dim_elems = [[sanitize_lp_name(e) for e in s.elements] for s in var.sets]
         term_dim_elements.append(dim_elems)
 
-        # Is each dimension free?
-        is_free = [id(s) in free_set_ids for s in var.sets]
-        term_is_free_dims.append(is_free)
+        # Map each var dim to its free set by identity (-1 if summed). A
+        # positional counter in Rust corrupted terms free over a non-aligned
+        # subset of the constraint's free sets (and could panic out of bounds).
+        term_var_free_maps.append([free_set_ids.get(id(s), -1) for s in var.sets])
+
+        # Position of each of the variable's summed axes (var-dim order), so a
+        # coefficient that varies over a summed axis is indexed correctly rather
+        # than pinned to element 0 - the incidence-coefficient bug.
+        sum_pos_by_name = {}
+        for s in var.sets:
+            if id(s) not in free_set_ids:
+                sum_pos_by_name[s.name] = len(sum_pos_by_name)
+
+        def _sum_map_for_dims(dims, _spb=sum_pos_by_name):
+            return [
+                _spb[d] if (d not in free_set_names and d in _spb) else -1
+                for d in dims
+            ]
 
         # Coefficient array - handle dimension mismatch
         if isinstance(coef, nb.Array):
@@ -292,6 +381,7 @@ def _write_multi_term_fast(
                 else:
                     coef_free_map.append(-1)  # Not a free set
             term_coef_free_maps.append(coef_free_map)
+            term_coef_sum_maps.append(_sum_map_for_dims(coef.dims))
             term_scalar_coefs.append(1.0)  # Not used for array coefs
         elif hasattr(coef, "array"):
             arr = coef.array
@@ -304,16 +394,19 @@ def _write_multi_term_fast(
                 else:
                     coef_free_map.append(-1)
             term_coef_free_maps.append(coef_free_map)
+            term_coef_sum_maps.append(_sum_map_for_dims(arr.dims))
             term_scalar_coefs.append(1.0)  # Not used for array coefs
         elif isinstance(coef, (int, float)):
             term_coefs.append(None)  # Scalar - use term_scalar_coefs
             term_coef_shapes.append([])
             term_coef_free_maps.append([])
+            term_coef_sum_maps.append([])
             term_scalar_coefs.append(float(coef))
         else:
             term_coefs.append(None)
             term_coef_shapes.append([])
             term_coef_free_maps.append([])
+            term_coef_sum_maps.append([])
             term_scalar_coefs.append(float(coef) if coef is not None else 1.0)
 
     # Free set sizes
@@ -337,7 +430,8 @@ def _write_multi_term_fast(
         term_coefs,
         term_coef_shapes,
         term_coef_free_maps,
-        term_is_free_dims,
+        term_coef_sum_maps,
+        term_var_free_maps,
         free_set_sizes,
         rhs_flat,
         term_scalar_coefs,
@@ -405,7 +499,7 @@ def _write_batch_constraints_rust_slow(
                     else ""
                 )
                 vname = var.name + suffix
-                cv = _get_coef_scalar(coef, var.sets, combo)
+                cv = _get_coef_scalar(coef, var.sets, combo, bindings)
                 con_var_names.append(vname)
                 con_coefs.append(cv)
 
@@ -490,7 +584,12 @@ def _rhs_flat_for_free_sets(rhs_orig, rhs_const, free_sets, rhs_const_array=None
         arr = arr * ones
         if list(arr.dims) != dims:
             arr = arr.transpose(*dims)
-    return arr.values.reshape(-1).astype(np.float64)
+    # A numeric RHS constant coexists with the array part whenever a constraint
+    # has both -- e.g. `4*Sum(B, y) + ufix[A] <= 1` folds `ufix` into the array
+    # (rhs_const_array = -ufix) while the literal `1` stays in rhs_const. The
+    # array must be OFFSET by that scalar, not replace it; dropping rhs_const
+    # here built `<= -ufix` and turned feasible models infeasible.
+    return arr.values.reshape(-1).astype(np.float64) + float(rhs_const)
 
 
 def _coef_flat_for_var(coef, var) -> np.ndarray:
