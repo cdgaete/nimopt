@@ -731,6 +731,8 @@ def _build_lagged_constraint_vectorized(
 
     import nimblend as nb
 
+    from ..writers.lp_rust import _coef_flat_for_var
+
     if not free_sets:
         return None
 
@@ -768,15 +770,17 @@ def _build_lagged_constraint_vectorized(
         var_start = var_start_indices[var.name]
         var_sets = var.sets
 
-        # Build coefficient array
-        if isinstance(coef, nb.Array):
-            coef_vals = coef.values.flatten().astype(np.float64)
-        elif isinstance(coef, (int, float)):
+        # Build coefficient array, aligned to the variable's C-order flat
+        # index. Flattening the coefficient as-is is wrong whenever it spans
+        # only a subset of the variable's dims -- e.g. `eff[S] * dis[S,T]`
+        # gives len(S) values against len(S)*len(T) variable cells -- and the
+        # lookup below then reads the wrong element or falls off the end.
+        # _coef_flat_for_var broadcasts first; it is the same helper the LP
+        # writers, the objective builder and the Sum fast path already use.
+        if isinstance(coef, (int, float)):
             coef_vals = float(coef)
-        elif hasattr(coef, "array"):
-            coef_vals = coef.array.values.flatten().astype(np.float64)
         else:
-            coef_vals = 1.0
+            coef_vals = _coef_flat_for_var(coef, var)
 
         # Compute variable strides
         var_strides = []
@@ -877,12 +881,19 @@ def _build_lagged_constraint_vectorized(
                 data_list.append(td["coef"])
                 ptr += 1
             else:
-                # Compute variable flat index
+                # Compute variable flat index. `var_flat_idx` addresses the
+                # actual (lag-shifted) variable cell; `coef_flat_idx` is the
+                # same index WITHOUT the lag applied, because the coefficient
+                # is indexed by the un-lagged combo -- see the matching
+                # comment in writers/lp_rust.py's lagged path, which is the
+                # reference semantics this must agree with.
                 var_flat_idx = 0
+                coef_flat_idx = 0
                 for var_dim, var_stride in enumerate(td["var_strides"]):
                     free_pos = td["dim_to_free_pos"].get(var_dim)
                     if free_pos is not None:
                         idx = dim_indices[free_pos]
+                        coef_flat_idx += idx * var_stride
                         # Apply lag offset
                         offset = td["lag_offsets"].get(var_dim, 0)
                         idx = idx + offset
@@ -893,7 +904,17 @@ def _build_lagged_constraint_vectorized(
                 # Get coefficient
                 coef = td["coef"]
                 if isinstance(coef, np.ndarray):
-                    c = coef[flat_idx] if flat_idx < len(coef) else coef[0]
+                    if coef_flat_idx >= len(coef):
+                        # Previously this silently fell back to coef[0],
+                        # which quietly gave every out-of-range row the first
+                        # element's coefficient and produced a wrong optimum.
+                        raise ValueError(
+                            f"coefficient array of length {len(coef)} is too "
+                            f"short for variable index {coef_flat_idx} in "
+                            f"constraint {eq_name!r}; it was not broadcast to "
+                            f"the variable's dimensions"
+                        )
+                    c = coef[coef_flat_idx]
                 else:
                     c = coef
 
