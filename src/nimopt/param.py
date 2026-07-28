@@ -13,6 +13,52 @@ import numpy as np
 from .sets import LaggedSet, Set
 
 
+def _symbolic_sets(obj) -> Union[List[Set], None]:
+    """Sets an operand can vouch for, or None if it carries no provenance.
+
+    A bare nimblend Array knows dimension names but not the Set objects behind
+    them, so it returns None and callers fall back to plain array algebra.
+    """
+    if isinstance(obj, (ParamRef, Param)):
+        return obj.sets
+    return None
+
+
+def _fuse(left, right, fused: nb.Array):
+    """Re-attach Set provenance to a param*param product.
+
+    ``LinearExpr.from_term`` recovers a constraint's free sets from its
+    coefficient, but only when that coefficient still knows its Sets. A
+    product of two params used to collapse to a bare nimblend Array, so a free
+    set carried *solely* by such a coefficient was dropped and the constraint
+    expanded to a diagonal slice of its intended rows.
+
+    The multiply itself has already happened in nimblend; this only rewraps
+    the result, mapping each surviving dimension back to the Set it came from.
+    No data is copied - ``Param`` wraps the existing float64 buffer as a view -
+    and the only iteration is over dimension names, not elements.
+
+    Returns the raw array unchanged if any dimension cannot be traced to a Set
+    (e.g. an operand indexed by a concrete element), so this is never worse
+    than the previous behaviour.
+    """
+    left_sets, right_sets = _symbolic_sets(left), _symbolic_sets(right)
+    if left_sets is None or right_sets is None:
+        return fused
+
+    by_name = {}
+    for s in (*left_sets, *right_sets):
+        by_name.setdefault(s.name, s)
+
+    try:
+        sets = [by_name[d] for d in fused.dims]
+    except KeyError:
+        return fused
+
+    name = f"({getattr(left, 'name', '?')}*{getattr(right, 'name', '?')})"
+    return ParamRef(Param(name, sets, fused.values), tuple(sets))
+
+
 class ParamRef:
     """
     Reference to a parameter with symbolic indexing.
@@ -89,7 +135,7 @@ class ParamRef:
             from .expression import LinearExpr
 
             return LinearExpr.from_term(other, self)
-        return self.param.array * other
+        return _fuse(self, other, self.param.array * other)
 
     def __rmul__(self, other):
         from .variable import VarRef
@@ -98,7 +144,7 @@ class ParamRef:
             from .expression import LinearExpr
 
             return LinearExpr.from_term(other, self)
-        return other * self.param.array
+        return _fuse(other, self, other * self.param.array)
 
     def __truediv__(self, other):
         return self.param.array / other
