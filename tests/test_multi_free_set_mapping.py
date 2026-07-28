@@ -212,7 +212,9 @@ def test_fused_param_coef_const_rhs_row_count(tmp_path, use_rust):
     f = str(tmp_path / f"fused_{int(use_rust)}.lp")
     m.to_lp(f, use_rust=use_rust)
     rows = [ln for ln in open(f) if ln.strip().startswith("bal")]
-    assert len(rows) == 4, f"use_rust={use_rust}: got {len(rows)} rows:\n{''.join(rows)}"
+    assert len(rows) == 4, (
+        f"use_rust={use_rust}: got {len(rows)} rows:\n{''.join(rows)}"
+    )
 
 
 def test_unbindable_coef_dimension_raises():
