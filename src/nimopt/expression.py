@@ -224,6 +224,74 @@ class Constraint:
 
         return result
 
+    def validate(self, name: str = "constraint") -> None:
+        """Fail loudly on a coefficient dimension nothing can bind.
+
+        A constraint expands over the cross product of its free sets, and each
+        term's coefficient is indexed by the variable's own sets plus those
+        free-set bindings (matched by dimension name, then by subset aliasing
+        into whatever set is still unclaimed). A coefficient dimension that
+        neither route can reach is *silently skipped* by the writers, which
+        then read an arbitrary slice of the coefficient - the constraint still
+        builds, still solves, and quietly means something other than what was
+        written.
+
+        That is how a free set carried only by a coefficient used to vanish.
+        The specific cause is fixed, but the failure mode is silent and has
+        recurred, so this asserts the invariant directly rather than trusting
+        every future path that assembles free sets to get it right.
+
+        Only counts and dimension names are inspected - no element data - so
+        this is O(terms x dims) with no effect on the solve path.
+        """
+        free = self.free_sets
+
+        def _check(arr, available, what):
+            # Mirror the writers' resolution order: exact dimension-name
+            # matches claim their set first, then each leftover dimension may
+            # alias into a still-unclaimed set - but only one whose elements
+            # actually cover the dimension's coordinates, which is the runtime
+            # test (`elem in coord_list`). Allowing an alias on availability
+            # alone would let an unbindable dimension pass by pairing with an
+            # unrelated set that merely happens to be spare.
+            remaining = list(available)
+            leftover = []
+            for d in arr.dims:
+                hit = next((s for s in remaining if s.name == d), None)
+                if hit is not None:
+                    remaining.remove(hit)
+                else:
+                    leftover.append(d)
+
+            for d in leftover:
+                coords = set(arr.coords[d])
+                hit = next(
+                    (s for s in remaining if coords <= set(s.elements)), None
+                )
+                if hit is None:
+                    raise ValueError(
+                        f"Constraint '{name}': {what} has dimension '{d}' that "
+                        f"cannot be bound. Free sets are "
+                        f"{[s.name for s in free]}. A dimension carried only by "
+                        f"a coefficient must appear in the constraint's free "
+                        f"sets, or it is silently dropped and the constraint "
+                        f"expands to a slice of its intended rows."
+                    )
+                remaining.remove(hit)
+
+        for term in self.lhs.terms:
+            var, coef = term[0], term[1]
+            if not isinstance(coef, nb.Array):
+                coef = getattr(coef, "array", None)
+            if not isinstance(coef, nb.Array):
+                continue
+            _check(coef, list(var.sets) + free, f"coefficient of '{var.name}'")
+
+        for side, label in ((self.lhs.const, "LHS constant"), (self.rhs, "RHS")):
+            arr = side if isinstance(side, nb.Array) else getattr(side, "array", None)
+            if isinstance(arr, nb.Array):
+                _check(arr, free, label)
+
 
 def _add_const(a, b):
     if isinstance(a, nb.Array) and isinstance(b, nb.Array):

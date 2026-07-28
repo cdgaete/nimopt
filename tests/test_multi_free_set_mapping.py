@@ -215,6 +215,41 @@ def test_fused_param_coef_const_rhs_row_count(tmp_path, use_rust):
     assert len(rows) == 4, f"use_rust={use_rust}: got {len(rows)} rows:\n{''.join(rows)}"
 
 
+def test_unbindable_coef_dimension_raises():
+    """A coefficient dimension nothing can bind must fail loudly at eq() time.
+
+    A raw nimblend Array carries dimension names but no Set objects, so WN
+    cannot reach the constraint's free sets by any route. Previously the
+    writers skipped such a dimension and read an arbitrary slice; the model
+    built and solved while meaning something other than what was written.
+    """
+    m = no.Model("unbindable", sense="minimize")
+    WL = no.Set("WL", ["l1", "l2", "l3"])
+    WN = no.Set("WN", ["n1", "n2"])
+    T = no.Set("T", [1, 2])
+    inc = no.Param("inc", [WL, WN], np.array([[1.0, 0.0], [0.0, 1.0], [1.0, -1.0]]))
+    f = m.var("f", sets=[WL, T], lb=0)
+    with pytest.raises(ValueError, match="cannot be bound"):
+        m.eq("bal", no.Sum(WL, inc.array * f[WL, T]) == 0)
+
+
+def test_guard_allows_subset_aliasing():
+    """The guard must not fire on a legitimate subset-aliased coefficient.
+
+    ``cost`` is indexed by the superset ALL while the variable is indexed by
+    the subset SUB; the writers bind that by element membership, not by name,
+    so this must build.
+    """
+    m = no.Model("aliasing", sense="minimize")
+    ALL = no.Set("ALL", ["a", "b", "c"])
+    SUB = no.Set("SUB", ["a", "b"])
+    T = no.Set("T", [1, 2])
+    cost = no.Param("cost", [ALL], np.array([1.0, 2.0, 3.0]))
+    x = m.var("x", sets=[SUB, T], lb=0)
+    m.eq("cap", cost[ALL] * x[SUB, T] <= 5.0)  # must not raise
+    assert "cap" in m._constraints
+
+
 def test_fused_param_coef_matches_single_param_coef():
     """eff is all ones, so fusing it in must not change the optimum.
 

@@ -48,6 +48,7 @@ class Model:
         """Add constraint(s) to the model."""
         if name in self._constraints:
             raise ValueError(f"Constraint '{name}' already exists")
+        constraint.validate(name)
         self._constraints[name] = constraint
 
     def set_objective(self, expr) -> None:
