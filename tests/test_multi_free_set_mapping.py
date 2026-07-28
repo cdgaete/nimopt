@@ -159,3 +159,73 @@ def test_coef_only_free_set_const_rhs_row_count(tmp_path):
         m.to_lp(f, use_rust=use_rust)
         rows = [ln for ln in open(f) if ln.strip().startswith("neutral")]
         assert len(rows) == 4, f"use_rust={use_rust}: got {len(rows)} rows:\n{''.join(rows)}"
+
+
+def _fused_coef_model(fused, rhs_kind):
+    """Water-balance shape: ``Sum(WL, inc[WL, WN] * eff[WL] * f[WL, T]) == 0``.
+
+    WN is carried ONLY by the coefficient; T is the variable's own free set.
+    That is the same shape as ``_block_neutral_model`` with one difference: the
+    coefficient is the *product of two params*, which ``ParamRef.__mul__``
+    evaluates eagerly to a bare ``nb.Array`` before it ever reaches
+    ``LinearExpr.from_term``.
+
+    ``from_term`` only collects ``coef_sets`` for ``Param``/``ParamRef``
+    coefficients; the ``nb.Array`` branch leaves it ``None``, so the free-set
+    recovery loop is skipped and WN is dropped -- exactly the failure the
+    single-param tests above were written to prevent, one branch further down.
+
+    fused=False -> ``inc[WL, WN] * f[WL, T]``            (single ParamRef coef)
+    fused=True  -> ``inc[WL, WN] * eff[WL] * f[WL, T]``  (nb.Array coef)
+
+    Both forms are the same math (eff only rescales columns), and with a param
+    RHS both build correctly; only (fused, const-RHS) loses rows.
+    """
+    m = no.Model(f"fused_{fused}_{rhs_kind}", sense="minimize")
+    WL = no.Set("WL", ["l1", "l2", "l3"])
+    WN = no.Set("WN", ["n1", "n2"])
+    T = no.Set("T", [1, 2])
+    inc = no.Param("inc", [WL, WN], np.array([[1.0, 0.0], [0.0, 1.0], [1.0, -1.0]]))
+    eff = no.Param("eff", [WL], np.array([1.0, 1.0, 1.0]))  # identity: math unchanged
+    f = m.var("f", sets=[WL, T], lb=0, ub=1)
+    coef_term = inc[WL, WN] * eff[WL] * f[WL, T] if fused else inc[WL, WN] * f[WL, T]
+    if rhs_kind == "const":
+        m.eq("bal", no.Sum(WL, coef_term) == 0)
+    else:
+        zero = no.Param("zero", [WN, T], np.zeros((2, 2)))
+        m.eq("bal", no.Sum(WL, coef_term) == zero[WN, T])
+    # distinct prices so every f is pinned; unconstrained rows show up as a
+    # strictly lower objective rather than a tie.
+    price = no.Param("price", [WL, T], np.array([[3.0, 1.0], [5.0, 2.0], [4.0, 6.0]]))
+    m.set_objective(no.Sum(WL, T, price[WL, T] * f[WL, T]))
+    return m
+
+
+@pytest.mark.parametrize("use_rust", [True, False])
+def test_fused_param_coef_const_rhs_row_count(tmp_path, use_rust):
+    """A param*param coefficient must not lose the coefficient-only free set.
+
+    Expect |WN| * |T| = 4 rows. Under the bug the fused form emits 2, zipping
+    WN against T diagonally instead of taking the cross product.
+    """
+    m = _fused_coef_model(fused=True, rhs_kind="const")
+    f = str(tmp_path / f"fused_{int(use_rust)}.lp")
+    m.to_lp(f, use_rust=use_rust)
+    rows = [ln for ln in open(f) if ln.strip().startswith("bal")]
+    assert len(rows) == 4, f"use_rust={use_rust}: got {len(rows)} rows:\n{''.join(rows)}"
+
+
+def test_fused_param_coef_matches_single_param_coef():
+    """eff is all ones, so fusing it in must not change the optimum.
+
+    This is the silent-wrong-answer face of the bug: the fused model stays
+    feasible and reports a strictly better objective because half its balance
+    rows were never built.
+    """
+    r_single, _ = _fused_coef_model(fused=False, rhs_kind="const").solve()
+    r_fused, _ = _fused_coef_model(fused=True, rhs_kind="const").solve()
+    assert "optimal" in str(r_single.status).lower(), r_single.status
+    assert "optimal" in str(r_fused.status).lower(), r_fused.status
+    assert abs(r_fused.objective_value - r_single.objective_value) < 1e-6, (
+        f"single={r_single.objective_value} fused={r_fused.objective_value}"
+    )
