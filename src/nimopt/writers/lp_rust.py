@@ -6,7 +6,7 @@ from typing import List
 import nimblend as nb
 import numpy as np
 
-from . import sanitize_lp_name
+from . import coord_positions, sanitize_lp_name
 
 try:
     import nimopt_rust
@@ -130,11 +130,18 @@ def _get_coef_scalar(coef, var_sets: List[Set], combo: tuple, bindings=None) -> 
             if dim not in full:
                 # Unresolved dim - fall back to the scalar cell if unambiguous.
                 return float(coef.values.flat[0])
-            coord_list = list(coef.coords[dim])
-            try:
-                indices.append(coord_list.index(full[dim]))
-            except ValueError:
-                return 0.0
+            pos = coord_positions(coef, dim)
+            if pos is None:
+                coord_list = list(coef.coords[dim])
+                try:
+                    indices.append(coord_list.index(full[dim]))
+                except ValueError:
+                    return 0.0
+            else:
+                i = pos.get(full[dim])
+                if i is None:
+                    return 0.0
+                indices.append(i)
         if indices:
             return float(coef.values[tuple(indices)])
         return float(coef.values.flat[0])
