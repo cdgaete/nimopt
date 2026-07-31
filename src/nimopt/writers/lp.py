@@ -8,7 +8,7 @@ import nimblend as nb
 from ..expression import LinearExpr
 from ..sets import Set
 from ..variable import Variable, VarRef
-from . import sanitize_lp_name
+from . import coord_positions, sanitize_lp_name
 
 
 def write_lp(model, filename: str) -> None:
@@ -63,12 +63,19 @@ def _get_coef(
         for dim in coef.dims:
             for s, elem in full_bindings.items():
                 if s.name == dim and dim not in used_dims:
-                    coord_list = list(coef.coords[dim])
-                    try:
-                        indices.append(coord_list.index(elem))
-                        used_dims.add(dim)
-                    except ValueError:
-                        return 0.0
+                    pos = coord_positions(coef, dim)
+                    if pos is None:
+                        coord_list = list(coef.coords[dim])
+                        try:
+                            indices.append(coord_list.index(elem))
+                        except ValueError:
+                            return 0.0
+                    else:
+                        i = pos.get(elem)
+                        if i is None:
+                            return 0.0
+                        indices.append(i)
+                    used_dims.add(dim)
                     break
             # If dim not found in bindings, skip it
 
