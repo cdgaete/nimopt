@@ -50,13 +50,18 @@ def _write_objective_fast(model, filename: str) -> None:
     coef_map = {}
 
     for term in model.objective.terms:
-        var, coef, _ = term[0], term[1], term[2]
+        var, coef, fixed = term[0], term[1], term[2]
         if var.sets:
-            dim_elements = [[sanitize_lp_name(e) for e in s.elements] for s in var.sets]
-            coefs_arr = _coef_flat_for_var(coef, var)
-
-            # Generate variable names and accumulate coefficients
-            var_names = nimopt_rust.generate_var_names(var.name, dim_elements)
+            if fixed:
+                # Literal indices pin a dimension: emit only the selected
+                # names, not the variable's whole cross-product.
+                var_names, coefs_arr = _fixed_names_and_coefs(var, coef, fixed)
+            else:
+                dim_elements = [
+                    [sanitize_lp_name(e) for e in s.elements] for s in var.sets
+                ]
+                coefs_arr = _coef_flat_for_var(coef, var)
+                var_names = nimopt_rust.generate_var_names(var.name, dim_elements)
             for vname, c in zip(var_names, coefs_arr):
                 coef_map[vname] = coef_map.get(vname, 0.0) + c
         else:
@@ -81,7 +86,12 @@ def _get_objective_data(model):
     coefs = []
     if model.objective:
         for term in model.objective.terms:
-            var, coef, _ = term[0], term[1], term[2]
+            var, coef, fixed = term[0], term[1], term[2]
+            if var.sets and fixed:
+                names, cs = _fixed_names_and_coefs(var, coef, fixed)
+                var_names.extend(names)
+                coefs.extend(cs)
+                continue
             # Generate all variable names
             if var.sets:
                 combos = list(itertools.product(*(s.elements for s in var.sets)))
@@ -632,6 +642,36 @@ def _coef_flat_for_var(coef, var) -> np.ndarray:
         if list(arr.dims) != var_dims:
             arr = arr.transpose(*var_dims)
     return arr.values.reshape(-1).astype(np.float64)
+
+
+def fixed_flat_positions(var, fixed) -> np.ndarray:
+    """C-order flat positions of a variable selected by literal indices.
+
+    Positions listed in ``fixed`` are pinned to their named element; any
+    remaining dimensions expand over their set. The result indexes the
+    variable's own flat range, so it aligns with ``_coef_flat_for_var`` and
+    with the direct solver's per-variable column block.
+
+    Raises ValueError if a fixed element is not in its set.
+    """
+    fixed_map = {pos: val for pos, val in fixed}
+    for i, s in enumerate(var.sets):
+        if i in fixed_map and fixed_map[i] not in s.elements:
+            raise ValueError(
+                f"Fixed index '{fixed_map[i]}' on variable '{var.name}' is not "
+                f"an element of set '{s.name}'"
+            )
+
+    shape = tuple(len(s) for s in var.sets)
+    keep = np.arange(int(np.prod(shape)), dtype=np.int64).reshape(shape)
+    sel = tuple(
+        slice(list(s.elements).index(fixed_map[i]),
+              list(s.elements).index(fixed_map[i]) + 1)
+        if i in fixed_map
+        else slice(None)
+        for i, s in enumerate(var.sets)
+    )
+    return keep[sel].reshape(-1)
 
 
 def _fixed_names_and_coefs(var, coef, fixed):

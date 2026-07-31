@@ -170,8 +170,18 @@ def _write_objective(f: TextIO, model, var_names: Dict) -> None:
     
     if model.objective:
         for var, coef, fixed, _lagged in model.objective.terms:
+            # Literal indices pin a dimension to their named element instead
+            # of expanding it over its whole set.
+            fixed_map = {pos: val for pos, val in fixed} if fixed else {}
             if var.sets:
-                combos = list(itertools.product(*(s.elements for s in var.sets)))
+                combos = list(
+                    itertools.product(
+                        *(
+                            [fixed_map[i]] if i in fixed_map else s.elements
+                            for i, s in enumerate(var.sets)
+                        )
+                    )
+                )
             else:
                 combos = [()]
             for combo in combos:

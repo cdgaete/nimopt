@@ -206,12 +206,19 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
     # === Build objective vector (vectorized) ===
     c = np.zeros(n_vars, dtype=np.float64)
     if model.objective:
-        from ..writers.lp_rust import _coef_flat_for_var
+        from ..writers.lp_rust import _coef_flat_for_var, fixed_flat_positions
 
         for var, coef, fixed, _lagged in model.objective.terms:
             start = var_start_idx[var.name]
             n = var.size
-            c[start : start + n] += _coef_flat_for_var(coef, var)
+            flat = _coef_flat_for_var(coef, var)
+            if fixed and var.sets:
+                # Literal indices pin a dimension: only the selected columns
+                # carry the coefficient, not the variable's whole block.
+                keep = fixed_flat_positions(var, fixed)
+                c[start + keep] += flat[keep]
+            else:
+                c[start : start + n] += flat
 
     # === Build variable bounds (vectorized) ===
     lb = np.full(n_vars, -np.inf, dtype=np.float64)
@@ -980,8 +987,15 @@ def _build_matrices(model: "Model") -> Dict:
             if not var.sets:
                 c[var_idx[var.name]] += _get_scalar_coef(coef)
             else:
+                # Literal indices pin a dimension to their named element.
+                fixed_map = {pos: val for pos, val in fixed} if fixed else {}
                 for i, combo in enumerate(
-                    itertools.product(*(s.elements for s in var.sets))
+                    itertools.product(
+                        *(
+                            [fixed_map[j]] if j in fixed_map else s.elements
+                            for j, s in enumerate(var.sets)
+                        )
+                    )
                 ):
                     vname = var.name + "_" + "_".join(str(e) for e in combo)
                     c[var_idx[vname]] += _get_coef_for_combo(coef, var.sets, combo)
