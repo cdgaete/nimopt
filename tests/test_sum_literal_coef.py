@@ -1,13 +1,13 @@
 """Regression tests: literal (numeric) coefficient on a single-term constraint.
 
 A literal coefficient multiplying a variable -- whether inside a ``Sum`` or on a
-plain indexed term -- was silently dropped by the single-term Rust fast path
-(``_build_sum_csr_rust_fast`` for direct solves, ``_write_sum_constraints_fast``
+plain indexed term -- was silently dropped by the single-term Rust path
+(``_build_sum_csr_rust`` for direct solves, ``_write_sum_constraints``
 for LP export). Both handed the Rust kernel ``coef_flat=None`` for any scalar
 coefficient, and the kernel reads ``None`` as "all coefficients are 1.0", so a
 ``4 * y`` term was assembled as ``1 * y``. The bug is independent of the
 comparison operator: it fires for ``==``, ``<=`` and ``>=`` alike, whenever the
-constraint routes to the single-term fast path (one variable, free sets equal
+constraint routes to the single-term path (one variable, free sets equal
 to the variable's own free dims). It only *looked* operator-specific because a
 ``z == Sum(...)`` control is multi-term (the ``z`` term forces the multi-term
 builder, which materialises scalars correctly).
@@ -30,8 +30,8 @@ import pytest
 import nimopt as no
 from nimopt import Sum
 from nimopt.solvers.highs_direct import (
-    _build_matrices,
-    _build_matrices_rust_fast,
+    _build_matrices_python,
+    _build_matrices_rust,
     _generate_var_names_from_info,
 )
 
@@ -63,10 +63,10 @@ def _rows_from_matrices(mat, var_names):
 
 def direct_rows(m, use_rust):
     if use_rust:
-        mat = _build_matrices_rust_fast(m)
+        mat = _build_matrices_rust(m)
         var_names = _generate_var_names_from_info(mat["var_info"])
     else:
-        mat = _build_matrices(m)
+        mat = _build_matrices_python(m)
         var_names = mat["var_names"]
     return _rows_from_matrices(mat, var_names)
 

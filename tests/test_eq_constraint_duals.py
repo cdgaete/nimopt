@@ -1,7 +1,7 @@
 """Regression: multi-term free EQUALITY constraints must expose per-row duals.
 
 A multi-variable free constraint (e.g. `x[I] + y[I] == b`) is built by the
-multi-term Rust fast path, which used to name its rows positionally
+multi-term Rust path, which used to name its rows positionally
 (`bal_0, bal_1, ...`) instead of by element (`bal_a, bal_b, ...`). Solution
 extraction matches solver row names against element-based expected names, so
 the positional names matched nothing -> the constraint got ZERO dual rows and,
@@ -25,7 +25,7 @@ def test_multiterm_equality_constraint_has_full_duals():
     x = m.var("x", sets=[I], lb=0, ub=8)
     y = m.var("y", sets=[I], lb=0, ub=8)
 
-    # multi-term free equality -> multi-term Rust fast path
+    # multi-term free equality -> multi-term Rust path
     m.eq("bal", x[I] + y[I] == 10)
     # a constraint AFTER the equality, to catch dual misalignment
     m.eq("xcap", x[I] <= 6)

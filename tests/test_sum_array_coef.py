@@ -58,7 +58,7 @@ def test_matrix_vector_product_Ax_equals_b():
     A = [[1,2],[3,4]], b = [5,11]  =>  unique solution x = [1,2].
 
     This single-term Sum routes through a *different* Rust builder than the
-    two-variable case above (`build_sum_csr_fast`, not `build_multi_term_csr`).
+    two-variable case above (`build_sum_csr`, not `build_multi_term_csr`).
     Under the bug that builder indexes a coef whose free axis (i) the variable
     lacks and panics with index-out-of-bounds -- so the same root defect must be
     fixed in both builders.

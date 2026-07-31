@@ -61,9 +61,9 @@ class HiGHSDirectSolver(Solver):
     def load_model(self, model: "Model") -> None:
         self._model = model
         if self._use_rust:
-            matrices = _build_matrices_rust_fast(model)
+            matrices = _build_matrices_rust(model)
         else:
-            matrices = _build_matrices(model)
+            matrices = _build_matrices_python(model)
 
         self._var_names = matrices.get("var_names")
         self._con_names = matrices.get("con_names")
@@ -183,8 +183,8 @@ def _generate_var_names_from_info(var_info: List) -> List[str]:
     return names
 
 
-def _build_matrices_rust_fast(model: "Model") -> Dict:
-    """Build matrices with minimal Python overhead - Rust fast path."""
+def _build_matrices_rust(model: "Model") -> Dict:
+    """Build the model matrices in Rust, with minimal Python overhead."""
     from ..expression import LinearExpr
     from ..variable import Variable, VarRef
 
@@ -231,7 +231,7 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
         if var.ub is not None:
             ub[start : start + n] = var.ub
 
-    # === Build constraints (Rust fast path) ===
+    # === Build constraints (Rust route) ===
     all_indptr = [0]
     all_indices = []
     all_data = []
@@ -282,7 +282,7 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
 
         # A constant on the LHS (e.g. from `param[I] + x[I] == ...`, where the
         # param folds into the LHS expression's constant) moves to the RHS.
-        # `lhs_has_const` disqualifies the single-term fast path, which cannot
+        # `lhs_has_const` disqualifies the single-term Rust route, which cannot
         # combine a LHS constant with the RHS.
         lhs_const = con.lhs.const
         lhs_has_const = not (isinstance(lhs_const, (int, float)) and lhs_const == 0)
@@ -309,7 +309,7 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
         # the same-variable-twice family pays the (vectorized) merge cost.
         may_dupe = len({t[0].name for t in lhs_terms}) != len(lhs_terms)
 
-        # Rust fast path: single indexed var, has free sets, no fixed/lagged indices.
+        # Single-term Rust route: one indexed var, has free sets, no fixed/lagged indices.
         # Requires every free set to be one of the variable's own dims -- this
         # builder derives the constraint layout from the variable's shape, so a
         # free axis that lives only in the coefficient (e.g. Sum(j, a[i,j]*x[j]),
@@ -319,7 +319,7 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
             and len(lhs_terms) == 1
             and lhs_terms[0][0].sets
             and free_sets
-            and not lhs_has_const  # fast path can't fold a LHS constant into RHS
+            and not lhs_has_const  # this route can't fold a LHS constant into RHS
             and not lhs_terms[0][2]  # no fixed indices
             and not lhs_terms[0][3]  # no lagged indices
             # The variable's free dims must be exactly the constraint's free
@@ -336,7 +336,7 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
 
         if can_use_rust:
             var, coef, fixed, _lagged = lhs_terms[0]
-            result = _build_sum_csr_rust_fast(
+            result = _build_sum_csr_rust(
                 var, coef, free_sets, con.rhs, rhs_const, sense, var_start_idx[var.name]
             )
             if result is not None:
@@ -351,7 +351,7 @@ def _build_matrices_rust_fast(model: "Model") -> Dict:
                 total_nnz += len(indices)
                 continue
 
-        # Multi-term Rust fast path: multiple terms, free sets, no lagged indices
+        # Multi-term Rust route: multiple terms, free sets, no lagged indices
         can_use_multi_rust = (
             HAS_RUST
             and free_sets
@@ -511,10 +511,10 @@ def _build_var_idx(model, var_start_idx) -> Dict[str, int]:
     return var_idx
 
 
-def _build_sum_csr_rust_fast(
+def _build_sum_csr_rust(
     var, coef, free_sets, rhs_orig, rhs_const, sense, var_start_idx
 ) -> Optional[Tuple]:
-    """Build sum constraint CSR using fast Rust path."""
+    """Build a Sum constraint's CSR block in Rust."""
     import itertools
 
     import nimblend as nb
@@ -565,7 +565,7 @@ def _build_sum_csr_rust_fast(
 
     sense_str = "<=" if sense == "<=" else (">=" if sense == ">=" else "=")
 
-    indptr, indices, data, row_lower, row_upper = nimopt_rust.build_sum_csr_fast(
+    indptr, indices, data, row_lower, row_upper = nimopt_rust.build_sum_csr(
         var_start_idx, dim_sizes, is_free_dim, coef_flat, rhs_flat, sense_str
     )
 
@@ -783,7 +783,7 @@ def _build_lagged_constraint_vectorized(
         # gives len(S) values against len(S)*len(T) variable cells -- and the
         # lookup below then reads the wrong element or falls off the end.
         # _coef_flat_for_var broadcasts first; it is the same helper the LP
-        # writers, the objective builder and the Sum fast path already use.
+        # writers, the objective builder and the Sum route already use.
         if isinstance(coef, (int, float)):
             coef_vals = float(coef)
         else:
@@ -958,7 +958,7 @@ def _append_bounds(row_lower, row_upper, sense, rhs):
         row_upper.append(np.array([rhs], dtype=np.float64))
 
 
-def _build_matrices(model: "Model") -> Dict:
+def _build_matrices_python(model: "Model") -> Dict:
     """Build matrices (pure Python fallback)."""
     import itertools
 
@@ -1044,7 +1044,7 @@ def _build_matrices(model: "Model") -> Dict:
 
         # A constant on the LHS (e.g. from `param[I] + x[I] == ...`, where the
         # param folds into the LHS expression's constant) moves to the RHS.
-        # `lhs_has_const` disqualifies the single-term fast path, which cannot
+        # `lhs_has_const` disqualifies the single-term Rust route, which cannot
         # combine a LHS constant with the RHS.
         lhs_const = con.lhs.const
         lhs_has_const = not (isinstance(lhs_const, (int, float)) and lhs_const == 0)

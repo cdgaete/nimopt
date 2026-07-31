@@ -1,7 +1,7 @@
 """Regression tests: Rust LP writer coefficient broadcasting and
 LP-path solution name alignment.
 
-The Rust writer's scalar-constraint fast path used to flatten a
+The Rust writer's scalar-constraint route used to flatten a
 partial-dimension coefficient (e.g. ef[G] against p[G,T]) without
 broadcasting, silently corrupting the constraint. LP-loaded solutions
 also used to be sliced positionally although LP column order follows

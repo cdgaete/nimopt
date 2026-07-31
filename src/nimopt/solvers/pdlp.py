@@ -121,13 +121,13 @@ class PDLPSolver(Solver):
 
     def load_model(self, model: "Model") -> None:
         """Build matrices from nimopt Model."""
-        from .highs_direct import _build_matrices_rust_fast, _build_matrices
+        from .highs_direct import _build_matrices_rust, _build_matrices_python
         
         self._model = model
         if self._use_rust:
-            self._matrices = _build_matrices_rust_fast(model)
+            self._matrices = _build_matrices_rust(model)
         else:
-            self._matrices = _build_matrices(model)
+            self._matrices = _build_matrices_python(model)
         
         self._var_names = self._matrices.get('var_names')
         self._con_names = self._matrices.get('con_names')

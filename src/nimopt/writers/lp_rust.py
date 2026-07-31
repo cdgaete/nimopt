@@ -30,15 +30,15 @@ def write_lp_rust(model, filename: str) -> None:
         raise ImportError(_RUST_MISSING_MSG)
 
     nimopt_rust.write_lp_header(filename, model.name, model.sense)
-    _write_objective_fast(model, filename)
+    _write_objective(model, filename)
     nimopt_rust.write_subject_to(filename)
     _write_constraints_rust(model, filename)
-    _write_bounds_fast(model, filename)
+    _write_bounds(model, filename)
     ints, bins = _get_var_types(model)
     nimopt_rust.write_var_types(filename, ints, bins)
 
 
-def _write_objective_fast(model, filename: str) -> None:
+def _write_objective(model, filename: str) -> None:
     """Write objective using Rust with name generation."""
     if not model.objective:
         # Write empty objective
@@ -212,15 +212,15 @@ def _write_constraints_rust(model, filename: str):
         sense = "<=" if con.sense == "<=" else (">=" if con.sense == ">=" else "=")
 
         if not free_sets:
-            _write_single_constraint_fast(
+            _write_single_constraint(
                 filename, eq_name, sense, lhs_terms, rhs_const, con.rhs
             )
         elif _can_use_sum_constraints(lhs_terms, free_sets):
-            _write_sum_constraints_fast(
+            _write_sum_constraints(
                 filename, eq_name, sense, lhs_terms, free_sets, rhs_const, con.rhs
             )
         else:
-            _write_batch_constraints_rust(
+            _write_batch_constraints(
                 filename,
                 eq_name,
                 sense,
@@ -254,7 +254,7 @@ def _can_use_sum_constraints(lhs_terms, free_sets) -> bool:
     return var_free_ids == [id(s) for s in free_sets]
 
 
-def _write_sum_constraints_fast(
+def _write_sum_constraints(
     filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig
 ):
     """Use optimized Rust path for Sum constraints."""
@@ -317,39 +317,44 @@ def _write_sum_constraints_fast(
     )
 
 
-def _write_batch_constraints_rust(
+def _write_batch_constraints(
     filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig, model
 ):
-    """Write constraints using Rust - fast path with name generation in Rust."""
-    # Try the fast path first: all terms have no lagged and no fixed indices.
-    # The Rust writer expands every variable dimension over its whole set, so a
-    # term carrying literal indices must take the slow path or the pinned axis
+    """Write constraints, generating variable names in Rust where possible.
+
+    Both routes below write through Rust; they differ in where the variable
+    names and coefficients are built. Rust generates them by expanding every
+    dimension over its whole set, which a lagged or literal index contradicts,
+    so those terms are named in Python instead.
+    """
+    # The Rust route expands every variable dimension over its whole set, so a
+    # term carrying literal indices must be named in Python or the pinned axis
     # is emitted in full and the LP means something else than solve() does.
     has_lagged = any(len(term) > 3 and term[3] for term in lhs_terms)
     has_fixed = any(term[2] for term in lhs_terms)
 
     if not has_lagged and not has_fixed:
         try:
-            return _write_multi_term_fast(
+            return _write_batch_constraints_rust_names(
                 filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig
             )
         except BaseException:
             # NOTE: pyo3 surfaces a Rust panic as PanicException, which
             # subclasses BaseException (not Exception) - `except Exception`
             # would let it escape and wedge the server. Catch broadly and
-            # fall back to the correct Python slow path.
-            pass  # Fall back to slow path
+            # fall back to the correct Python-named route.
+            pass
 
-    # Slow path: build variable names in Python
-    return _write_batch_constraints_rust_slow(
+    # Build variable names in Python
+    return _write_batch_constraints_py_names(
         filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig, model
     )
 
 
-def _write_multi_term_fast(
+def _write_batch_constraints_rust_names(
     filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig
 ):
-    """Fast path: generate variable names in Rust."""
+    """Generate variable names and coefficients in Rust."""
     free_set_ids = {id(s): i for i, s in enumerate(free_sets)}
     free_set_names = {s.name: i for i, s in enumerate(free_sets)}
 
@@ -470,10 +475,15 @@ def _lag_bounds_ok(lhs_terms, bindings) -> bool:
     return True
 
 
-def _write_batch_constraints_rust_slow(
+def _write_batch_constraints_py_names(
     filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig, model
 ):
-    """Slow path: build variable names in Python (for lagged indices)."""
+    """Build variable names and coefficients in Python, then write via Rust.
+
+    Serves terms Rust cannot name by whole-set expansion: lagged indices,
+    which shift the element referenced, and literal indices, which pin a
+    dimension to one element.
+    """
     all_var_names = []
     all_coefs = []
     all_rhs = []
@@ -737,7 +747,7 @@ def _fixed_names_and_coefs(var, coef, fixed):
     return names, coefs
 
 
-def _write_single_constraint_fast(
+def _write_single_constraint(
     filename, eq_name, sense, lhs_terms, rhs_const, rhs_orig
 ):
     """Write single constraint using Rust - optimized for many variables."""
@@ -788,73 +798,6 @@ def _write_single_constraint_fast(
     )
 
 
-def _write_single_constraint_py(
-    filename, eq_name, sense, lhs_terms, rhs_const, bindings, rhs_orig
-):
-    """Write a single constraint using Python (fallback)."""
-    with open(filename, "a") as f:
-        f.write(f" {eq_name}: ")
-        first = True
-        for term in lhs_terms:
-            var, coef, fixed = term[0], term[1], term[2]
-            fixed_map = {pos: val for pos, val in fixed} if fixed else {}
-            var_combos = []
-            for i, s in enumerate(var.sets):
-                if i in fixed_map:
-                    elem = fixed_map[i]
-                    if elem not in s.elements:
-                        raise ValueError(
-                            f"Fixed index '{elem}' on variable '{var.name}' is "
-                            f"not an element of set '{s.name}'"
-                        )
-                    var_combos.append([elem])
-                elif s in bindings:
-                    var_combos.append([bindings[s]])
-                else:
-                    var_combos.append(s.elements)
-
-            for combo in itertools.product(*var_combos) if var_combos else [()]:
-                suffix = (
-                    "_" + "_".join(sanitize_lp_name(e) for e in combo) if combo else ""
-                )
-                vname = var.name + suffix
-                cv = _get_coef_scalar(coef, var.sets, combo)
-                if cv == 0:
-                    continue
-                if first:
-                    if cv == 1:
-                        f.write(vname)
-                    elif cv == -1:
-                        f.write(f"- {vname}")
-                    elif cv > 0:
-                        f.write(f"{cv} {vname}")
-                    else:
-                        f.write(f"- {-cv} {vname}")
-                    first = False
-                else:
-                    if cv == 1:
-                        f.write(f" + {vname}")
-                    elif cv == -1:
-                        f.write(f" - {vname}")
-                    elif cv > 0:
-                        f.write(f" + {cv} {vname}")
-                    else:
-                        f.write(f" - {-cv} {vname}")
-
-        if first:
-            f.write("0")
-
-        if isinstance(rhs_orig, nb.Array):
-            rv = float(rhs_orig.values.flat[0])
-        elif hasattr(rhs_orig, "array"):
-            rv = float(rhs_orig.values.flat[0])
-        elif hasattr(rhs_orig, "values"):
-            rv = float(rhs_orig.values.flat[0])
-        else:
-            rv = rhs_const
-        f.write(f" {sense} {rv}\n")
-
-
 def _negate_coef(coef):
     if isinstance(coef, (int, float)):
         return -coef
@@ -863,7 +806,7 @@ def _negate_coef(coef):
     return coef
 
 
-def _write_bounds_fast(model, filename):
+def _write_bounds(model, filename):
     """Write bounds using Rust for variable name generation."""
     # Write header
     with open(filename, "a") as f:
@@ -872,7 +815,7 @@ def _write_bounds_fast(model, filename):
     for var in model.variables.values():
         if var.sets:
             dim_elements = [[sanitize_lp_name(e) for e in s.elements] for s in var.sets]
-            nimopt_rust.write_bounds_fast(
+            nimopt_rust.write_bounds_from_dims(
                 filename, var.name, dim_elements, var.lb, var.ub
             )
         else:

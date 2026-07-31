@@ -83,20 +83,20 @@ def test_an_unpinned_objective_term_is_unaffected():
     assert res.objective_value == pytest.approx(4.0)
 
 
-@pytest.mark.parametrize("builder", ["rust_fast", "python"])
+@pytest.mark.parametrize("builder", ["rust", "python"])
 def test_objective_vector_pins_a_literal_index_in_both_builders(builder):
     from nimopt.solvers.highs_direct import (
-        _build_matrices,
-        _build_matrices_rust_fast,
+        _build_matrices_python,
+        _build_matrices_rust,
         _generate_var_names_from_info,
     )
 
     m = _pinned_objective_model()
-    if builder == "rust_fast":
-        mat = _build_matrices_rust_fast(m)
+    if builder == "rust":
+        mat = _build_matrices_rust(m)
         names = _generate_var_names_from_info(mat["var_info"])
     else:
-        mat = _build_matrices(m)
+        mat = _build_matrices_python(m)
         names = mat["var_names"]
 
     obj = {n: float(v) for n, v in zip(names, mat["c"]) if v}

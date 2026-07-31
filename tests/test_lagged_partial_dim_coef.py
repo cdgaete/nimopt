@@ -1,6 +1,6 @@
 """Regression tests: partial-dim coefficient on a LAGGED constraint.
 
-Sibling of ``test_sum_partial_dim_coef.py``, which covers the ``Sum`` fast
+Sibling of ``test_sum_partial_dim_coef.py``, which covers the ``Sum``
 path. This file covers ``_build_lagged_constraint_vectorized``, the direct
 solver's builder for any constraint carrying a lag/lead term.
 
@@ -13,7 +13,7 @@ spans ``[S,T]`` (|S|*|T| cells). The builder did two things wrong:
 
 1. it flattened the coefficient array as-is, with no broadcast to the
    variable's dims (every other path -- both LP writers, the objective
-   builder, the Sum fast path -- goes through ``_coef_flat_for_var``);
+   builder, the Sum path -- goes through ``_coef_flat_for_var``);
 2. it then looked the coefficient up by the *constraint row* index and, when
    that ran past the end of the short array, silently fell back to
    ``coef[0]``.

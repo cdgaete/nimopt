@@ -32,7 +32,7 @@ import numpy as np
 
 import nimopt as no
 from nimopt.solvers import HiGHSDirectSolver, SolverStatus
-from nimopt.solvers.highs_direct import _build_matrices_rust_fast
+from nimopt.solvers.highs_direct import _build_matrices_rust
 
 BND_ELEMS = ["opc", "flyash", "ggbs", "silica", "limestone", "pozzolan"]
 
@@ -57,7 +57,7 @@ def _decode_rows(model):
     Also asserts no row repeats a column index -- the exact defect under test.
     """
     names = _col_names(model)
-    mats = _build_matrices_rust_fast(model)
+    mats = _build_matrices_rust(model)
     indptr = np.asarray(mats["indptr"])
     indices = np.asarray(mats["indices"])
     data = np.asarray(mats["data"])

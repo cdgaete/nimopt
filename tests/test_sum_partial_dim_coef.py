@@ -2,8 +2,8 @@
 
 In ``Sum(G, inertia[G] * status[G,T])`` free over ``[T]``, the coefficient is
 indexed only by the *summed* set ``G`` while the variable spans ``[G, T]`` and
-the free set ``T`` comes from the variable alone. The single-term Rust fast
-path (``_build_sum_csr_rust_fast``) flattened the coefficient array as-is and
+the free set ``T`` comes from the variable alone. The single-term Rust
+path (``_build_sum_csr_rust``) flattened the coefficient array as-is and
 handed the kernel an array of length ``|G|`` where the kernel expects the
 variable's full flat size ``|G|*|T|``. The kernel pads a short array with 1.0,
 so only the *first* free-set element received the real coefficients; every
@@ -15,7 +15,7 @@ found -- a system-inertia constraint with 29x slack presolved to infeasible),
 but with ``<=`` the model solves happily to a wrong optimum.
 
 The multi-term builder and both LP writers broadcast correctly, which is why
-only single-term ``Sum`` constraints routed to the fast path were affected.
+only single-term ``Sum`` constraints routed to that path were affected.
 """
 
 import numpy as np

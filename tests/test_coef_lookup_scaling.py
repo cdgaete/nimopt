@@ -27,7 +27,8 @@ def _model(n_rows):
     w = no.Param("w", [G, T], np.arange(n_rows * 20, dtype=float).reshape(n_rows, 20))
     m = no.Model("scale", sense="minimize")
     p = m.var("p", [G, T], lb=0, ub=10)
-    # Pinned index keeps this on the batch slow path, one array-coef term per row.
+    # Pinned index keeps this on the Python-named batch route, one array-coef
+    # term per row.
     m.eq("c", w[G, 0] * p[G, 0] >= 1.0)
     m.set_objective(no.Sum(G, no.Sum(T, p[G, T])))
     return m
@@ -45,7 +46,7 @@ def _export_seconds(n_rows, tmp_path):
     return best
 
 
-def test_slow_path_export_scales_linearly_in_row_count(tmp_path):
+def test_python_named_route_export_scales_linearly_in_row_count(tmp_path):
     small = _export_seconds(500, tmp_path)
     large = _export_seconds(4000, tmp_path)
 

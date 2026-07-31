@@ -1,6 +1,6 @@
 """Regression test for Bug 2: stale var-index cache after variable deletion.
 
-The direct solver's Rust-fast matrix builder cached a name->column map keyed by
+The direct solver's Rust matrix builder cached a name->column map keyed by
 `id(model)` in a module-level dict that was never invalidated. Because the MCP
 mutates ONE persistent model object across edits, deleting a variable changed the
 column layout while `id(model)` stayed the same, so a later build reused stale
@@ -14,7 +14,7 @@ below is built to take that path.
 import numpy as np
 
 import nimopt as no
-from nimopt.solvers.highs_direct import _build_matrices_rust_fast
+from nimopt.solvers.highs_direct import _build_matrices_rust
 
 
 def _build(with_dummy):
@@ -37,14 +37,14 @@ def test_delete_variable_rebuilds_matrix_columns():
     # Fresh, never-had-dummy reference. Keep the model object alive for the whole
     # test so CPython cannot recycle its id() for the mutated model below.
     ref_model = _build(with_dummy=False)
-    ref = _build_matrices_rust_fast(ref_model)
+    ref = _build_matrices_rust(ref_model)
 
     # Bug path: build WITH dummy (first build seeds any per-model cache), delete
     # the dummy on the same object (mirrors MCP delete_variable), rebuild.
     m = _build(with_dummy=True)
-    _build_matrices_rust_fast(m)
+    _build_matrices_rust(m)
     del m.variables["dummy"]
-    after = _build_matrices_rust_fast(m)
+    after = _build_matrices_rust(m)
 
     assert after["n_vars"] == ref["n_vars"]
     np.testing.assert_array_equal(after["indptr"], ref["indptr"])

@@ -3,7 +3,7 @@
 Two defects, both in how a constraint is *serialized* to LP (the direct solver
 builds the same models correctly):
 
-1. The rust writer's lagged slow path never applied the lag offset (a
+1. The rust writer's Python-named batch route never applied the lag offset (a
    `# TODO: handle lag`), so `s[T] == s[T-1] + 1` was written as `s_T - s_T`
    for every T (including out-of-bounds T=1) instead of `s_T - s_{T-1}` for
    T = 2..N.

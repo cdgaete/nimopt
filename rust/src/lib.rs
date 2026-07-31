@@ -322,7 +322,7 @@ fn append_term(s: &mut String, c: f64, name: &str, first: bool) {
 }
 
 #[pyfunction]
-fn write_bounds(
+fn write_bounds_from_names(
     filename: &str,
     var_names: Vec<String>,
     lbs: Vec<Option<f64>>,
@@ -419,9 +419,9 @@ fn write_single_constraint(
     Ok(())
 }
 
-/// Write bounds with variable names generated in Rust
+/// Write bounds, generating the variable names in Rust from dim elements
 #[pyfunction]
-fn write_bounds_fast(
+fn write_bounds_from_dims(
     filename: &str,
     var_name: &str,
     dim_elements: Vec<Vec<String>>,
@@ -598,7 +598,7 @@ fn write_con_solution_csv(
 /// Returns: (indptr, indices, data, row_lower, row_upper)
 #[pyfunction]
 #[pyo3(signature = (var_start_idx, dim_sizes, is_free_dim, coef_flat, rhs_flat, sense))]
-fn build_sum_csr_fast(
+fn build_sum_csr(
     py: Python<'_>,
     var_start_idx: i32,
     dim_sizes: Vec<usize>,
@@ -1376,16 +1376,16 @@ fn nimopt_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(write_uniform_constraints, m)?)?;
     m.add_function(wrap_pyfunction!(write_coef_constraints, m)?)?;
     m.add_function(wrap_pyfunction!(write_sum_constraints, m)?)?;
-    m.add_function(wrap_pyfunction!(write_bounds, m)?)?;
+    m.add_function(wrap_pyfunction!(write_bounds_from_names, m)?)?;
     m.add_function(wrap_pyfunction!(write_var_types, m)?)?;
     m.add_function(wrap_pyfunction!(write_single_constraint, m)?)?;
-    m.add_function(wrap_pyfunction!(write_bounds_fast, m)?)?;
+    m.add_function(wrap_pyfunction!(write_bounds_from_dims, m)?)?;
     m.add_function(wrap_pyfunction!(write_objective_fast, m)?)?;
     m.add_function(wrap_pyfunction!(write_var_solution_csv, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_solution_csv, m)?)?;
     m.add_function(wrap_pyfunction!(write_npy_f64, m)?)?;
     m.add_function(wrap_pyfunction!(build_sum_constraint_csr, m)?)?;
-    m.add_function(wrap_pyfunction!(build_sum_csr_fast, m)?)?;
+    m.add_function(wrap_pyfunction!(build_sum_csr, m)?)?;
     m.add_function(wrap_pyfunction!(generate_var_names, m)?)?;
     m.add_function(wrap_pyfunction!(write_multi_term_constraints, m)?)?;
     m.add_function(wrap_pyfunction!(build_multi_term_csr, m)?)?;
