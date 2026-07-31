@@ -328,10 +328,15 @@ def _write_lhs(
     for var, coef, fixed, lagged in expr.terms:
         # Build lagged_map for quick lookup
         lagged_map = {pos: ls for pos, ls in lagged} if lagged else {}
+        # Honor fixed (literal) indices, e.g. vol[WR, 1]: pin that dimension
+        # to the named element instead of expanding it over its whole set.
+        fixed_map = {pos: val for pos, val in fixed} if fixed else {}
 
         var_combos = []
         for i, s in enumerate(var.sets):
-            if s in bindings:
+            if i in fixed_map:
+                var_combos.append([fixed_map[i]])
+            elif s in bindings:
                 var_combos.append([bindings[s]])
             elif i in lagged_map:
                 # For lagged dims, use the binding for base set
