@@ -304,10 +304,14 @@ def _write_batch_constraints_rust(
     filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig, model
 ):
     """Write constraints using Rust - fast path with name generation in Rust."""
-    # Try the fast path first: all terms have no lagged indices
+    # Try the fast path first: all terms have no lagged and no fixed indices.
+    # The Rust writer expands every variable dimension over its whole set, so a
+    # term carrying literal indices must take the slow path or the pinned axis
+    # is emitted in full and the LP means something else than solve() does.
     has_lagged = any(len(term) > 3 and term[3] for term in lhs_terms)
+    has_fixed = any(term[2] for term in lhs_terms)
 
-    if not has_lagged:
+    if not has_lagged and not has_fixed:
         try:
             return _write_multi_term_fast(
                 filename, eq_name, sense, lhs_terms, free_sets, rhs_const, rhs_orig
@@ -473,13 +477,18 @@ def _write_batch_constraints_rust_slow(
         con_coefs = []
 
         for term in lhs_terms:
-            var, coef, _ = term[0], term[1], term[2]
+            var, coef, fixed = term[0], term[1], term[2]
             lagged = term[3] if len(term) > 3 else []
             lagged_map = {pos: ls for pos, ls in lagged}
+            # Honor fixed (literal) indices, e.g. vol[WR, 1]: pin that
+            # dimension instead of expanding it over its whole set.
+            fixed_map = {pos: val for pos, val in fixed} if fixed else {}
 
             var_combos = []
             for i, s in enumerate(var.sets):
-                if s in bindings:
+                if i in fixed_map:
+                    var_combos.append([fixed_map[i]])
+                elif s in bindings:
                     var_combos.append([bindings[s]])
                 elif i in lagged_map and lagged_map[i].base_set in bindings:
                     var_combos.append([bindings[lagged_map[i].base_set]])
