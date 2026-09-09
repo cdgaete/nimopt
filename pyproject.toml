@@ -60,6 +60,9 @@ bench = ["linopy>=0.5", "highspy>=1.15", "pypsa>=1.2"]
 [tool.hatch.version]
 path = "src/nimopt/__init__.py"
 
+[tool.hatch.build.targets.sdist]
+exclude = ["website/static/wheels", "website/node_modules", "website/build", "website/.docusaurus"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/nimopt"]
 
