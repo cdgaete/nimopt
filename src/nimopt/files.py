@@ -1,0 +1,470 @@
+"""A model as a file: its structure in YAML, and its data inline or beside it."""
+
+from collections.abc import Iterable, Mapping, Sequence
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import numpy.typing as npt
+import yaml
+
+from nimopt.definition import Definition
+from nimopt.model import Model
+from nimopt.param import Param
+from nimopt.spelling import read, spell
+from nimopt.term import Relation
+
+VERSION = 2
+KEYS = (
+    "version",
+    "name",
+    "sense",
+    "sets",
+    "aliases",
+    "parameters",
+    "variables",
+    "constraints",
+    "objective",
+    "data",
+)
+VARIABLE_KEYS = ("sets", "subset", "lower", "upper", "integer")
+CONSTRAINT_KEYS = ("relation", "where", "over")
+
+
+class _Dumper(yaml.SafeDumper):
+    """Block mappings, and a list of scalars on one line."""
+
+
+def _sequence(dumper: Any, data: Any) -> Any:
+    flow = all(isinstance(item, (str, int, float, bool)) for item in data)
+    return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=flow)
+
+
+_Dumper.add_representer(list, _sequence)
+
+
+def dumps(mapping: Mapping[str, Any]) -> str:
+    """`mapping` as the YAML text a file carries, keys in the order given."""
+    return yaml.dump(
+        mapping,
+        Dumper=_Dumper,
+        sort_keys=False,
+        width=float("inf"),
+        default_flow_style=False,
+    )
+
+
+def _addressable(name: str, what: str) -> None:
+    if not name.isidentifier() or name == "Sum":
+        raise ValueError(
+            f"{what} {name!r} is not a name the spelling can address; a symbol's "
+            f"name is a Python identifier other than Sum"
+        )
+
+
+def _domain(held: Any, owner: str, slot: str) -> Any:
+    if held is None:
+        return None
+    if isinstance(held, Param):
+        return held.name
+    if isinstance(held, tuple):
+        return [s.name for s in held]
+    raise ValueError(
+        f"{owner} states {slot} with a domain that has no name; declare its "
+        f"members as a parameter and name that"
+    )
+
+
+def _bound(bound: Any, default: float) -> str | float | None:
+    if isinstance(bound, Param):
+        return bound.name
+    return None if float(bound) == default else float(bound)
+
+
+def _parts(held: Any) -> tuple[Any, ...]:
+    """The sets, aliases, parameters, variables, constraints and objective of `held`."""
+    if isinstance(held, Definition):
+        constraints = [
+            (name, relation, where, over)
+            for name, (relation, where, over) in held.constraints.items()
+        ]
+        return (
+            tuple(held.sets.values()),
+            tuple(held.aliases.values()),
+            tuple(held.parameters.values()),
+            tuple(held.variables.values()),
+            constraints,
+            held.objective,
+        )
+    if isinstance(held, Model):
+        parameters = held._parameters()
+        constraints = [
+            (name, c.relation, c.where, c.over) for name, c in held.constraints.items()
+        ]
+        sets, aliases = held._dimensions(parameters)
+        return (
+            sets,
+            aliases,
+            parameters,
+            tuple(held.variables.values()),
+            constraints,
+            held.objective,
+        )
+    raise TypeError(f"a file states a definition or a model; got {type(held).__name__}")
+
+
+def _long(
+    parameter: Any,
+) -> tuple[dict[str, npt.NDArray[Any]], npt.NDArray[np.float64]]:
+    """A parameter's entries as one label column per dimension and its values."""
+    array = parameter.materialise()
+    positions = array.coordinates()
+    labels = {
+        dim: held.coord.to_index(positions[j])
+        for j, (dim, held) in enumerate(zip(parameter.dims, parameter.sets))
+    }
+    return labels, array.values()
+
+
+def _arrays(model: Any) -> dict[str, npt.NDArray[Any]]:
+    """Every set's members and every parameter's array, keyed by name.
+
+    A parameter covering its full product is its grid; one covering less is
+    a structured table of one field per dimension and a `value` field.
+    """
+    sets, _, parameters, *_ = _parts(model)
+    out = {s.name: np.asarray(s.labels) for s in sets}
+    for parameter in parameters:
+        array = parameter.materialise()
+        if array.domain(parameter.dims).is_full:
+            out[parameter.name] = array.to_dense()
+            continue
+        labels, values = _long(parameter)
+        dtype = [(dim, labels[dim].dtype) for dim in parameter.dims]
+        dtype.append(("value", np.dtype(np.float64)))
+        table = np.empty(values.size, dtype=dtype)
+        for dim in parameter.dims:
+            table[dim] = labels[dim]
+        table["value"] = values
+        out[parameter.name] = table
+    for name, array in out.items():
+        if array.dtype.hasobject:
+            raise ValueError(
+                f"{name!r} holds an object array, which a file cannot carry "
+                f"without pickling; give its labels one dtype"
+            )
+    return out
+
+
+def structure(held: Any) -> dict[str, Any]:
+    """The mapping a definition's or a model's file carries, without data."""
+    sets, aliases, parameters, variables, constraints, objective = _parts(held)
+    for s in sets:
+        _addressable(s.name, "set")
+    for a in aliases:
+        _addressable(a.name, "alias")
+    for p in parameters:
+        _addressable(p.name, "parameter")
+    out = {
+        "version": VERSION,
+        "name": held.name,
+        "sense": held.sense,
+        "sets": [s.name for s in sets],
+    }
+    if aliases:
+        out["aliases"] = {a.name: a.base.name for a in aliases}
+    out["parameters"] = {p.name: list(p.dims) for p in parameters}
+    out["variables"] = {}
+    out["constraints"] = {}
+    for v in variables:
+        _addressable(v.name, "variable")
+        entry = {"sets": list(v.dims)}
+        for slot, value in (
+            ("subset", _domain(v.subset, f"variable {v.name!r}", "subset=")),
+            ("lower", _bound(v.lower, 0.0)),
+            ("upper", _bound(v.upper, np.inf)),
+        ):
+            if value is not None:
+                entry[slot] = value
+        if v.integer:
+            entry["integer"] = True
+        out["variables"][v.name] = entry
+    for name, relation, where, over in constraints:
+        entry = {"relation": spell(relation)}
+        for slot, value in (
+            ("where", _domain(where, f"constraint {name!r}", "where=")),
+            ("over", _domain(over, f"constraint {name!r}", "over=")),
+        ):
+            if value is not None:
+                entry[slot] = value
+        out["constraints"][name] = entry
+    if objective is not None:
+        out["objective"] = spell(objective)
+    return out
+
+
+def _only(entry: Mapping[str, Any], keys: Iterable[str], what: str) -> None:
+    unknown = sorted(set(entry) - set(keys))
+    if unknown:
+        raise ValueError(
+            f"{what} carries {unknown}, which the format does not; it takes {keys}"
+        )
+
+
+def _named_set(definition: Any, name: str, what: str) -> Any:
+    if name not in definition.sets:
+        raise ValueError(f"{what} names set {name!r}, which the file does not declare")
+    return definition.sets[name]
+
+
+def _named_dimension(definition: Any, name: str, what: str) -> Any:
+    """The set or the alias `name` names, either being a dimension to declare over."""
+    if name in definition.aliases:
+        return definition.aliases[name]
+    return _named_set(definition, name, what)
+
+
+def _named_parameter(definition: Any, name: str, what: str) -> Any:
+    if name not in definition.parameters:
+        raise ValueError(
+            f"{what} names parameter {name!r}, which the file does not declare"
+        )
+    return definition.parameters[name]
+
+
+def _read_domain(definition: Any, given: Any, what: str) -> Any:
+    if given is None:
+        return None
+    if isinstance(given, str):
+        return _named_parameter(definition, given, what)
+    if isinstance(given, list):
+        return tuple(_named_dimension(definition, name, what) for name in given)
+    raise ValueError(
+        f"{what} is a parameter's name or a list of set names; got {given!r}"
+    )
+
+
+def _read_bound(definition: Any, given: Any, what: str) -> Any:
+    if isinstance(given, str):
+        return _named_parameter(definition, given, what)
+    if isinstance(given, bool) or not isinstance(given, (int, float)):
+        raise ValueError(f"{what} is a number or a parameter's name; got {given!r}")
+    return float(given)
+
+
+def _definition(spec: Mapping[str, Any]) -> Definition:
+    """The definition a file's structure section declares."""
+    for key in ("name", "sense"):
+        if key not in spec:
+            raise ValueError(f"a model file states {key!r}; this one does not")
+    d = Definition(spec["name"], sense=spec["sense"])
+    for name in spec.get("sets") or []:
+        d.set(name)
+    for name, base in (spec.get("aliases") or {}).items():
+        d.alias(name, _named_set(d, base, f"alias {name!r}"))
+    for name, dims in (spec.get("parameters") or {}).items():
+        what = f"parameter {name!r}"
+        d.param(name, tuple(_named_dimension(d, dim, what) for dim in dims))
+    for name, entry in (spec.get("variables") or {}).items():
+        what = f"variable {name!r}"
+        _only(entry, VARIABLE_KEYS, what)
+        d.var(
+            name,
+            tuple(_named_dimension(d, dim, what) for dim in entry["sets"]),
+            subset=_read_domain(d, entry.get("subset"), f"{what} subset"),
+            lower=_read_bound(d, entry.get("lower", 0.0), f"{what} lower"),
+            upper=_read_bound(d, entry.get("upper", np.inf), f"{what} upper"),
+            integer=bool(entry.get("integer", False)),
+        )
+    symbols = {**d.sets, **d.aliases, **d.parameters, **d.variables}
+    for name, entry in (spec.get("constraints") or {}).items():
+        what = f"constraint {name!r}"
+        _only(entry, CONSTRAINT_KEYS, what)
+        relation = read(entry["relation"], symbols)
+        if not isinstance(relation, Relation):
+            raise ValueError(
+                f"{what} reads to no comparison: {entry['relation']!r} states an "
+                f"expression and no sense"
+            )
+        d.eq(
+            name,
+            relation,
+            where=_read_domain(d, entry.get("where"), f"{what} where"),
+            over=_read_domain(d, entry.get("over"), f"{what} over"),
+        )
+    if "objective" in spec:
+        objective = read(spec["objective"], symbols)
+        if isinstance(objective, Relation):
+            raise ValueError(
+                f"the objective reads to a comparison: {spec['objective']!r}; an "
+                f"objective is an expression"
+            )
+        d.set_objective(objective)
+    return d
+
+
+def _spec(text: str) -> dict[str, Any]:
+    spec = yaml.safe_load(text)
+    if not isinstance(spec, dict):
+        raise ValueError(f"a model file is a YAML mapping; got {type(spec).__name__}")
+    version = spec.get("version")
+    if version != VERSION:
+        raise ValueError(
+            f"the file states version {version!r}; this reader understands "
+            f"version {VERSION}"
+        )
+    _only(spec, KEYS, "a model file")
+    return spec
+
+
+def to_inline(model: Any) -> dict[str, Any]:
+    """A model's data as the block its file carries, in the three shapes."""
+    out = {}
+    for name, array in _arrays(model).items():
+        if array.dtype.names is None:
+            out[name] = array.tolist()
+        else:
+            columns = list(array.dtype.names)
+            out[name] = {
+                "columns": columns,
+                "rows": [
+                    [array[c][k].item() for c in columns] for k in range(array.size)
+                ],
+            }
+    return out
+
+
+def _columns(name: str, dims: Sequence[str], columns: Sequence[str]) -> None:
+    """Refuse a long table whose columns are not the dimensions then `value`."""
+    expected = list(dims) + ["value"]
+    if list(columns) != expected:
+        raise ValueError(
+            f"parameter {name!r} is given columns {list(columns)}; a table "
+            f"states the dimensions then value: {expected}"
+        )
+
+
+def _table(
+    name: str, dims: Sequence[str], columns: Sequence[str], rows: Sequence[Any]
+) -> tuple[dict[str, npt.NDArray[Any]], npt.NDArray[np.float64]]:
+    """A long table as the pair `build` takes, checking its columns."""
+    _columns(name, dims, columns)
+    expected = list(dims) + ["value"]
+    held = list(zip(*rows)) if rows else [[] for _ in expected]
+    labels = {dim: np.asarray(held[j]) for j, dim in enumerate(dims)}
+    return labels, np.asarray(held[-1], dtype=np.float64)
+
+
+def from_inline(block: Mapping[str, Any], definition: Definition) -> dict[str, Any]:
+    """The mapping `build` takes, from a file's inline block."""
+    out = {}
+    for name, value in block.items():
+        parameter = definition.parameters.get(name)
+        if parameter is not None and isinstance(value, dict):
+            _only(value, ("columns", "rows"), f"parameter {name!r}")
+            out[name] = _table(name, parameter.dims, value["columns"], value["rows"])
+        elif parameter is not None:
+            out[name] = np.asarray(value, dtype=np.float64)
+        else:
+            out[name] = np.asarray(value)
+    return out
+
+
+def write_npz(arrays: Mapping[str, Any], path: Any) -> None:
+    """The arrays `_arrays` gathered, as an `.npz` at `path`."""
+    np.savez_compressed(path, **arrays)
+
+
+def read_npz(path: Any, definition: Definition) -> dict[str, Any]:
+    """The mapping `build` takes, from an `.npz` written beside a file."""
+    out = {}
+    with np.load(path, allow_pickle=False) as held:
+        for name in held.files:
+            array = held[name]
+            if array.dtype.names is None:
+                out[name] = array
+                continue
+            parameter = definition.parameters.get(name)
+            dims = () if parameter is None else parameter.dims
+            _columns(name, dims, list(array.dtype.names))
+            labels = {dim: array[dim] for dim in dims}
+            values = np.asarray(array["value"], dtype=np.float64)
+            out[name] = (labels, values)
+    return out
+
+
+def _loads(text: str, data: Any, directory: Any) -> Any:
+    spec = _spec(text)
+    definition = _definition(spec)
+    carried = spec.get("data")
+    if carried is not None and data is not None:
+        raise ValueError(
+            "the file carries data and data= is given; two sources for one "
+            "model is a choice this reader does not make"
+        )
+    if isinstance(carried, str):
+        if directory is None:
+            raise ValueError(
+                f"the text names {carried!r} as its data, and text has no "
+                f"directory to find it in; read the file with load(path)"
+            )
+        if Path(carried).name != carried:
+            raise ValueError(
+                f"a data file is named beside the model file with no directory; "
+                f"got {carried!r}"
+            )
+        data = directory / carried
+    elif isinstance(carried, dict):
+        return definition.build(from_inline(carried, definition))
+    elif carried is not None:
+        raise ValueError(
+            f"data is an inline mapping or the name of an .npz beside the "
+            f"file; got {type(carried).__name__}"
+        )
+    if data is None:
+        return definition
+    if isinstance(data, (str, Path)):
+        return definition.build(read_npz(Path(data), definition))
+    return definition.build(data)
+
+
+def loads(text: str, data: Any = None) -> Any:
+    """The definition `text` states, or the model it builds where data is given.
+
+    `data` is a mapping `build` takes or the path of an `.npz`. A file naming
+    a sidecar cannot be read from text, because text has no directory.
+    """
+    return _loads(text, data, None)
+
+
+def load(path: Any, data: Any = None) -> Any:
+    """The definition the file at `path` states, or the model it builds."""
+    path = Path(path)
+    return _loads(path.read_text(), data, path.parent)
+
+
+def save(what: Any, path: Any, inline: bool = False) -> None:
+    """Write `what` to `path`: a definition's file, or a model's with its data.
+
+    A model's data goes to an `.npz` beside the file under the file's stem, or
+    into the file itself with `inline=True`.
+    """
+    path = Path(path)
+    if isinstance(what, Definition):
+        if inline:
+            raise ValueError("a definition carries no data to inline")
+        path.write_text(dumps(structure(what)))
+        return
+    if not isinstance(what, Model):
+        raise TypeError(
+            f"a file states a definition or a model; got {type(what).__name__}"
+        )
+    mapping = structure(what)
+    if inline:
+        mapping["data"] = to_inline(what)
+    else:
+        arrays = _arrays(what)
+        sidecar = path.with_suffix(".npz")
+        mapping["data"] = sidecar.name
+        write_npz(arrays, sidecar)
+    path.write_text(dumps(mapping))

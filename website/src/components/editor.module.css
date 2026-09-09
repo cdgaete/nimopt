@@ -1,0 +1,28 @@
+.frame {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: var(--ifm-code-border-radius);
+  overflow: auto;
+  max-height: 34rem;
+}
+
+.editor {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  min-height: 22rem;
+}
+
+/* the textarea sits transparently over the highlighted pre, so both have to
+   lay text out identically or the caret drifts from the glyphs it marks */
+.area,
+.pre {
+  font-family: var(--ifm-font-family-monospace) !important;
+  font-size: 0.875rem !important;
+  line-height: 1.55 !important;
+  tab-size: 4;
+  white-space: pre !important;
+}
+
+.area {
+  outline: none;
+}

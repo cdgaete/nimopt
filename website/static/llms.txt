@@ -1,0 +1,83 @@
+# nimopt
+
+> An LP/MILP builder in which a variable is a dimension. A constraint is
+> an array over its free sets crossed with the column space, so the array
+> is the matrix. nimblend, the labeled sparse array it is built on, is
+> documented under its own section.
+
+## For agents
+
+- [For agents](/for-agents): The mental model, the public surface, and the mistakes to avoid when writing nimopt.
+- [nimopt](/): An LP/MILP builder in which a variable is a dimension. Models are declared over named index sets and solutions are returned over the same sets.
+
+## Get started
+
+- [Get started](/get-started): Install nimopt, build a transport model, solve it, and read the solution back over its index sets.
+
+## Vocabulary
+
+- [Vocabulary](/vocabulary): The terms used throughout the documentation, each defined once.
+
+## Reference
+
+- [Constraint](/reference/constraint): The rows an expression produces, the right-hand side that bounds them, and the conditions that shape them.
+- [Definition](/reference/definition): The symbols and constraints a model is written from, declared before any data exists.
+- [Explanation](/reference/explanation): The shape of what is declared and, where it is built, of what was built from it.
+- [Expressions](/reference/expression): Terms, the frame they share, the sums that reduce them and the relations that bound them.
+- [Files](/reference/files): The file a definition or a model writes, what each key carries, the two data sources, and the verbs that read and write it.
+- [Row and Absence](/reference/inspection): What one row of a built model contains, and which coordinates were dropped from a constraint.
+- [Model](/reference/model): The model that holds the columns, the rows and the objective, and the matrix it assembles.
+- [Param](/reference/param): Coefficients over a set product, from a dense array or from label columns.
+- [Sets and domains](/reference/sets): Name a dimension, give it a second name, and list which members of a product a model uses.
+- [Solution](/reference/solution): Status, objective, primals and duals, returned over the sets they were declared over.
+- [Solvers](/reference/solvers): What each solver adapter can do, the options a caller can set, and a session that keeps one solver open.
+- [Variable](/reference/variable): A variable over a set product, the columns it occupies, and the reserved dimension names.
+
+## nimblend
+
+- [nimblend arrays](/nimblend/arrays): The array contract, the two implementations behind it, and what an absence declaration means.
+- [nimblend domains](/nimblend/domains): The coordinates an array has, the three ways a position is computed, and the buffer assembly writes into.
+- [nimblend](/nimblend): A labeled sparse N-dimensional array library, and the layer nimopt's matrices are built on.
+
+## Explanation
+
+- [A variable is a dimension](/explanation/a-variable-is-a-dimension): Why the column space is a dimension, and why nothing stores a column index.
+- [Expressions are symbolic](/explanation/expressions-are-symbolic): Why writing an expression costs nothing, and what materialising it does.
+- [The array is the matrix](/explanation/the-array-is-the-matrix): Why a constraint needs no assembly step, and what a model's build does.
+- [The package boundary](/explanation/the-package-boundary): What belongs to nimblend, what belongs to nimopt, and the tests that keep the boundary where it is.
+- [What the numbers measure](/explanation/what-the-numbers-measure): The benchmark figures, what each is measured against, and what none of them claims.
+
+## Tutorial
+
+- [Sets and parameters](/tutorial/sets-and-parameters): Declare the index sets of the transport model and the data indexed over them.
+- [Variables](/tutorial/variables): Declare the shipment variable over plants and warehouses, and set its bounds and integrality.
+- [Expressions](/tutorial/expressions): Write the sums the constraints and the objective are stated over, without computing anything.
+- [Constraints](/tutorial/constraints): Add the supply and demand constraints, and see how many rows each family produces.
+- [Solving](/tutorial/solving): Set the objective function, call the solver, and check the status before reading values.
+- [Reading the answer](/tutorial/reading-the-answer): Read primal and dual values over their index sets, and the distinction between an absent value and a zero.
+
+## Guides
+
+- [Stating a model at scale](/guides/at-scale): Read a model's shape as it is declared, build the matrix once, and read a large solution.
+- [Bounds from a parameter](/guides/bounds-from-parameters): Give each column its own bound from a parameter, broadcast over the dimensions the parameter lacks.
+- [Coefficient arithmetic](/guides/coefficient-arithmetic): Combine parameters into a coefficient, divide by a parameter, carry a constant, and the forms that are refused with the form to write instead.
+- [Conditions on a sum and on a constraint](/guides/conditions): Restrict the members a sum runs over, restrict the rows a constraint produces, or state the rows explicitly.
+- [A member fixed at a label](/guides/fixed-members): Reference one member of a dimension by its label, removing that dimension from the frame.
+- [Interior point and first-order methods](/guides/highs-methods): HiGHS's simplex, IPX, HiPO and PDLP through nimopt's options, what each holds in memory, and how to install a HiGHS that carries HiPO and a GPU.
+- [Lags](/guides/lags): Reference a variable at the previous or next member of a set, and choose whether the boundary row is dropped or wraps around.
+- [Saving and loading a model](/guides/saving-and-loading): Write a definition or a built model to a file in nimopt's own spelling, read it back, and carry the data inline or beside it.
+- [A variable over a subset](/guides/subsets): Declare a variable over the members of a set product that exist in the model, so that the others have no column.
+
+## Worked models
+
+- [Commitment](/models/commitment): Unit commitment with a binary on-off column per generator and snapshot.
+- [Dispatch](/models/dispatch): Least-cost dispatch of a generator fleet against a load. The baseline formulation.
+- [Expansion](/models/expansion): "A two-stage stochastic program: capacity chosen before the scenario is known, dispatched once it is."
+- [Fleet](/models/fleet): The dispatch model declared as one variable per unit rather than one variable over a product.
+- [Worked models](/models): Ten complete models, each with its formulation, its data at any scale, and an independently computed reference objective.
+- [Nodal](/models/nodal): Generators sited at buses, grouped into bus balance rows by a lookup parameter.
+- [Profiled](/models/profiled): A dispatch whose capacity is a profile, with one bound per generator and hour.
+- [Recourse](/models/recourse): "Stochastic unit commitment: a binary on-off decision fixed before the scenario is known."
+- [Sector](/models/sector): Technologies sited in some regions, running in every hour. Sparse in one axis, dense in the other.
+- [Storage](/models/storage): A generator fleet and batteries meeting an hourly load, with the hours coupled through the state of charge.
+- [Transport](/models/transport): Plants shipping to warehouses over a network that is not complete.

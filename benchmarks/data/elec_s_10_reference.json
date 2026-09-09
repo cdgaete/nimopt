@@ -1,0 +1,114 @@
+{
+  "pypsa": "1.3.0",
+  "rows": 10499,
+  "cols": 5105,
+  "nnz": 21394,
+  "families": {
+    "Generator-ext-p_nom-lower": {
+      "rows": 30,
+      "nnz": 30
+    },
+    "Generator-ext-p_nom-upper": {
+      "rows": 30,
+      "nnz": 30
+    },
+    "Line-ext-s_nom-lower": {
+      "rows": 10,
+      "nnz": 10
+    },
+    "Link-ext-p_nom-lower": {
+      "rows": 40,
+      "nnz": 40
+    },
+    "Store-ext-e_nom-lower": {
+      "rows": 20,
+      "nnz": 20
+    },
+    "Generator-fix-p-lower": {
+      "rows": 396,
+      "nnz": 396
+    },
+    "Generator-fix-p-upper": {
+      "rows": 396,
+      "nnz": 396
+    },
+    "Generator-ext-p-lower": {
+      "rows": 1080,
+      "nnz": 1080
+    },
+    "Generator-ext-p-upper": {
+      "rows": 1080,
+      "nnz": 2004
+    },
+    "Line-ext-s-lower": {
+      "rows": 360,
+      "nnz": 720
+    },
+    "Line-ext-s-upper": {
+      "rows": 360,
+      "nnz": 720
+    },
+    "Link-ext-p-lower": {
+      "rows": 1440,
+      "nnz": 1440
+    },
+    "Link-ext-p-upper": {
+      "rows": 1440,
+      "nnz": 2880
+    },
+    "Store-ext-e-lower": {
+      "rows": 720,
+      "nnz": 720
+    },
+    "Store-ext-e-upper": {
+      "rows": 720,
+      "nnz": 1440
+    },
+    "StorageUnit-fix-p_dispatch-lower": {
+      "rows": 72,
+      "nnz": 72
+    },
+    "StorageUnit-fix-p_dispatch-upper": {
+      "rows": 72,
+      "nnz": 72
+    },
+    "StorageUnit-fix-p_store-lower": {
+      "rows": 72,
+      "nnz": 72
+    },
+    "StorageUnit-fix-p_store-upper": {
+      "rows": 72,
+      "nnz": 72
+    },
+    "StorageUnit-fix-state_of_charge-lower": {
+      "rows": 72,
+      "nnz": 72
+    },
+    "StorageUnit-fix-state_of_charge-upper": {
+      "rows": 72,
+      "nnz": 72
+    },
+    "Bus-nodal_balance": {
+      "rows": 1080,
+      "nnz": 5940
+    },
+    "Kirchhoff-Voltage-Law": {
+      "rows": 72,
+      "nnz": 288
+    },
+    "StorageUnit-energy_balance": {
+      "rows": 72,
+      "nnz": 288
+    },
+    "Store-energy_balance": {
+      "rows": 720,
+      "nnz": 2160
+    },
+    "GlobalConstraint-CO2Limit": {
+      "rows": 1,
+      "nnz": 360
+    }
+  },
+  "objective": 2662944681.8591576,
+  "constant": 368025607.86311567
+}

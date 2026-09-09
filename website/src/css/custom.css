@@ -1,0 +1,9 @@
+:root {
+  --ifm-color-primary: #0f766e;
+  --ifm-code-font-size: 92%;
+  --ifm-font-family-monospace: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+[data-theme="dark"] {
+  --ifm-color-primary: #5eead4;
+}

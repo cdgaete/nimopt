@@ -1,0 +1,97 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nimopt"
+version = "0.1.0"
+description = "An LP/MILP builder whose constraint blocks are labeled sparse arrays"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Carlos Gaete-Morales", email = "cdgaete@gmail.com" }]
+requires-python = ">=3.13,<3.15"
+dependencies = ["nimblend", "numpy>=2.5.2", "pyyaml>=6"]
+
+[project.optional-dependencies]
+highs = ["highspy>=1.15"]
+gurobi = ["gurobipy>=12", "scipy>=1.11"]
+mosek = ["mosek>=11"]
+dev = [
+    "pytest>=8",
+    "hypothesis>=6",
+    "ruff>=0.16",
+    "highspy>=1.15",
+    "gurobipy>=12",
+    "scipy>=1.11",
+    "mosek>=11",
+    "pre-commit>=4.6.2",
+    "coverage>=7.16",
+    "vulture>=2.14",
+    "ty>=0.0.78",
+]
+bench = ["linopy>=0.5", "highspy>=1.15", "pypsa>=1.2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nimopt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["website/scripts"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+src = [".", "src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "W", "S", "SIM114", "C416", "PIE790", "B023", "ANN"]
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S603", "ANN"]
+"benchmarks/**" = ["S101", "S603", "ANN"]
+"website/scripts/**" = ["ANN", "S310"]
+
+[tool.ty.src]
+include = ["src"]
+
+[[tool.ty.overrides]]
+include = ["src/nimopt/solvers/highs.py"]
+
+[tool.ty.overrides.rules]
+no-matching-overload = "ignore"
+
+[tool.coverage.run]
+branch = true
+source = ["src/nimopt"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
+
+[tool.vulture]
+min_confidence = 60
+paths = ["src", "tests", "benchmarks", "website/scripts"]
+sort_by_size = true
+ignore_names = [
+    "args",
+    "kwargs",
+    "exc",
+    "generic_visit",
+    "num_col_",
+    "num_row_",
+    "col_cost_",
+    "col_lower_",
+    "col_upper_",
+    "row_lower_",
+    "row_upper_",
+    "sense_",
+    "integrality_",
+    "format_",
+    "start_",
+    "index_",
+    "value_",
+    "ModelSense",
+    "include_objective_constant",
+]

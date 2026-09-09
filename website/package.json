@@ -1,0 +1,30 @@
+{
+  "name": "nimopt-docs",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "start": "docusaurus start",
+    "build": "node scripts/llms.mjs && node scripts/skill.mjs && node scripts/readme.mjs && docusaurus build",
+    "serve": "docusaurus serve",
+    "generate": "node scripts/llms.mjs && node scripts/skill.mjs && node scripts/readme.mjs",
+    "watch": "node scripts/watch.mjs"
+  },
+  "dependencies": {
+    "@docusaurus/core": "3.10.2",
+    "@docusaurus/preset-classic": "3.10.2",
+    "@docusaurus/theme-common": "3.10.2",
+    "@mdx-js/react": "3.1.1",
+    "prism-react-renderer": "^2.4.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-simple-code-editor": "^0.14.1"
+  },
+  "devDependencies": {
+    "@docusaurus/module-type-aliases": "3.10.2",
+    "@docusaurus/tsconfig": "3.10.2",
+    "typescript": "5.6.3"
+  },
+  "engines": {
+    "node": ">=20.0"
+  }
+}
