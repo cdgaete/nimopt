@@ -4,9 +4,9 @@ import type * as Preset from "@docusaurus/preset-classic";
 const config: Config = {
   title: "nimopt",
   tagline: "An LP/MILP builder in which a variable is a dimension",
-  favicon: "img/favicon.ico",
-  url: "https://example.invalid",
-  baseUrl: "/",
+  favicon: "img/favicon.svg",
+  url: "https://cdgaete.github.io",
+  baseUrl: "/nimopt/",
   onBrokenLinks: "throw",
   markdown: {
     format: "detect",

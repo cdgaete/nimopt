@@ -4,13 +4,39 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nimopt"
-version = "0.1.0"
+dynamic = ["version"]
 description = "An LP/MILP builder whose constraint blocks are labeled sparse arrays"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Carlos Gaete-Morales", email = "cdgaete@gmail.com" }]
 requires-python = ">=3.13,<3.15"
-dependencies = ["nimblend", "numpy>=2.5.2", "pyyaml>=6"]
+dependencies = ["nimblend>=0.1.0", "numpy>=2.5.2", "pyyaml>=6"]
+keywords = [
+    "linear programming",
+    "milp",
+    "mathematical programming",
+    "optimization",
+    "solver",
+    "sparse",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/cdgaete/nimopt"
+Documentation = "https://cdgaete.github.io/nimopt/"
+Repository = "https://github.com/cdgaete/nimopt"
+Issues = "https://github.com/cdgaete/nimopt/issues"
 
 [project.optional-dependencies]
 highs = ["highspy>=1.15"]
@@ -30,6 +56,9 @@ dev = [
     "ty>=0.0.78",
 ]
 bench = ["linopy>=0.5", "highspy>=1.15", "pypsa>=1.2"]
+
+[tool.hatch.version]
+path = "src/nimopt/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nimopt"]

@@ -6,8 +6,8 @@ benchmarks/data/large/
 website/node_modules/
 website/build/
 website/.docusaurus/
-website/scripts/cache/
 .coverage
 coverage.json
 htmlcov/
 .ruff_cache/
+website/scripts/cache/
