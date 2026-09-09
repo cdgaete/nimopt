@@ -138,9 +138,21 @@ ROUTES = {
 LINK = re.compile(r"\[([^\]]*)\]\((/[^)]*)\)")
 
 
+SITE = "https://cdgaete.github.io/nimopt/"
+
+
+def with_site(body):
+    """The body with the line naming where the rendered pages are."""
+    lines = body.split("\n")
+    heading = next(i for i, line in enumerate(lines) if line.startswith("# "))
+    lines[heading + 1 : heading + 1] = ["", f"The documentation site is at <{SITE}>."]
+    return "\n".join(lines)
+
+
 def as_readme(page):
     """The README the front page states: its body, with the site's routes
-    answered by the files a reader on the repository has."""
+    answered by the files a reader on the repository has, under a line
+    naming the site."""
 
     def repointed(match):
         label, route = match.group(1), match.group(2)
@@ -148,7 +160,7 @@ def as_readme(page):
             return label
         return f"[{label}]({ROUTES[route]})"
 
-    return LINK.sub(repointed, body(page)) + "\n"
+    return with_site(LINK.sub(repointed, body(page))) + "\n"
 
 
 def test_the_readme_is_the_front_page():

@@ -1,5 +1,7 @@
 # nimopt
 
+The documentation site is at <https://cdgaete.github.io/nimopt/>.
+
 `nimopt` is a Python library for building linear and mixed-integer programs. A model is declared symbolically over named index sets — as parameters, variables and constraints — and is expanded into a coefficient matrix only when it is assembled or solved. Solutions are returned as arrays over those same index sets, so a primal value is read by label rather than by column position.
 
 `nimopt` is built on `nimblend`, a labelled sparse N-dimensional array library with no knowledge of optimisation. The dependency runs in one direction, and `nimblend` is documented in [its own section](website/docs/nimblend/index.md).

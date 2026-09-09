@@ -40,6 +40,17 @@ function repoLinks(body) {
     });
 }
 
+const SITE = "https://cdgaete.github.io/nimopt/";
+
+// the rendered pages, their search and the playground are the site's; a
+// reader holding the repository is told where they are
+function withSite(body) {
+  const lines = body.split("\n");
+  const heading = lines.findIndex((line) => line.startsWith("# "));
+  lines.splice(heading + 1, 0, "", `The documentation site is at <${SITE}>.`);
+  return lines.join("\n");
+}
+
 /** The README the page states, or the reason it cannot be stated. */
 export function readme(page) {
   const body = repoLinks(below(page));
@@ -47,7 +58,7 @@ export function readme(page) {
   if (unresolved.length) {
     throw new Error(`no repository path for ${unresolved.join(", ")}`);
   }
-  return `${body}\n`;
+  return `${withSite(body)}\n`;
 }
 
 const page = await readFile(PAGE, "utf8");
