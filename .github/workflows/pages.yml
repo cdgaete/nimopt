@@ -24,7 +24,7 @@ jobs:
 
       - name: the wheels the playground imports
         run: |
-          uvx --from pip pip download nimblend==0.1.0 --no-deps --only-binary=:all: --python-version 3.13 --dest website/static/wheels
+          uvx --from pip pip download nimblend==0.1.1 --no-deps --only-binary=:all: --python-version 3.13 --dest website/static/wheels
           uv build --wheel -o website/static/wheels
 
       - uses: pnpm/action-setup@v4
