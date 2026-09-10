@@ -1,12 +1,11 @@
-"""What nimopt states against what PyPSA states, family by family.
+"""The nimopt model against the PyPSA model, family by family.
 
-The matrix a builder hands a solver is the thing being compared, so a family
+The comparison is over the matrix each builder passes to a solver. A family
 agrees when its rows and its nonzeros both agree. A mismatch is printed beside
-the number it should have been rather than left to be hunted.
+the expected number.
 
-PyPSA splits its nodal balance into blocks by how many terms a bus carries,
-which serves the solver rather than the model, so every block is compared
-against the one balance stated here.
+PyPSA splits its nodal balance into blocks by the number of terms in a bus row.
+Every block is compared against the single balance family of the nimopt model.
 """
 
 import json
@@ -21,29 +20,29 @@ DATA = HERE / "data"
 
 
 def group_of(name):
-    """The stated family a PyPSA family belongs to."""
+    """Return the nimopt family that contains a PyPSA family."""
     if name.endswith("nodal_balance"):
         return "Bus-nodal_balance"
     return name
 
 
 def grouped(reference):
-    """Each stated family's rows and nonzeros, summed over PyPSA's blocks."""
+    """Return the rows and nonzeros of each family, summed over PyPSA blocks."""
     totals = {}
     for name, want in reference["families"].items():
         into = group_of(name)
-        held = totals.setdefault(into, {"rows": 0, "nnz": 0, "blocks": []})
-        held["rows"] += want["rows"]
-        held["nnz"] += want["nnz"]
-        held["blocks"].append(name)
+        group = totals.setdefault(into, {"rows": 0, "nnz": 0, "blocks": []})
+        group["rows"] += want["rows"]
+        group["nnz"] += want["nnz"]
+        group["blocks"].append(name)
     return totals
 
 
 def compare(stem="elec_s_10", root=DATA):
-    """Both sides of every family, and the objective each reaches.
+    """Return both sides of every family and the objective of each side.
 
-    A reference written without a solve carries no objective, and the
-    comparison then reports the shape alone.
+    A reference written without a solve has no objective. The comparison then
+    reports the shape alone.
     """
     root = Path(root)
     reference = json.loads((root / f"{stem}_reference.json").read_text())
@@ -52,20 +51,20 @@ def compare(stem="elec_s_10", root=DATA):
 
     families = {}
     for name, want in grouped(reference).items():
-        stated = model.constraints.get(name)
-        if stated is None:
+        constraint = model.constraints.get(name)
+        if constraint is None:
             raise ValueError(
-                f"PyPSA states {want['blocks']}, which belong to family "
-                f"{name!r}; this restatement states no such family"
+                f"family {name!r} of PyPSA blocks {want['blocks']} is absent "
+                f"from the nimopt model; declare it in pypsa_network.build"
             )
         families[name] = {
-            "rows": (stated.n_rows, want["rows"]),
-            "nnz": (stated.nnz, want["nnz"]),
+            "rows": (constraint.n_rows, want["rows"]),
+            "nnz": (constraint.nnz, want["nnz"]),
             "blocks": want["blocks"],
         }
     extra = sorted(set(model.constraints) - set(families))
     if extra:
-        raise ValueError(f"this restatement states {extra}, which PyPSA does not")
+        raise ValueError(f"families {extra} are absent from PyPSA; remove them")
 
     got = {
         "families": families,
@@ -76,7 +75,10 @@ def compare(stem="elec_s_10", root=DATA):
     if "objective" in reference:
         result = highs.solve(assembled, model.sense)
         if result.status != "optimal":
-            raise RuntimeError(f"the restatement solved {result.status!r}")
+            raise RuntimeError(
+                f"status is {result.status!r}; compare a network that solves to "
+                f"optimality"
+            )
         offset = constant(root / f"{stem}.npz")
         got["objective"] = (result.objective - offset, reference["objective"])
     return got

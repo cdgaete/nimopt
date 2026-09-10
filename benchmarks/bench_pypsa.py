@@ -1,15 +1,14 @@
-"""A European capacity expansion network as a case both builders state.
+"""A European capacity expansion network as a case both builders declare.
 
-The `linopy` side is PyPSA's own model rather than a restatement of it, so
-what is compared is what a modeller would actually run. Each side reads its
-input before the measurement begins — the arrays on one, the network and its
-horizon on the other — so the build phase measures building and not reading a
-212 MB file.
+The `linopy` side is the PyPSA model itself. The comparison is over the model
+a modeler runs. Each side reads its input before the measurement starts: the
+arrays on one side, the network and its horizon on the other. The build phase
+then measures building and not reading a 212 MB file.
 
-The two sides start from different resident baselines, because importing PyPSA
-costs about 323 MB against numpy's 32 MB. Every phase's watermark is taken
-over a baseline captured when that phase begins, so the difference sits
-outside the deltas and is reported beside them rather than corrected for.
+The two sides start from different resident baselines. Importing PyPSA costs
+about 323 MB and importing numpy costs about 32 MB. The watermark of each
+phase is taken over a baseline captured when that phase starts. The difference
+is outside the deltas and is reported beside them.
 """
 
 from pathlib import Path
@@ -25,21 +24,20 @@ NETWORK = LARGE / "interconnected-transport.nc"
 BALANCE = "Bus-nodal_balance"
 OUTPUT = "Generator-p"
 
-# linopy carries the objective's constant as a column fixed to its value,
-# holding no matrix entry; nimopt states that constant as a number. Excluding
-# it compares the two matrices rather than the two ways of holding a scalar.
+# linopy adds the objective constant as a column fixed to its value, with no
+# matrix entry; nimopt reports the constant as a number. Excluding the column
+# compares the two matrices.
 CONSTANT_COLUMNS = 1
 
 
 def _shape(rows, cols, nnz, index_bytes, value_bytes, columns_of, snapshots):
-    """The fields every side reports about the matrix it built.
+    """Return the fields every side reports about the matrix it built.
 
-    `dense_cols` counts the columns holding at least as many nonzeros as the
-    rung has snapshots. Those are the capacity columns, which reach one
-    operating row per snapshot, and they are what drives fill-in in a barrier
-    solver's factorization. The count sits a little under the number of
-    nominal columns because a capacity term drops at every hour its component
-    is unavailable.
+    `dense_cols` counts the columns with at least as many nonzeros as the rung
+    has snapshots. Those are the capacity columns, with one operating row per
+    snapshot. They drive the fill-in of a barrier factorization. The count is
+    below the number of nominal columns. A capacity term is absent at every
+    hour the component is unavailable.
     """
     per_column = np.bincount(columns_of, minlength=int(cols))
     return {
@@ -52,7 +50,7 @@ def _shape(rows, cols, nnz, index_bytes, value_bytes, columns_of, snapshots):
 
 
 def nimopt(snapshots):
-    """The network as `nimopt` states it, over its first `snapshots` hours."""
+    """Return the nimopt case for the network over its first `snapshots` hours."""
     from pypsa_network import Data, constant, model_from
 
     data = Data(ARRAYS, snapshots)
@@ -62,8 +60,8 @@ def nimopt(snapshots):
         model = model_from(data)
         return {"model": model, "session": model.session()}
 
-    def describe(state):
-        assembled = state["session"].assembled
+    def describe(built):
+        assembled = built["session"].assembled
         return _shape(
             assembled.n_rows,
             assembled.n_cols,
@@ -74,16 +72,19 @@ def nimopt(snapshots):
             snapshots,
         )
 
-    def solve(state):
-        solution = state["session"].solve()
+    def solve(built):
+        solution = built["session"].solve()
         if solution.status != "optimal":
-            raise RuntimeError(f"nimopt returned status {solution.status!r}")
-        state["solution"] = solution
-        # PyPSA reports its objective less what the existing capacity costs
+            raise RuntimeError(
+                f"nimopt returned status {solution.status!r}; solve a model "
+                f"that returns 'optimal'"
+            )
+        built["solution"] = solution
+        # PyPSA excludes the cost of the existing capacity from its objective
         return float(solution.objective) - offset
 
-    def read(state):
-        solution = state["solution"]
+    def read(built):
+        solution = built["solution"]
         return {
             "primal_sum": float(solution.primal(OUTPUT).values().sum()),
             "dual_sum": float(solution.dual(BALANCE).values().sum()),
@@ -93,7 +94,7 @@ def nimopt(snapshots):
 
 
 def linopy(snapshots):
-    """The network as PyPSA states it, over its first `snapshots` hours."""
+    """Return the PyPSA case for the network over its first `snapshots` hours."""
     import pypsa
 
     network = pypsa.Network(str(NETWORK))
@@ -118,9 +119,9 @@ def linopy(snapshots):
         )
 
     def solve(model):
-        # io_api="direct" hands the matrix to the solver in memory; the
-        # default writes an LP file, which measures the disk rather than the
-        # solver and reaches a gigabyte at the horizons this sweep runs
+        # io_api="direct" passes the matrix to the solver in memory; the
+        # default writes an LP file of about a gigabyte at these horizons,
+        # and that measures the disk
         model.solve(
             solver_name="highs",
             io_api="direct",
@@ -128,7 +129,10 @@ def linopy(snapshots):
             log_to_console=False,
         )
         if model.status != "ok":
-            raise RuntimeError(f"linopy returned status {model.status!r}")
+            raise RuntimeError(
+                f"linopy returned status {model.status!r}; solve a model that "
+                f"returns 'ok'"
+            )
         return float(model.objective.value)
 
     def read(model):

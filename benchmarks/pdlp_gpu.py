@@ -1,20 +1,27 @@
-"""PDLP on the European network, with a log a later reader can follow.
+"""PDLP on the European network, with a log for a later reader.
 
-`run` states the network as nimopt does over the first `--snapshots` snapshots,
-hands the matrix to HiGHS with `solver=pdlp`, and keeps five files in a
-directory named after the run: HiGHS's own log, cuPDLP's iteration table
-and closing report as it writes them to the process's standard output, a line
-of timestamped events per phase, the GPU's memory and utilisation sampled
-through the solve, and the host's resident size sampled through it.
-`report` reads a run's directory back and states what happened: the reduced
-problem presolve handed over, the device, the gap and the residuals at
-checkpoints, the closing criteria, HiGHS's own check of the point, and the
-peaks.
+`run` builds the nimopt model over the first `--snapshots` snapshots and passes
+the matrix to HiGHS with `solver=pdlp`. It writes five files to a directory
+named after the run:
+
+- the HiGHS log
+- the cuPDLP iteration table and closing report, from the process standard
+  output
+- one timestamped event per phase
+- the GPU memory and utilization, sampled through the solve
+- the host resident size, sampled through the solve
+
+`report` reads a run directory and prints:
+
+- the problem presolve reduced, and the device
+- the gap and the residuals at checkpoints
+- the closing criteria, and the HiGHS check of the point
+- the peak GPU memory and the peak host resident size
 
     python benchmarks/pdlp_gpu.py run --tol 1e-9
     python benchmarks/pdlp_gpu.py report data/large/traces/pdlp/pdlp-all-1e-09
 
-A run without `--time-limit` goes on until PDLP stops on its own.
+A run without `--time-limit` continues until PDLP stops.
 """
 
 import argparse
@@ -51,10 +58,10 @@ def _event(path, **fields):
 
 
 def _sample_gpu(path, stop, every=5.0):
-    """Write the GPU's memory and utilisation to `path` every `every` seconds."""
+    """Write the GPU memory and utilization to `path` every `every` seconds."""
     tool = shutil.which("nvidia-smi")
     with path.open("w") as out:
-        out.write("seconds,used_mib,utilisation\n")
+        out.write("seconds,used_mib,utilization\n")
         started = time.perf_counter()
         while tool and not stop.is_set():
             try:
@@ -72,14 +79,17 @@ def _sample_gpu(path, stop, every=5.0):
             except (OSError, subprocess.TimeoutExpired):
                 read = ""
             if read:
-                used, utilisation = (x.strip() for x in read.split(",")[:2])
-                out.write(f"{time.perf_counter() - started:.1f},{used},{utilisation}\n")
+                used, utilization = (x.strip() for x in read.split(",")[:2])
+                out.write(f"{time.perf_counter() - started:.1f},{used},{utilization}\n")
                 out.flush()
             stop.wait(every)
 
 
 def _info(highs):
-    """The fields of HiGHS's information record a report reads, where it has them."""
+    """Return the fields of the HiGHS information record that a report reads.
+
+    A field the record does not define is omitted.
+    """
     info = highs.getInfo()
     names = (
         "pdlp_iteration_count",
@@ -96,7 +106,7 @@ def _info(highs):
 
 
 def run(snapshots, tol, time_limit, out):
-    """Solve with PDLP and keep the log, the events, and both memory samples."""
+    """Solve with PDLP and write the log, the events and both memory samples."""
     import highspy
     from bench_pypsa import ARRAYS
     from pypsa_network import Data, model_from
@@ -192,7 +202,7 @@ def run(snapshots, tol, time_limit, out):
 
 
 def _checkpoints(lines, keep=12):
-    """The iteration rows a report shows: evenly spaced, the last kept."""
+    """Return at most `keep` iteration rows, evenly spaced, including the last."""
     rows = [m.groupdict() for m in (ITERATION.match(line) for line in lines) if m]
     if len(rows) <= keep:
         return rows
@@ -201,7 +211,7 @@ def _checkpoints(lines, keep=12):
 
 
 def report(where):
-    """What a run did, read from the files `run` kept."""
+    """Print the result of a run, read from the files `run` wrote."""
     where = Path(where)
 
     def lines(name):
@@ -254,7 +264,7 @@ def report(where):
             f"  rows {len(kinds)}: {average} on the average iterate, {last} on the last"
         )
 
-    print("\n## How PDLP stopped")
+    print("\n## The PDLP stopping criteria")
     closing = False
     for line in table:
         if line.startswith("Solving information"):
@@ -264,7 +274,7 @@ def report(where):
         if closing and line.strip().startswith("Number of iterations"):
             break
 
-    print("\n## HiGHS's own check of the point")
+    print("\n## The HiGHS check of the point")
     for line in log:
         if re.search(
             r"infeasibilit|objective error|Model status changed|WARNING", line
@@ -290,7 +300,7 @@ def report(where):
 
 
 def main(argv=None):
-    """The command line: `run` keeps a run, `report` reads one back."""
+    """Parse the command line and dispatch to `run` or `report`."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     runner = sub.add_parser("run")

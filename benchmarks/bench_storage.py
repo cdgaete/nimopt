@@ -1,13 +1,12 @@
-"""Peak RAM and time of building the corpus's storage model at a size.
+"""Peak RAM and time of building the corpus storage model at a size.
 
-The model is `nimopt.models.storage`, so the benchmark and the documentation
-describe one definition rather than two that resemble each other. What differs
-here is the data: a thermal fleet, a solar fleet and a price spread wide enough
-that the batteries are worth cycling, where the corpus's own `data` states a
-spread narrow enough for its reference to be arithmetic.
+The model is `nimopt.models.storage`. The benchmark and the documentation
+describe one definition. The data differs. This data has a thermal fleet, a
+solar fleet and a cost spread wide enough for a nonzero optimal charge. The
+corpus `data` has a narrow spread and a zero optimal charge.
 
-The hourly profiles are the input a time series store hands over; everything
-nimopt does with them is measured.
+The hourly profiles are the input of a time series store. Every computation
+nimopt performs on them is measured.
 """
 
 import time
@@ -26,11 +25,11 @@ RAMP_FRACTION = 0.5
 
 
 def profiles(n_generators, n_hours, seed=0):
-    """Availability per generator and hour, hourly demand, and marginal costs.
+    """Return the availability per generator and hour, the demand and the cost.
 
-    Half the fleet is thermal and available at every hour; the rest is solar
-    and follows daylight. Peak demand stays under the thermal fleet, so the
-    dispatch clears whatever the solar profile does.
+    Half the fleet is thermal and available at every hour. The rest is solar
+    and follows the daylight profile. Peak demand is below the capacity of the
+    thermal fleet. The dispatch is feasible at every solar profile.
     """
     rng = np.random.default_rng(seed)
     n_thermal = max(1, n_generators // 2)
@@ -46,7 +45,7 @@ def profiles(n_generators, n_hours, seed=0):
 
 
 def inputs(n_generators, n_storage, n_hours, availability, demand, price):
-    """The corpus model's data, at this benchmark's size and price spread."""
+    """Return the corpus model data at this benchmark's size and cost spread."""
     gen_shape = (n_generators, n_hours)
     store_shape = (n_storage, n_hours)
     return {
@@ -65,14 +64,17 @@ def inputs(n_generators, n_storage, n_hours, availability, demand, price):
 
 
 def build(n_generators, n_storage, n_hours, availability, demand, price):
-    """The corpus's storage model, bound to this benchmark's data."""
+    """Return the corpus storage model over this benchmark's data."""
     return storage.definition().build(
         inputs(n_generators, n_storage, n_hours, availability, demand, price)
     )
 
 
 def measure(n_generators, n_storage, n_hours, solve=False, seed=0):
-    """Peak bytes and elapsed time of one build, assembly and optional solve."""
+    """Return the peak bytes and the elapsed time of one build and assembly.
+
+    `solve` adds the status, the objective and the solve time.
+    """
     availability, demand, price = profiles(n_generators, n_hours, seed)
 
     tracemalloc.start()
@@ -117,6 +119,6 @@ if __name__ == "__main__":
         )
     solved = measure(10, 2, 168, solve=True)
     print(
-        f"\na week on 10 generators and 2 batteries solves {solved['status']} "
-        f"at {solved['objective']:.1f} in {solved['solve_ms']:.1f} ms"
+        f"\n10 generators, 2 batteries, 168 hours: status {solved['status']}, "
+        f"objective {solved['objective']:.1f}, solve {solved['solve_ms']:.1f} ms"
     )

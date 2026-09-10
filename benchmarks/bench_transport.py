@@ -1,12 +1,11 @@
-"""Peak RAM and time of building the corpus's transport model at a size.
+"""Peak RAM and time of building the corpus transport model at a size.
 
-The model is `nimopt.models.transport`, so the benchmark and the documentation
-describe one definition rather than two that resemble each other. What differs
-here is the data: a network whose bands are drawn from every warehouse, where
-the corpus's own `data` leaves the last one unreached.
+The model is `nimopt.models.transport`. The benchmark and the documentation
+describe one definition. The data differs. This network draws each band from
+every warehouse. The corpus network excludes the last warehouse.
 
-The arc list and its labels are the input a columnar store hands over;
-everything nimopt does with them is measured.
+The arc list and its labels are the input of a columnar store. Every
+computation nimopt performs on them is measured.
 """
 
 import time
@@ -19,11 +18,14 @@ from nimopt.solvers import highs
 
 
 def network(n_plants, n_warehouses, arcs_per_plant, seed=0):
-    """One arc per row: each plant serves a band of `arcs_per_plant` warehouses."""
+    """Return the arc index of plant and warehouse positions, one column per arc.
+
+    Each plant serves a band of `arcs_per_plant` consecutive warehouses.
+    """
     if arcs_per_plant > n_warehouses:
         raise ValueError(
-            f"a plant serves {arcs_per_plant} of {n_warehouses} warehouses; a "
-            f"band cannot be wider than the set it is drawn from"
+            f"arcs_per_plant is {arcs_per_plant} and n_warehouses is "
+            f"{n_warehouses}; set arcs_per_plant to at most n_warehouses"
         )
     rng = np.random.default_rng(seed)
     offsets = rng.integers(0, n_warehouses, n_plants)
@@ -34,16 +36,16 @@ def network(n_plants, n_warehouses, arcs_per_plant, seed=0):
 
 
 def inputs(n_plants, n_warehouses, arcs_per_plant, arc_index, unit_cost, integer):
-    """The corpus model's data, over the given arc network."""
+    """Return the corpus model data over the given arc network."""
     plants = np.array([f"p{i}" for i in range(n_plants)])
     warehouses = np.array([f"w{i}" for i in range(n_warehouses)])
     labels = {"P": plants[arc_index[0]], "W": warehouses[arc_index[1]]}
 
-    # every warehouse takes one unit from each plant that can reach it, and a
-    # plant can serve every warehouse in its band, so the network clears
+    # supply per plant is the band width and demand per warehouse is at most
+    # that width, so the model is feasible
     per_plant = float(arcs_per_plant)
     served = np.bincount(arc_index[1], minlength=n_warehouses).astype(np.float64)
-    held = {
+    data = {
         "P": plants,
         "W": warehouses,
         "cost": (labels, unit_cost),
@@ -51,15 +53,15 @@ def inputs(n_plants, n_warehouses, arcs_per_plant, arc_index, unit_cost, integer
         "demand": np.minimum(served, per_plant),
     }
     if integer:
-        held["capacity"] = (labels, np.full(arc_index.shape[1], per_plant))
-    return held
+        data["capacity"] = (labels, np.full(arc_index.shape[1], per_plant))
+    return data
 
 
 def build(n_plants, n_warehouses, arcs_per_plant, arc_index, unit_cost, integer=False):
-    """The corpus's transport model, bound to this benchmark's network.
+    """Return the corpus transport model over this benchmark's network.
 
-    `integer` makes the flow an integer column bounded by a plant's band, so
-    the same network states a MILP rather than an LP.
+    `integer` makes the flow an integer column bounded by the band width. The
+    model is then a MILP.
     """
     return transport.definition(integer=integer).build(
         inputs(n_plants, n_warehouses, arcs_per_plant, arc_index, unit_cost, integer)
@@ -67,7 +69,10 @@ def build(n_plants, n_warehouses, arcs_per_plant, arc_index, unit_cost, integer=
 
 
 def measure(n_plants, n_warehouses, arcs_per_plant, solve=False, seed=0):
-    """Peak bytes and elapsed time of one build, assembly and optional solve."""
+    """Return the peak bytes and the elapsed time of one build and assembly.
+
+    `solve` adds the status, the objective and the solve time.
+    """
     arc_index = network(n_plants, n_warehouses, arcs_per_plant, seed)
     unit_cost = np.random.default_rng(seed + 1).uniform(1.0, 9.0, arc_index.shape[1])
 
@@ -117,6 +122,6 @@ if __name__ == "__main__":
         )
     solved = measure(200, 100, 10, solve=True)
     print(
-        f"\n200x100 solves {solved['status']} at {solved['objective']:.1f} "
-        f"in {solved['solve_ms']:.1f} ms"
+        f"\n200x100: status {solved['status']}, objective "
+        f"{solved['objective']:.1f}, solve {solved['solve_ms']:.1f} ms"
     )

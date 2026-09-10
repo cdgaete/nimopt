@@ -1,15 +1,15 @@
 """Measure what a model costs to build, solve and read back.
 
-A `Case` states how one builder expresses one model. `measure` runs its
-phases in this process; `run` runs one in a fresh child, which is what makes
-two libraries comparable — resident memory carries the import cost of
-whichever library is loaded, so each side is given a process of its own.
+A `Case` defines how one builder expresses one model. `measure` runs its
+phases in this process. `run` runs one case in a fresh child process.
+Resident memory includes the import cost of the library loaded, and each side
+is given a process of its own.
 
-Resident size is sampled rather than traced: `tracemalloc` sees only what
-passes through Python's allocator, and two libraries that reach memory by
-different routes would be compared on the route rather than on the model.
-The traced peak is reported beside it for the build phase, in the units the
-single-library benchmarks use.
+Resident size is sampled and not traced. `tracemalloc` records only the
+allocations of the Python allocator. Two libraries allocating by different
+routes would be compared on the route and not on the model. The traced peak
+is reported beside the sampled peak for the build phase, in the units of the
+single-library benchmarks.
 """
 
 import json
@@ -35,9 +35,9 @@ _RESULT = "RESULT "
 class Case:
     """One model, expressed by one builder, as the phases a benchmark measures.
 
-    `build` returns the state the later phases work on, `describe` states the
-    problem's shape from it, `solve` returns the objective, and `read` returns
-    a summary of the primals and duals read back onto their labels.
+    `build` returns the value the later phases use. `describe` returns the
+    shape of the problem. `solve` returns the objective. `read` returns a
+    summary of the primals and duals read back onto their labels.
     """
 
     build: Callable[[], Any]
@@ -51,13 +51,13 @@ def _rss_mb():
 
 
 class _Watermark:
-    """Resident size through a phase, and the highest it reached.
+    """Resident size through a phase, and the highest sample.
 
-    Sampling is fast enough that a peak between two coarser readings is not
-    missed. The trace is kept at a coarser cadence than the sampling — a
-    reading every `every` seconds, and one whenever the size moves by more
-    than `step` — so an hour-long solve leaves a curve rather than millions
-    of rows, while a peak that lasts a millisecond is still recorded.
+    The sampling interval is short enough to record a peak between two
+    coarser readings. The trace is written at a coarser cadence than the
+    sampling: one reading every `every` seconds, and one whenever the size
+    changes by more than `step`. An hour-long solve produces a curve of a few
+    thousand rows, and a peak of one millisecond is recorded.
     """
 
     def __init__(self, interval=0.0005, every=0.25, step=1.0):
@@ -105,9 +105,9 @@ class _Watermark:
 def _phase(got, name, work, traces=None):
     """Run one phase, recording resident size through it and its wall time.
 
-    The trace is where the peak is read from rather than assumed: a solver
-    that holds its factorization for a moment and frees it leaves a curve
-    that says so, and a single number at the end would not.
+    The peak is read from the trace. A solver that allocates a factorization
+    and frees it produces a curve. A single number at the end of the phase
+    does not report that allocation.
     """
     started = time.perf_counter()
     with _Watermark() as mark:
@@ -122,7 +122,7 @@ def _phase(got, name, work, traces=None):
 
 
 def write_trace(path, trace):
-    """One phase's resident size through time, as seconds and megabytes."""
+    """Write the resident size of one phase over time, in seconds and megabytes."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as out:
         out.write("seconds,rss_mb\n")
@@ -131,15 +131,14 @@ def write_trace(path, trace):
 
 
 def measure(case, traced=True, solve=True, trace_dir=None, label="", on_phase=None):
-    """Build, solve and read back one case, reporting what each phase cost.
+    """Build, solve and read back one case, reporting the cost of each phase.
 
     `solve=False` measures the build alone. A problem too large to solve
-    still states what it cost to build, and reports no objective rather than
-    a number it did not reach.
+    reports the cost of the build and no objective.
 
-    A phase's trace is written and `on_phase(name, got)` is called as soon
-    as that phase ends, so a run stopped during a long solve leaves the
-    build's numbers and curve behind it.
+    A phase trace is written and `on_phase(name, got)` is called when that
+    phase ends. A run stopped during a long solve retains the numbers and the
+    curve of the build.
     """
     got = {}
     traces = {}
@@ -151,31 +150,30 @@ def measure(case, traced=True, solve=True, trace_dir=None, label="", on_phase=No
         if on_phase is not None:
             on_phase(name, got)
 
-    state = _phase(got, "build", case.build, traces)
-    got.update(case.describe(state))
+    built = _phase(got, "build", case.build, traces)
+    got.update(case.describe(built))
     done("build")
     if solve:
-        got["objective"] = _phase(got, "solve", lambda: case.solve(state), traces)
+        got["objective"] = _phase(got, "solve", lambda: case.solve(built), traces)
         done("solve")
-        got.update(_phase(got, "read", lambda: case.read(state), traces))
+        got.update(_phase(got, "read", lambda: case.read(built), traces))
         done("read")
-    # getrusage counts kibibytes, so a megabyte is 1024 of them. Dividing by
-    # a thousand instead puts the process peak below phases it contains.
+    # getrusage counts kibibytes, so a megabyte is 1024 of them
     peak_kib = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     got["process_rss_mb"] = peak_kib * 1024 / 1e6
-    state = None
+    built = None
     if traced:
         tracemalloc.start()
-        traced_state = case.build()
+        traced_built = case.build()
         _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
-        del traced_state
+        del traced_built
         got["build_traced_mb"] = peak / 1e6
     return got
 
 
 def run(case, side, sizes, traced=True, solve=True, trace_dir=None):
-    """Measure one case in a fresh process, so only one library is loaded."""
+    """Measure one case in a fresh process with one library loaded."""
     label = "-".join([case, side] + [str(v) for v in sizes.values()])
     spec = json.dumps(
         {
@@ -197,13 +195,15 @@ def run(case, side, sizes, traced=True, solve=True, trace_dir=None):
     )
     if done.returncode != 0:
         raise RuntimeError(
-            f"measuring {case} on {side} at {sizes} failed:\n{done.stderr.strip()}"
+            f"measuring {case} on {side} at {sizes} failed; read the error "
+            f"below\n{done.stderr.strip()}"
         )
     for line in done.stdout.splitlines():
         if line.startswith(_RESULT):
             return json.loads(line[len(_RESULT) :])
     raise RuntimeError(
-        f"measuring {case} on {side} at {sizes} printed no result:\n{done.stdout}"
+        f"measuring {case} on {side} at {sizes} printed no result; read the "
+        f"output below\n{done.stdout}"
     )
 
 

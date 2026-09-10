@@ -1,13 +1,13 @@
-"""A PyPSA network as plain arrays, and what its own model carries.
+"""A PyPSA network as plain arrays, and the shape of the PyPSA model.
 
 `nimopt` does not import PyPSA. This module reads a network once and writes
-two files beside it: the arrays a restatement is built from, and the rows,
-columns and nonzeros PyPSA's model holds per constraint family, which is what
-the restatement is checked against.
+two files beside it: the arrays the nimopt model is built from, and the rows,
+columns and nonzeros of the PyPSA model per constraint family. The nimopt
+model is checked against that reference.
 
-The cycle basis is PyPSA's own rather than recomputed. A different basis spans
-the same space and states different rows, so Kirchhoff's law could not be
-compared against a basis chosen here.
+The cycle basis is the PyPSA basis and is not recomputed. A different basis
+spans the same space and gives different rows. A basis chosen here would not
+compare against the Kirchhoff law rows of PyPSA.
 """
 
 import json
@@ -106,11 +106,11 @@ TIME_VARYING = {
 
 
 def _family_nnz(constraint):
-    """Nonzeros a family contributes, with repeated terms summed as one.
+    """Return the nonzeros of a family, with repeated terms summed as one.
 
-    A row naming one variable twice holds one nonzero in the matrix, so the
-    terms are grouped before they are counted, and a term whose coefficients
-    cancel holds none.
+    A row that refers to one variable twice has one nonzero in the matrix. The
+    terms are grouped before they are counted. A term whose coefficients cancel
+    has no nonzero.
     """
     flat = constraint.flat
     frame = pd.DataFrame(
@@ -121,7 +121,7 @@ def _family_nnz(constraint):
 
 
 def _cycles(network):
-    """The `(line, cycle)` basis PyPSA states Kirchhoff's law over."""
+    """Return the `(line, cycle)` basis of the Kirchhoff law rows of PyPSA."""
     lines = list(network.lines.index)
     blocks = []
     for sub in network.sub_networks.obj:
@@ -139,11 +139,10 @@ def _cycles(network):
 
 
 def _column(frame, name):
-    """One component column as an array, strings kept as labels.
+    """Return one component column as an array, with strings kept as labels.
 
-    A component class that does not carry the column answers an empty label
-    for every member, because a network whose links reach two buses states
-    nothing at the third rather than failing to be read.
+    A component class without the column returns an empty label for every
+    member. A network whose links connect two buses has no `bus2` column.
     """
     if name not in frame.columns:
         return np.full(len(frame), "", dtype=str)
@@ -156,10 +155,10 @@ def _column(frame, name):
 
 
 def _grid(network, component, attr):
-    """A time-varying attribute as `(component, snapshot)`, and its names.
+    """Return a time-varying attribute as `(component, snapshot)` and its names.
 
-    An attribute no member varies over answers no names, and the static
-    column stands for every member instead.
+    An attribute that varies for no member returns no names. The static column
+    applies to every member.
     """
     frame = getattr(network, component + "_t")[attr]
     names = np.array(list(frame.columns), dtype=str)
@@ -167,19 +166,20 @@ def _grid(network, component, attr):
 
 
 def _put(out, key, value):
-    """Store one array, refusing a key another array already holds.
+    """Store one array under `key`, and raise for a key already present.
 
-    A static column and a time-varying grid can carry the same attribute
-    name, and the grid silently replacing the column would leave a component
-    without the value it is stated over.
+    A static column and a time-varying grid can have the same attribute name.
+    Replacing the column with the grid would remove the value of a component.
     """
     if key in out:
-        raise ValueError(f"two arrays claim the key {key!r}")
+        raise ValueError(
+            f"the key {key!r} is already present; write the array under another key"
+        )
     out[key] = value
 
 
 def arrays(network):
-    """Every array a restatement of `network` is built from."""
+    """Return every array the nimopt model of `network` is built from."""
     out = {
         "snapshots": np.arange(len(network.snapshots), dtype=np.int64),
         "buses": np.array(list(network.buses.index), dtype=str),
@@ -213,7 +213,7 @@ def arrays(network):
 
 
 def _reference(network, model):
-    """What PyPSA's own model carries, overall and per constraint family."""
+    """Return the shape of the PyPSA model, overall and per constraint family."""
     matrix = model.matrices.A
     families = {
         name: {
@@ -234,10 +234,10 @@ def _reference(network, model):
 def extract(
     path, out_dir, stem="elec_s_10", solve=True, snapshots=None, reference=True
 ):
-    """Write the arrays and the reference PyPSA's model states for `path`.
+    """Write the arrays and the PyPSA reference for `path`.
 
-    `snapshots` takes the first that many, so a reference can be written at a
-    horizon that fits where the whole one would not.
+    `snapshots` takes the first N snapshots. A reference is then written at a
+    shorter horizon.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -256,7 +256,10 @@ def extract(
             solver_name="highs", log_to_console=False
         )
         if status != "ok" or condition != "optimal":
-            raise RuntimeError(f"the reference network solved {status}/{condition}")
+            raise RuntimeError(
+                f"the reference network solved {status}/{condition}; solve a "
+                f"network that returns ok/optimal"
+            )
         got["objective"] = float(network.objective)
         got["constant"] = float(network.objective_constant)
 

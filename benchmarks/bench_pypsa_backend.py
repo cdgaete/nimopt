@@ -1,14 +1,14 @@
-"""The European network through PyPSA itself, on either optimisation backend.
+"""The European network through PyPSA itself, on either optimization backend.
 
-`bench_pypsa` compares nimopt's restatement of the network with PyPSA's linopy
-model. This module compares the two paths a PyPSA user runs: the same
-network, the same `n.optimize` accessor, and the backend switched between
-`nimopt` and `linopy`. Each phase is the one PyPSA runs — building the model,
-handing it to the solver, and assigning the solution and duals back onto the
-network — measured with `compare.measure`, which samples resident size
-through each phase and writes the curve beside the numbers.
+`bench_pypsa` compares the nimopt model of the network with the PyPSA linopy
+model. This module compares the two paths a PyPSA user runs: the same network,
+the same `n.optimize` accessor, and the backend switched between `nimopt` and
+`linopy`. The phases are the phases PyPSA runs: building the model, passing it
+to the solver, and assigning the solution and the duals back onto the network.
+`compare.measure` samples resident size through each phase and writes the
+curve beside the numbers.
 
-Run one backend per process, so the resident figures carry one library:
+Run one backend per process, and the resident figures then cover one library:
 
     python benchmarks/bench_pypsa_backend.py nimopt
     python benchmarks/bench_pypsa_backend.py linopy --snapshots 24
@@ -16,12 +16,12 @@ Run one backend per process, so the resident figures carry one library:
     python benchmarks/bench_pypsa_backend.py nimopt --solver mosek --threads 8
     python benchmarks/bench_pypsa_backend.py nimopt --method barrier --crossover off
 
-`--solver` names the adapter the nimopt backend hands the matrix to; `--method`
-speaks nimopt's vocabulary and reaches whichever solver runs. The linopy
-backend takes HiGHS alone here, because its method names are HiGHS's.
+`--solver` selects the adapter the nimopt backend passes the matrix to.
+`--method` uses the nimopt option names and applies to every solver. The
+linopy backend runs HiGHS alone here, and its method names are the HiGHS names.
 
-The network's 2,920 three-hourly snapshots cover 8,760 hours; `--snapshots`
-takes the first that many, and the default is every one of them.
+The 2,920 three-hourly snapshots of the network cover 8,760 hours.
+`--snapshots` takes the first N, and the default is every snapshot.
 """
 
 import argparse
@@ -45,10 +45,10 @@ LINOPY_METHOD = {"choose": "choose", "simplex": "simplex", "barrier": "ipm"}
 
 
 def load(backend, snapshots, network=NETWORK):
-    """The network with its horizon set, ready for either backend to build.
+    """Return the network with its horizon set, for either backend to build.
 
-    Reading the file and resolving the topology happen here, before any
-    phase is measured, so the build phase measures building alone.
+    The file is read and the topology is resolved here, before any phase is
+    measured. The build phase then measures building alone.
     """
     import pypsa
 
@@ -67,7 +67,7 @@ def load(backend, snapshots, network=NETWORK):
 
 
 def _dense_columns(columns_of, cols, snapshots):
-    """Columns reaching at least one row per snapshot: the capacity columns."""
+    """Return the number of columns with at least one nonzero per snapshot."""
     per_column = np.bincount(columns_of, minlength=int(cols))
     return int((per_column >= snapshots).sum())
 
@@ -82,11 +82,10 @@ def case(
     solver="highs",
     crossover=None,
 ):
-    """PyPSA's three phases on `backend`, as the harness measures them.
+    """Return the three PyPSA phases on `backend`, as the harness measures them.
 
-    A solve stopped at `time_limit` seconds still reports its phase: the
-    objective is then `NaN`, the status is carried in the result, and the
-    read phase is skipped, so a run bounded for its peak leaves its numbers.
+    A solve stopped at `time_limit` seconds reports its phase. The objective is
+    then `NaN`, the result contains the status, and the read phase is skipped.
     """
     snapshots = len(n.snapshots)
     options = {}
@@ -104,10 +103,13 @@ def case(
         if solver != "highs":
             raise ValueError(f"the linopy backend runs HiGHS here; got {solver!r}")
         if crossover is not None:
-            raise ValueError("crossover is set through the nimopt backend here")
-        # io_api="direct" hands the matrix to the solver in memory; the
-        # default writes an LP file, which measures the disk rather than the
-        # solver and reaches gigabytes at the whole horizon
+            raise ValueError(
+                "crossover is not supported by the linopy backend; run the "
+                "nimopt backend"
+            )
+        # io_api="direct" passes the matrix to the solver in memory; the
+        # default writes an LP file of several gigabytes at the whole horizon,
+        # and that measures the disk
         options["io_api"] = "direct"
         options["log_to_console"] = log
         if method is not None:
@@ -149,22 +151,22 @@ def case(
             }
         return {"model": model, "shape": shape}
 
-    def describe(state):
-        return state["shape"]
+    def describe(built):
+        return built["shape"]
 
-    def solve(state):
-        status, condition = state["model"].solve(solver_name=solver, **options)
-        state["status"] = f"{status}, {condition}"
-        # linopy reports a time limit as "ok" and hands the iterate over;
-        # only an optimum is an answer here, on either side
+    def solve(built):
+        status, condition = built["model"].solve(solver_name=solver, **options)
+        built["status"] = f"{status}, {condition}"
+        # linopy reports a time limit as "ok" and returns the iterate; only
+        # status optimal is accepted here, on either side
         if condition != "optimal":
-            print(f"solve stopped: {state['status']}", flush=True)
+            print(f"solve stopped: {built['status']}", flush=True)
             return float("nan")
-        return float(state["model"].objective.value)
+        return float(built["model"].objective.value)
 
-    def read(state):
-        if not state["status"].endswith("optimal"):
-            return {"status": state["status"]}
+    def read(built):
+        if not built["status"].endswith("optimal"):
+            return {"status": built["status"]}
         n.optimize.assign_solution()
         n.optimize.assign_duals()
         n.optimize.post_processing()
@@ -172,14 +174,14 @@ def case(
             "primal_sum": float(np.nansum(n.c.generators.dynamic.p.to_numpy())),
             "dual_sum": float(np.nansum(n.c.buses.dynamic.marginal_price.to_numpy())),
             "network_objective": float(n.objective),
-            "status": state["status"],
+            "status": built["status"],
         }
 
     return Case(build=build, describe=describe, solve=solve, read=read)
 
 
 def report_phase(phase, got):
-    """One phase's time and resident size, printed as soon as it ends."""
+    """Print the time and the resident size of one phase."""
     print(
         f"{phase:6s} {got[f'{phase}_ms'] / 1e3:10.1f} s   "
         f"+{got[f'{phase}_rss_mb']:8.1f} MB over its baseline   "
@@ -198,7 +200,7 @@ def report_phase(phase, got):
 
 
 def report(got):
-    """The answer and the process peak, once every phase has run."""
+    """Print the status, the objective and the process peak."""
     if "status" in got:
         print(f"status {got['status']}")
     if "objective" in got:
@@ -218,7 +220,7 @@ def main(argv=None):
     parser.add_argument(
         "--time-limit", type=float, default=None, help="seconds the solver may run"
     )
-    parser.add_argument("--log", action="store_true", help="let the solver log")
+    parser.add_argument("--log", action="store_true", help="print the solver log")
     parser.add_argument("--traced", action="store_true", help="add a tracemalloc build")
     parser.add_argument("--trace-dir", type=Path, default=TRACES)
     parser.add_argument("--network", type=Path, default=NETWORK)

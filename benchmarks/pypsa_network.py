@@ -1,11 +1,11 @@
-"""A PyPSA network restated in nimopt, from the arrays it was extracted to.
+"""A PyPSA network as a nimopt model, built from the extracted arrays.
 
-PyPSA leaves every variable free and states each operating limit as a row, so
-the columns here carry no finite bound either. The one exception is a storage
-unit's spill, which PyPSA bounds by the inflow and states no row for.
+PyPSA declares every variable free and declares each operating limit as a row.
+The columns here have no finite bound. The exception is the spill of a storage
+unit: PyPSA bounds it by the inflow and declares no row.
 
-The variables carry PyPSA's own names, so a family checked here and the family
-it is checked against are reached by the same key.
+The variables take the PyPSA names. A family checked here and the family it is
+checked against have the same key.
 """
 
 import numpy as np
@@ -16,14 +16,16 @@ FREE = {"lower": -np.inf, "upper": np.inf}
 
 
 def _first_hours(arrays, hours):
-    """Every array cut to the first `hours` snapshots.
+    """Return every array cut to the first `hours` snapshots.
 
-    A grid over the snapshots is its last axis, a weighting is one value an
-    hour, and everything else stands as it is.
+    A grid over the snapshots has the snapshots on its last axis. A weighting
+    has one value per hour. Every other array is returned unchanged.
     """
-    held = len(arrays["snapshots"])
-    if hours > held:
-        raise ValueError(f"the extraction carries {held} snapshots; {hours} asked for")
+    available = len(arrays["snapshots"])
+    if hours > available:
+        raise ValueError(
+            f"the extraction contains {available} snapshots; pass at most {available}"
+        )
     cut = {}
     for name, value in arrays.items():
         if name == "snapshots" or name.startswith("weighting_"):
@@ -44,11 +46,10 @@ NOMINAL = (
 
 
 class Data:
-    """The arrays a network was extracted to, reached by name.
+    """The extracted arrays of a network, read by attribute name.
 
-    `snapshots` takes the first that many hours, so one extraction serves
-    every horizon a sweep measures: each grid over the snapshots is cut, and
-    so is every weighting.
+    `snapshots` takes the first N hours. One extraction serves every horizon a
+    sweep measures. The snapshot grids and the weightings are cut.
     """
 
     def __init__(self, path, snapshots=None):
@@ -61,14 +62,17 @@ class Data:
         try:
             return self.__dict__["_arrays"][name]
         except KeyError:
-            raise AttributeError(f"the extraction carries no {name!r}") from None
+            raise AttributeError(
+                f"the extraction contains no array {name!r}; write it with "
+                f"pypsa_reference.extract"
+            ) from None
 
     def __contains__(self, name):
         return name in self._arrays
 
 
 def sets(data):
-    """The model's sets, keyed by the letter the restatement names them by."""
+    """Return the model sets, keyed by the letter of each dimension."""
     return {
         "B": Set("B", data.buses),
         "G": Set("G", data.generators_names),
@@ -82,7 +86,7 @@ def sets(data):
 
 
 def align(grid, names, order):
-    """A `(component, snapshot)` grid rearranged onto `order`, missing as zero."""
+    """Return a `(component, snapshot)` grid on `order`, with missing as zero."""
     at = {name: row for row, name in enumerate(names)}
     out = np.zeros((len(order), grid.shape[1]))
     for row, name in enumerate(order):
@@ -92,12 +96,12 @@ def align(grid, names, order):
 
 
 def extendable(dim, names, flag):
-    """The members a nominal capacity is a column for."""
+    """Return the members with a nominal capacity column."""
     return subset((dim,), {dim.name: names[flag.astype(bool)]})
 
 
 def columns(model, data, dims):
-    """Declare every variable PyPSA states, by its own name."""
+    """Declare every variable of the PyPSA model, under the PyPSA name."""
     made = {}
     nominal = (
         ("Generator-p_nom", "G", "generators", "p_nom_extendable"),
@@ -130,7 +134,7 @@ def columns(model, data, dims):
         data.storage_units_inflow_t_names,
         data.storage_units_names,
     )
-    # a unit no water reaches spills nothing, so it is no column
+    # a unit with no inflow has no spill column
     spilling = np.abs(inflow).sum(axis=1) > 0.0
     made["StorageUnit-spill"] = model.var(
         "StorageUnit-spill",
@@ -149,16 +153,16 @@ def columns(model, data, dims):
 
 
 def over_members(name, dim, names, values):
-    """A parameter over the members carrying a finite value."""
+    """Return a parameter over the members with a finite value."""
     live = np.isfinite(values)
     return Param.from_long(name, (dim,), {dim.name: names[live]}, values[live])
 
 
 def nominal_bounds(model, data, dims, made):
-    """The rows a nominal capacity is bounded by, where the bound is finite.
+    """Declare the rows that bound a nominal capacity, where it is given.
 
-    A component whose nominal maximum is infinite is bounded on one side
-    only, and PyPSA states no row for the other.
+    A component with an infinite nominal maximum is bounded on one side only.
+    PyPSA declares no row for the other side.
     """
     for component, label, nom, key in NOMINAL:
         dim = dims[key]
@@ -178,7 +182,7 @@ def nominal_bounds(model, data, dims, made):
 
 
 def over_grid(name, dims, keys, names, grid, keep):
-    """A parameter over the kept members and every snapshot."""
+    """Return a parameter over the kept members and every snapshot."""
     rows = np.flatnonzero(keep)
     member = np.repeat(names[rows], grid.shape[1])
     snapshot = np.tile(np.arange(grid.shape[1]), rows.size)
@@ -189,11 +193,11 @@ def over_grid(name, dims, keys, names, grid, keep):
 
 
 def fixed_operational(model, data, dims, made):
-    """The rows a component of fixed capacity operates within.
+    """Declare the rows that bound a component of fixed capacity.
 
-    PyPSA states a row for each side of each fixed component, so the limit is
-    a right-hand side rather than a bound and the row exists wherever the
-    component's capacity is not a variable.
+    PyPSA declares a row for each side of each fixed component. The limit is a
+    right-hand side and not a bound. The row exists where the capacity of the
+    component is not a variable.
     """
     hours = len(data.snapshots)
     ones = np.ones(hours)
@@ -243,7 +247,7 @@ def fixed_operational(model, data, dims, made):
 
 
 def member_hours(dim, hours_dim, names, keep, hours):
-    """The members a family states rows for, crossed with every snapshot."""
+    """Return the members with rows in a family, crossed with every snapshot."""
     rows = np.flatnonzero(keep)
     member = np.repeat(names[rows], hours)
     snapshot = np.tile(np.arange(hours), rows.size)
@@ -251,11 +255,11 @@ def member_hours(dim, hours_dim, names, keep, hours):
 
 
 def per_unit(name, dim, hours_dim, names, grid, keep):
-    """A per-unit coefficient over the kept members, its zeros absent.
+    """Return a per-unit coefficient over the kept members, with no zeros.
 
-    A zero per-unit value states no capacity term, so the entry is absent
-    rather than stored: an absent coefficient contributes no nonzero, and a
-    stored zero would contribute one PyPSA does not hold.
+    A zero per-unit value declares no capacity term. An absent coefficient
+    contributes no nonzero. A stored zero would contribute one nonzero that
+    the PyPSA matrix does not have.
     """
     rows = np.flatnonzero(keep)
     member = np.repeat(names[rows], grid.shape[1])
@@ -271,11 +275,10 @@ def per_unit(name, dim, hours_dim, names, grid, keep):
 
 
 def extendable_operational(model, data, dims, made):
-    """The rows an extendable component operates within.
+    """Declare the rows that bound an extendable component.
 
-    Each row bounds the operating variable by a per-unit share of the
-    capacity it is a column for, so the capacity's column reaches every hour
-    that reads it.
+    Each row bounds the operating variable by a per-unit share of the capacity
+    column. The capacity column appears in the row of every hour.
     """
     hours = len(data.snapshots)
     time = dims["T"]
@@ -332,26 +335,24 @@ BUS_COLUMNS = (
 
 
 def attached(data):
-    """Which buses carry a component, as a mask over the bus set.
+    """Return a mask over the bus set of the buses with a component.
 
-    A bus nothing sits on states no balance, because there is nothing there
-    to balance.
+    A bus without a component has no balance row.
     """
-    carrying = set()
+    attached_buses = set()
     for column in BUS_COLUMNS:
         labels = getattr(data, column, None)
         if labels is None:
             continue
-        carrying |= {str(name) for name in labels if str(name) != ""}
-    return np.array([str(name) in carrying for name in data.buses])
+        attached_buses |= {str(name) for name in labels if str(name) != ""}
+    return np.array([str(name) in attached_buses for name in data.buses])
 
 
 def profile(data, component, attr, names, hours):
-    """A per-unit attribute over `(member, snapshot)`.
+    """Return a per-unit attribute over `(member, snapshot)`.
 
-    A member the network varies over the snapshots takes its own row; every
-    other takes its static value across the horizon. Reading the static
-    column alone would give the right nonzeros and the wrong numbers.
+    A member the network varies over the snapshots takes its own row. Every
+    other member takes its static value across the horizon.
     """
     grid = np.outer(getattr(data, f"{component}_{attr}"), np.ones(hours))
     varying = getattr(data, f"{component}_{attr}_t", None)
@@ -364,16 +365,16 @@ def profile(data, component, attr, names, hours):
 
 
 def varies(data, component, attr):
-    """The members whose attribute the network varies over the snapshots."""
+    """Return the members whose attribute varies over the snapshots."""
     return {str(n) for n in getattr(data, f"{component}_{attr}_t_names", [])}
 
 
 def link_arrivals(data, steady=False):
-    """Each bus a link arrives at, with the amount reaching it.
+    """Return each bus a link arrives at, with the amount delivered to it.
 
-    A link names `bus1` and may name `bus2` onward, each with an efficiency
-    of its own. A network whose links reach two buses carries empty labels
-    beyond that and places nothing there.
+    A link has `bus1` and can have `bus2` and beyond, each with its own
+    efficiency. A link without one of those buses has an empty label there and
+    contributes no term.
     """
     steady_only = varies(data, "links", "efficiency") if steady else set()
     keep = np.array([str(n) not in steady_only for n in data.links_names])
@@ -388,19 +389,19 @@ def link_arrivals(data, steady=False):
 
 
 def incidence(name, bus_dim, dim, at_bus, members, values):
-    """A coefficient placing each member's column in the bus rows reading it."""
+    """Return a coefficient placing each member column in its bus rows."""
     return Param.from_long(
         name, (bus_dim, dim), {bus_dim.name: at_bus, dim.name: members}, values
     )
 
 
 def _branch_incidence(name, bus_dim, dim, names, leaves, arrives):
-    """A branch leaves one bus and arrives at each of `arrives`.
+    """Return the incidence of a branch leaving one bus and arriving at others.
 
-    `arrives` pairs a bus label per branch with the per-unit amount reaching
-    it, so a link naming a third, fourth and fifth bus places a term at each.
-    A branch that does not name one of them carries an empty label there and
-    places nothing.
+    `arrives` pairs a bus label per branch with the per-unit amount delivered
+    to it. A link with a third, fourth and fifth bus contributes a term at
+    each. A branch without one of those buses has an empty label there and
+    contributes no term.
     """
     at_bus = [leaves]
     member = [names]
@@ -421,9 +422,9 @@ def _branch_incidence(name, bus_dim, dim, names, leaves, arrives):
 
 
 def _hourly_arrivals(data, bus_dim, dim, time_dim):
-    """The arrivals of the links whose efficiency the network varies.
+    """Return the arrivals of the links whose efficiency varies by hour.
 
-    Those alone need a coefficient per hour; the rest place one entry each.
+    Those links require a coefficient per hour. Every other link has one entry.
     """
     hours = len(data.snapshots)
     moving = varies(data, "links", "efficiency")
@@ -454,11 +455,10 @@ def _hourly_arrivals(data, bus_dim, dim, time_dim):
 
 
 def _load_grid(data, buses):
-    """Every bus's load over the snapshots, zero where no load sits.
+    """Return the load of every bus over the snapshots, zero where none exists.
 
-    A load the network states once stands at that value across the horizon,
-    and one it varies takes its own row. Reading the varying ones alone would
-    drop every load stated as a single number.
+    A load given once applies at that value across the horizon. A load that
+    varies over the snapshots takes its own row.
     """
     hours = len(data.snapshots)
     per_load = profile(data, "loads", "p_set", data.loads_names, hours)
@@ -470,10 +470,10 @@ def _load_grid(data, buses):
 
 
 def network_rows(model, data, dims, made):
-    """The rows a network states: a balance at every bus, a law on every cycle.
+    """Declare a balance row at every bus and a Kirchhoff row on every cycle.
 
-    The balance is stated over every bus and hour, because no bus carries
-    every component and a bus a term does not reach still balances.
+    The balance is declared over every bus and hour. No bus has every
+    component, and a bus without a term has a row.
     """
     bus, time = dims["B"], dims["T"]
     ones_g = np.ones(len(data.generators_names))
@@ -544,11 +544,11 @@ def network_rows(model, data, dims, made):
     )
 
 
-def _carried(model, name, dim, time, made, variable, values, cyclic, names):
-    """The terms reading the hour before, cyclic where the member is.
+def _lagged(model, name, dim, time, made, variable, values, cyclic, names):
+    """Return the terms that read the previous hour, cyclic where declared.
 
-    A member the network does not cycle has no predecessor at the first hour,
-    so its term is lagged plainly and states nothing there.
+    A member that does not cycle has no predecessor at the first hour. Its
+    term is lagged without the cyclic rule and is absent at that hour.
     """
     parts = []
     for kept, lag in ((cyclic, time.cyclic - 1), (~cyclic, time - 1)):
@@ -561,12 +561,12 @@ def _carried(model, name, dim, time, made, variable, values, cyclic, names):
 
 
 def temporal_rows(model, data, dims, made):
-    """The rows a state of charge carries from one hour to the next.
+    """Declare the rows that couple stored energy between consecutive hours.
 
-    A cyclic member reads the last hour at the first; one that does not cycle
-    states no term there. Each coefficient carries its own sign, and a term
-    whose coefficient is absent contributes nothing, so the rows are stated
-    rather than derived from the terms that reach them.
+    A cyclic member reads the last hour at the first. A member that does not
+    cycle has no term there. Each coefficient has its own sign. A term with an
+    absent coefficient contributes no nonzero. The rows are declared and are
+    not derived from the terms.
     """
     time = dims["T"]
     hours = len(data.snapshots)
@@ -581,7 +581,7 @@ def temporal_rows(model, data, dims, made):
     now = grid("store_now", store, np.full((n_stores, hours), -1.0))
     power = grid("store_power", store, np.outer(-np.ones(n_stores), weight))
     body = now[store, time] * made["Store-e"][store, time]
-    for part in _carried(
+    for part in _lagged(
         model,
         "store_before",
         store,
@@ -618,7 +618,7 @@ def temporal_rows(model, data, dims, made):
         data.storage_units_inflow_t_names,
         names,
     )
-    # a unit no water reaches spills nothing, so it states no spill term
+    # a unit with no inflow has no spill term
     spilling = np.abs(inflow).sum(axis=1) > 0.0
     spilled = per_unit(
         "su_spill", unit, time, names, np.outer(-np.ones(count), weight), spilling
@@ -626,7 +626,7 @@ def temporal_rows(model, data, dims, made):
     body = dispatch[unit, time] * made["StorageUnit-p_dispatch"][unit, time]
     body = body + charging[unit, time] * made["StorageUnit-p_store"][unit, time]
     body = body + soc_now[unit, time] * made["StorageUnit-state_of_charge"][unit, time]
-    for part in _carried(
+    for part in _lagged(
         model,
         "su_before",
         unit,
@@ -648,10 +648,10 @@ def temporal_rows(model, data, dims, made):
 
 
 def emission_rate(data):
-    """Each generator's emissions per unit of output, zero where it emits none.
+    """Return the emissions per unit of output, zero for a carrier that emits none.
 
-    A carrier that emits nothing contributes no term, so the rate is left at
-    zero there rather than divided by an efficiency it does not need.
+    A carrier with no emissions has a rate of zero. The efficiency divides the
+    rate only where the carrier emits.
     """
     carriers = list(data.carriers)
     per_carrier = {name: data.carriers_co2[i] for i, name in enumerate(carriers)}
@@ -663,9 +663,9 @@ def emission_rate(data):
 
 
 def energy_sum_rows(model, data, dims, made):
-    """The rows a generator's output over the whole horizon is bounded by.
+    """Declare the rows that bound the output of a generator over the horizon.
 
-    A row exists where the bound is finite, as a nominal bound row does.
+    A row exists where the bound is finite, as for a nominal bound row.
     """
     generator, time = dims["G"], dims["T"]
     names = data.generators_names
@@ -689,7 +689,7 @@ def energy_sum_rows(model, data, dims, made):
 
 
 def _primary_energy(model, data, dims, made, label, carrier, sense, constant):
-    """A limit on what burning a carrier emits, over everything that burns it."""
+    """Declare a limit on the emissions of a carrier, over every generator."""
     generator, time = dims["G"], dims["T"]
     grid = np.outer(emission_rate(data), data.weighting_generators)
     keep = np.ones(len(data.generators_names), dtype=bool)
@@ -700,12 +700,13 @@ def _primary_energy(model, data, dims, made, label, carrier, sense, constant):
 
 
 def _operational_limit(model, data, dims, made, label, carrier, sense, constant):
-    """A limit on what a carrier's stores hold when the horizon ends."""
+    """Declare a limit on the stored energy of a carrier at the last hour."""
     store, time = dims["E"], dims["T"]
     live = np.flatnonzero(data.stores_carrier == carrier)
     if live.size == 0:
         raise ValueError(
-            f"{label!r} limits carrier {carrier!r}, which no store carries"
+            f"{label!r} limits carrier {carrier!r} and no store has that "
+            f"carrier; remove the limit or add a store"
         )
     last = len(data.snapshots) - 1
     coefficient = Param.from_long(
@@ -717,12 +718,12 @@ def _operational_limit(model, data, dims, made, label, carrier, sense, constant)
         },
         -np.ones(live.size),
     )
-    held = made["Store-e"]
-    body = Sum(store, time, coefficient[store, time] * held[store, time])
+    stored = made["Store-e"]
+    body = Sum(store, time, coefficient[store, time] * stored[store, time])
     model.constraint(label, body >= constant if sense == ">=" else body <= constant)
 
 
-# a carbon budget PyPSA carries on a store of its own states no row here
+# a carbon budget PyPSA models as a store declares no row here
 GLOBAL_TYPES = {
     "primary_energy": _primary_energy,
     "operational_limit": _operational_limit,
@@ -731,7 +732,7 @@ GLOBAL_TYPES = {
 
 
 def global_rows(model, data, dims, made):
-    """The rows the network's own global constraints state."""
+    """Declare the rows of the global constraints of the network."""
     for name, kind, carrier, sense, constant in zip(
         data.global_names,
         data.global_type,
@@ -741,14 +742,14 @@ def global_rows(model, data, dims, made):
     ):
         if kind not in GLOBAL_TYPES:
             raise ValueError(
-                f"global constraint {name!r} is of type {kind!r}, which this "
-                f"restatement does not state"
+                f"global constraint {name!r} has type {kind!r}; add a handler "
+                f"for that type to GLOBAL_TYPES"
             )
-        state = GLOBAL_TYPES[kind]
-        if state is None:
+        declare = GLOBAL_TYPES[kind]
+        if declare is None:
             continue
         label = f"GlobalConstraint-{name}"
-        state(model, data, dims, made, label, carrier, sense, constant)
+        declare(model, data, dims, made, label, carrier, sense, constant)
 
 
 FIXED_OPERATIONAL = (
@@ -766,11 +767,11 @@ MARGINAL = (
 
 
 def objective(model, data, dims, made):
-    """What the model minimises: capacity built, and energy run.
+    """Set the objective: the capital cost of capacity and the marginal cost.
 
-    A capital cost prices each nominal variable and a marginal cost prices
-    each operating one, weighted by its snapshot. A cost of zero states no
-    term, so the coefficient carries its zeros as absent.
+    A capital cost prices each nominal variable. A marginal cost prices each
+    operating variable, weighted by its snapshot. A cost of zero declares no
+    term, and the coefficient is absent there.
     """
     parts = []
     for component, label, nom, key in NOMINAL:
@@ -805,10 +806,10 @@ def objective(model, data, dims, made):
 
 
 def constant(path):
-    """What the existing capacity of the extendable components already costs.
+    """Return the capital cost of the existing extendable capacity.
 
-    PyPSA holds this apart from the objective it reports, so a comparison
-    against that number subtracts it.
+    PyPSA excludes this cost from the objective it reports. A comparison
+    against that objective subtracts it.
     """
     data = Data(path)
     total = 0.0
@@ -821,7 +822,7 @@ def constant(path):
 
 
 def model_from(data):
-    """The model `data` states, declared and ready to assemble."""
+    """Return the model declared by `data`, ready to assemble."""
     dims = sets(data)
     model = Model("pypsa")
     made = columns(model, data, dims)
@@ -837,5 +838,5 @@ def model_from(data):
 
 
 def build(path, snapshots=None):
-    """The network at `path` as a nimopt model, over its first `snapshots`."""
+    """Return the network at `path` as a nimopt model, over `snapshots` hours."""
     return model_from(Data(path, snapshots))

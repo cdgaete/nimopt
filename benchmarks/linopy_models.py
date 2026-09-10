@@ -1,15 +1,13 @@
 """The benchmark models as linopy builds them.
 
-Each factory returns a `compare.Case`. The models are the ones
-`bench_transport.py` and `bench_storage.py` state, formulated the way linopy
-asks for them: a variable spans the full product of its coordinates and a
-mask removes the members the model does not carry, where nimopt gives the
-variable a subset to span.
+Each factory returns a `compare.Case`. The models are those of
+`bench_transport.py` and `bench_storage.py`, formulated as linopy requires. A
+variable spans the full product of its coordinates and a mask removes the
+members the model excludes. nimopt gives the variable a subset to span.
 
-Row-for-row agreement with the nimopt side is what makes the two comparable,
-so the ramp block is masked to the hours that have a predecessor and the
-state-of-charge block rolls, matching the absence rules those constraints
-carry.
+The two sides agree row for row. The ramp block is masked to the hours with a
+predecessor, and the `state_of_charge` block rolls. Both follow the absence
+rules of those constraints.
 """
 
 import linopy
@@ -29,7 +27,7 @@ from compare import Case
 
 
 def _describe(model):
-    """Rows, columns and nonzeros of the matrix a solver would be given."""
+    """Return the rows, columns and nonzeros of the matrix passed to a solver."""
     matrix = model.matrices.A
     return {
         "rows": int(matrix.shape[0]),
@@ -47,20 +45,22 @@ def _solve(model):
         log_to_console=False,
     )
     if model.status != "ok":
-        raise RuntimeError(f"linopy returned status {model.status!r}")
+        raise RuntimeError(
+            f"linopy returned status {model.status!r}; solve a model that returns 'ok'"
+        )
     return float(model.objective.value)
 
 
 def transport(n_plants, n_warehouses, arcs_per_plant, seed=0, integer=False):
-    """Flow over an arc network, as a masked variable over the full product."""
+    """Return the transport case, with the flow masked over the full product."""
     arc_index = network(n_plants, n_warehouses, arcs_per_plant, seed)
     unit_cost = np.random.default_rng(seed + 1).uniform(1.0, 9.0, arc_index.shape[1])
     per_plant = float(arcs_per_plant)
 
     P = pd.Index([f"p{i}" for i in range(n_plants)], name="P")
     W = pd.Index([f"w{i}" for i in range(n_warehouses)], name="W")
-    carried = np.zeros((n_plants, n_warehouses), dtype=bool)
-    carried[arc_index[0], arc_index[1]] = True
+    arc_mask = np.zeros((n_plants, n_warehouses), dtype=bool)
+    arc_mask[arc_index[0], arc_index[1]] = True
     cost_grid = np.zeros((n_plants, n_warehouses))
     cost_grid[arc_index[0], arc_index[1]] = unit_cost
     served = np.bincount(arc_index[1], minlength=n_warehouses).astype(np.float64)
@@ -72,10 +72,10 @@ def transport(n_plants, n_warehouses, arcs_per_plant, seed=0, integer=False):
             upper=per_plant if integer else np.inf,
             coords=[P, W],
             name="flow",
-            mask=carried,
+            mask=arc_mask,
             integer=integer,
         )
-        one = xr.DataArray(carried.astype(np.float64), coords=[P, W])
+        one = xr.DataArray(arc_mask.astype(np.float64), coords=[P, W])
         model.add_constraints((one * flow).sum("W") <= per_plant, name="supply")
         model.add_constraints(
             (one * flow).sum("P")
@@ -88,8 +88,8 @@ def transport(n_plants, n_warehouses, arcs_per_plant, seed=0, integer=False):
 
     def read(model):
         got = {"primal_sum": float(np.nansum(model.solution["flow"].values))}
-        # a mixed-integer model carries no duals nimopt will hand over, so the
-        # two sides read the same fields
+        # a mixed-integer model has no duals, and both sides read the same
+        # fields
         if not integer:
             got["dual_sum"] = float(np.nansum(model.dual["demand"].values))
         return got
@@ -98,7 +98,7 @@ def transport(n_plants, n_warehouses, arcs_per_plant, seed=0, integer=False):
 
 
 def storage(n_generators, n_storage, n_hours, seed=0):
-    """Dispatch with a cyclic state of charge and a ramp limit."""
+    """Return the storage case, with a cyclic `state_of_charge` row and ramps."""
     availability, demand, price = profiles(n_generators, n_hours, seed)
     G = pd.Index([f"g{i}" for i in range(n_generators)], name="G")
     S = pd.Index([f"s{i}" for i in range(n_storage)], name="S")
@@ -128,7 +128,7 @@ def storage(n_generators, n_storage, n_hours, seed=0):
             gen <= xr.DataArray(UNIT_MW * availability, coords=[G, T]),
             name="generation_limit",
         )
-        # the ramp row at the first hour has no predecessor and is not stated
+        # the ramp row at the first hour has no predecessor and is absent
         model.add_constraints(
             gen - gen.shift(T=1) <= 0.5 * UNIT_MW,
             name="ramp",
@@ -153,5 +153,5 @@ def storage(n_generators, n_storage, n_hours, seed=0):
 
 
 def transport_milp(n_plants, n_warehouses, arcs_per_plant, seed=0):
-    """The transport model with integer flows."""
+    """Return the transport case with integer flows."""
     return transport(n_plants, n_warehouses, arcs_per_plant, seed, integer=True)

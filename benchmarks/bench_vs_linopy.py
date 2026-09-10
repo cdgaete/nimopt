@@ -1,15 +1,14 @@
-"""nimopt against linopy: what the same model costs each of them to build.
+"""nimopt against linopy: the cost of building the same model in each.
 
 Three models over four axes. Transport puts a variable on a sparse arc
-network — a subset of the product in nimopt, a masked full product in linopy. Storage
-couples neighbouring hours through a ramp limit and a cyclic state of charge.
-The integer transport model states the same network as a MILP. Every case
-also reads its primals and duals back onto their labels, which is the fourth
-axis.
+network: a subset of the product in nimopt, a masked full product in linopy.
+Storage couples adjacent hours through a ramp limit and a cyclic
+`state_of_charge` row. The integer transport model declares the same network
+as a MILP. Every case also reads its primals and duals back onto their labels,
+and that is the fourth axis.
 
-Each side runs in a process of its own, and a row is printed only once the
-two agree on rows, columns, nonzeros and the solved objective: a comparison
-of two different problems is worth nothing.
+Each side runs in a process of its own. A row is printed only when the two
+sides agree on rows, columns, nonzeros and the solved objective.
 """
 
 from pathlib import Path
@@ -24,9 +23,9 @@ from bench_transport import network
 from compare import Case, run
 
 
-def _describe(state):
-    """Rows, columns and nonzeros of the matrix a solver would be given."""
-    assembled = state["session"].assembled
+def _describe(built):
+    """Return the rows, columns and nonzeros of the matrix passed to a solver."""
+    assembled = built["session"].assembled
     return {
         "rows": assembled.n_rows,
         "cols": assembled.n_cols,
@@ -35,20 +34,23 @@ def _describe(state):
     }
 
 
-def _solve(state):
-    solution = state["session"].solve()
+def _solve(built):
+    solution = built["session"].solve()
     if solution.status != "optimal":
-        raise RuntimeError(f"nimopt returned status {solution.status!r}")
-    state["solution"] = solution
+        raise RuntimeError(
+            f"nimopt returned status {solution.status!r}; solve a model that "
+            f"returns 'optimal'"
+        )
+    built["solution"] = solution
     return float(solution.objective)
 
 
 def _reader(variable, constraint, duals=True):
-    def read(state):
-        solution = state["solution"]
+    def read(built):
+        solution = built["solution"]
         got = {"primal_sum": float(solution.primal(variable).values().sum())}
-        # a mixed-integer model carries no duals: the seam refuses the pair,
-        # and the number both sides reported for one was zero
+        # a mixed-integer model has no duals, and both sides read the same
+        # fields
         if duals:
             got["dual_sum"] = float(solution.dual(constraint).values().sum())
         return got
@@ -57,7 +59,7 @@ def _reader(variable, constraint, duals=True):
 
 
 def transport(n_plants, n_warehouses, arcs_per_plant, seed=0, integer=False):
-    """Flow over an arc network, as a variable spanning the arcs."""
+    """Return the transport case, with the flow spanning the arcs."""
     arc_index = network(n_plants, n_warehouses, arcs_per_plant, seed)
     unit_cost = np.random.default_rng(seed + 1).uniform(1.0, 9.0, arc_index.shape[1])
 
@@ -76,7 +78,7 @@ def transport(n_plants, n_warehouses, arcs_per_plant, seed=0, integer=False):
 
 
 def storage(n_generators, n_storage, n_hours, seed=0):
-    """Dispatch with a cyclic state of charge and a ramp limit."""
+    """Return the storage case, with a cyclic `state_of_charge` row and ramps."""
     availability, demand, price = profiles(n_generators, n_hours, seed)
 
     def build():
@@ -94,7 +96,7 @@ def storage(n_generators, n_storage, n_hours, seed=0):
 
 
 def transport_milp(n_plants, n_warehouses, arcs_per_plant, seed=0):
-    """The transport model with integer flows."""
+    """Return the transport case with integer flows."""
     return transport(n_plants, n_warehouses, arcs_per_plant, seed, integer=True)
 
 
@@ -133,39 +135,39 @@ SIZES = {
 
 
 def agree(sides, sizes):
-    """The shape and objective both builders reached, or a raised mismatch.
+    """Return the shape and objective of both builders, or raise on a mismatch.
 
     Rows, columns and nonzeros are compared at every rung. A rung neither
-    side solved is compared on its shape alone, because what a build costs
-    does not wait on a solve that will not finish.
+    side solved is compared on its shape alone.
     """
     nimopt, linopy = sides["nimopt"], sides["linopy"]
     for field in ("rows", "cols", "nnz"):
         if nimopt[field] != linopy[field]:
             raise ValueError(
-                f"at {sizes} the two builders state different problems: "
-                f"{field} is {nimopt[field]} for nimopt and {linopy[field]} for linopy"
+                f"at {sizes} the two builders declare different problems; got "
+                f"{field} {nimopt[field]} for nimopt and {linopy[field]} for "
+                f"linopy"
             )
     solved = ["objective" in side for side in (nimopt, linopy)]
     if not any(solved):
         return nimopt
     if not all(solved):
         raise ValueError(
-            f"at {sizes} one builder solved and the other did not; a rung is "
-            f"solved on both sides or on neither"
+            f"at {sizes} one builder solved and the other did not; solve the "
+            f"rung on both sides or on neither"
         )
     if abs(nimopt["objective"] - linopy["objective"]) > 1e-6 * max(
         1.0, abs(nimopt["objective"])
     ):
         raise ValueError(
-            f"at {sizes} the two builders solve to different objectives: "
+            f"at {sizes} the two builders solve to different objectives; got "
             f"{nimopt['objective']} and {linopy['objective']}"
         )
     return nimopt
 
 
 def compare(case, sizes, traced=True, solve=True, trace_dir=None):
-    """Both builders on one case at one size, each in a process of its own."""
+    """Return both builders on one case at one size, each in its own process."""
     sides = {
         side: run(case, side, sizes, traced, solve, trace_dir)
         for side in ("nimopt", "linopy")
@@ -174,14 +176,13 @@ def compare(case, sizes, traced=True, solve=True, trace_dir=None):
     return sides
 
 
-# How many of a case's rungs are solved. A rung past this is built and
-# measured but not solved, because what a build costs does not wait on a
-# solve that will not finish. A case named here solves at least one rung.
+# the number of rungs of a case that are solved. A later rung is built and
+# measured without a solve. A case listed here solves at least one rung.
 SOLVED = {"pypsa": 3}
 
 
 def solves(case, rung):
-    """Whether the rung at this position is solved on both sides."""
+    """Return whether the rung at this position is solved on both sides."""
     return rung < SOLVED.get(case, len(SIZES[case]))
 
 
@@ -189,10 +190,10 @@ TRACES = Path(__file__).resolve().parent / "data" / "large" / "traces"
 
 
 def sweep(cases=None, traced=True, trace_dir=TRACES):
-    """Every rung of every case, printed as both builders measured it.
+    """Print every rung of every case, as both builders measured it.
 
-    Each phase's resident size through time is written beside the table, so
-    a peak is read off the curve rather than taken on trust.
+    The resident size of each phase over time is written beside the table.
+    The peak is read from the curve.
     """
     header = (
         f"{'case':>8} {'size':>20} {'side':>7} {'rows':>10} {'cols':>10} "
@@ -205,9 +206,9 @@ def sweep(cases=None, traced=True, trace_dir=TRACES):
         print(f"\n{header}")
         solved_any = False
         for rung, sizes in enumerate(SIZES[case]):
-            wanted = solves(case, rung)
+            to_solve = solves(case, rung)
             sides = compare(
-                case, sizes, traced=traced, solve=wanted, trace_dir=trace_dir
+                case, sizes, traced=traced, solve=to_solve, trace_dir=trace_dir
             )
             solved_any = solved_any or "objective" in sides["nimopt"]
             label = "x".join(str(v) for v in sizes.values())
@@ -233,8 +234,7 @@ def sweep(cases=None, traced=True, trace_dir=TRACES):
                 )
         if not solved_any:
             raise RuntimeError(
-                f"no rung of {case!r} was solved; a shape both builders agree "
-                f"on is not evidence they state the same problem"
+                f"no rung of {case!r} was solved; solve at least one rung of the case"
             )
 
 

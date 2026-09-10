@@ -16,18 +16,18 @@ _NUMPY = str(Path(numpy.__file__).parent)
 
 
 def _owner(traceback):
-    """The package that ordered the allocation.
+    """Return the package that allocated the block.
 
-    A traceback runs oldest frame first, so a package's innermost frame is
-    found by walking it in reverse, and a package is recognised by its own
-    source root rather than by a name appearing anywhere in the path — an
-    interpreter installed under a package's directory carries that package's
-    name in every filename.
+    A traceback is ordered from the oldest frame. The reverse walk finds the
+    innermost frame of a package. A package is identified by its source root
+    and not by a name appearing anywhere in the path. An interpreter
+    installed under a package directory contains that package name in every
+    filename.
 
-    numpy is transparent. An array a package asks numpy to build belongs to
-    the package that asked, whether the call lands in C or in numpy's own
-    Python — `np.empty` allocates under its caller's frame and `np.resize`
-    under numpy's, and the two must not attribute differently.
+    numpy is transparent. An array built by a numpy call is attributed to the
+    calling package. `np.empty` allocates under the frame of its caller.
+    `np.resize` allocates under a numpy frame. Both are attributed to the
+    calling package.
     """
     for frame in reversed(traceback):
         for package, root in _ROOTS:
@@ -40,11 +40,11 @@ def _owner(traceback):
 
 
 def attribute(build, depth=25):
-    """Bytes each package still holds once `build` has returned.
+    """Return the bytes each package retains after `build` returns.
 
-    A snapshot carries the blocks alive when it is taken, so this weighs what
-    a build retains and not what it touched on the way. `peak_bytes` answers
-    the other half.
+    The snapshot contains the blocks alive when it is taken. The result
+    measures what a build retains and not what it allocates and frees.
+    `peak_bytes` measures the peak.
     """
     tracemalloc.start(depth)
     kept = build()
@@ -59,17 +59,17 @@ def attribute(build, depth=25):
 
 
 def peak_bytes(build, depth=25):
-    """The highest traced total reached while `build` runs, over every package.
+    """Return the highest traced total over every package while `build` runs.
 
-    `get_traced_memory` keeps a high-water mark, so this counts an allocation
-    a build frees before returning, which a snapshot cannot see. It is one
-    number for the process and not a figure per package: a snapshot carries no
-    peak per traceback, so the peak is attributed by holding everything but
-    the nonzeros fixed and reading what the nonzeros add.
+    `get_traced_memory` reports the peak traced total. The result includes an
+    allocation a build frees before returning. A snapshot does not report that
+    allocation. The result is one number for the process and not a figure per
+    package. A snapshot has no peak per traceback. The peak of a package is
+    measured by changing the nonzero count and reading the difference.
 
-    An allocation freed before the high-water mark is reached does not appear,
-    which is correct rather than a gap: peak is a maximum, and memory returned
-    before it costs nothing.
+    An allocation freed before the peak does not appear in the result. The
+    peak is a maximum, and memory returned before it does not raise the
+    maximum.
     """
     tracemalloc.start(depth)
     kept = build()
