@@ -36,9 +36,9 @@ print(x[G, "t0"].frame)
 </details>
 <!-- /output -->
 
-`T` is fixed at `t0`, so the reference is indexed over `G` alone. An
-initial condition is one row per unit, referencing that unit's column at the
-first period.
+`T` is fixed at `t0`, and the reference is indexed over `G` alone. An
+initial condition is one row per unit, referencing the column of that unit at
+the first period.
 
 ```python
 import numpy as np

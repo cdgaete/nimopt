@@ -11,7 +11,7 @@ unit produces nothing. The `capacity` and `minimum` rows are written against
 the binary column. This is the only MILP in the corpus.
 
 ```text
-minimise    Σ_{t,g} cost[g] · gen[t,g] + Σ_{t,g} no_load[g] · on[t,g]
+minimize    Σ_{t,g} cost[g] · gen[t,g] + Σ_{t,g} no_load[g] · on[t,g]
 subject to  gen[t,g] − p_max[g] · on[t,g] ≤ 0
             gen[t,g] − p_min[g] · on[t,g] ≥ 0
             Σ_g gen[t,g] == load[t]           for each snapshot t
@@ -42,9 +42,9 @@ commitment  min  not built
 </details>
 <!-- /output -->
 
-Snapshots are uncoupled, so `reference` enumerates every on-off subset per
-snapshot and takes the cheapest feasible one: an optimum computed without a
-solver.
+Snapshots are uncoupled. `reference` enumerates every on-off subset per
+snapshot and takes the cheapest feasible one. The optimum is computed without
+a solver.
 
 ```python
 from nimopt.models import commitment

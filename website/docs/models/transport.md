@@ -12,7 +12,7 @@ from that parameter. The model therefore has one column per arc, not one per
 cell of the plant-warehouse product.
 
 ```text
-minimise    Σ_{(p,w) ∈ arcs} cost[p,w] · flow[p,w]
+minimize    Σ_{(p,w) ∈ arcs} cost[p,w] · flow[p,w]
 subject to  Σ_w flow[p,w] ≤ supply[p]     for each plant p
             Σ_p flow[p,w] ≥ demand[w]     for each warehouse w
             flow[p,w] ≥ 0                 for each arc (p,w)
@@ -67,9 +67,9 @@ print(solution.objective, transport.reference(inputs))
 </details>
 <!-- /output -->
 
-Arcs are drawn from every warehouse but the last, so the last warehouse is
-reached by no plant and has no demand row. `absent` reports the row and the
-rule that dropped it.
+Arcs are drawn from every warehouse but the last. No plant serves the last
+warehouse, and it has no demand row. `absent` reports the row and the rule
+that dropped it.
 
 ```python
 from nimopt.models import transport

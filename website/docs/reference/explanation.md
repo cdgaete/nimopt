@@ -33,14 +33,13 @@ count.
 | `VariableShape` | `name`, `dims`, `members`, `columns`, `lower`, `upper`, `integer` |
 | `ConstraintShape` | `name`, `free`, `sense`, `rows`, `nonzeros`, `relation` |
 
-`VariableShape.members` names the parameter a sparse variable took its
-members from, and is `None` for one over the full product. Columns are
-absent until data binds, so without it a sparse declaration and a dense one
-would otherwise read identically.
+`VariableShape.members` identifies the parameter a sparse variable took its
+members from, and is `None` for one over the full product. Columns are absent
+until data binds. Without that field a sparse declaration and a dense one
+read identically.
 
-`ConstraintShape.free` and `.sense` are read off the relation rather than
-declared beside it, because an expression holds references and reports
-both.
+`ConstraintShape.free` and `.sense` are read off the relation. Neither is
+declared beside it. An expression contains references and reports both.
 
 ```python
 from nimopt import Definition, Sum

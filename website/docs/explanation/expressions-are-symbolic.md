@@ -99,4 +99,4 @@ time, and peak memory is set by the largest constraint, not by the sum of
 all of them.
 
 A model that is cheap to declare and more expensive to assemble suits a
-builder, because declaration is what a caller iterates on.
+builder. A caller iterates on the declaration.

@@ -48,7 +48,7 @@ def sources():
     """Return every place this repository writes Python, by its location.
 
     The modules, and the fenced blocks of the documentation beside them. The
-    site documents this boundary on `reference/nimblend-arrays.md` and on
+    site documents this boundary on `nimblend/arrays.md` and on
     `for-agents.md`, and `SKILL.md` repeats it for an agent. The examples that
     document the rule are checked against it. A block is identified as
     `<page>:<line>`, where its fence opens.

@@ -12,7 +12,7 @@ parameter over the sited pairs crossed with the whole horizon. It is
 therefore sparse in one axis and dense in the other.
 
 ```text
-minimise    Σ_{(r,k) sited, t} cost[r,k] · gen[r,k,t]
+minimize    Σ_{(r,k) sited, t} cost[r,k] · gen[r,k,t]
 subject to  Σ_k gen[r,k,t] == demand[r,t]     for each region r and hour t
             0 ≤ gen[r,k,t] ≤ capacity[r,k]    for each sited (r,k) and hour t
 ```
@@ -39,7 +39,7 @@ sector  min  not built
 </details>
 <!-- /output -->
 
-Each region meets its own demand from the technologies sited in it, so the
+Each region meets its own demand from the technologies sited in it. The
 optimum is a merit order per region and hour.
 
 ```python
@@ -68,8 +68,8 @@ print(solution.objective, sector.reference(inputs))
 </details>
 <!-- /output -->
 
-Every region-hour has a balance row, and the capacity bound applies only to
-the sited pairs, so no balance row is dropped.
+Every region-hour has a balance row. The capacity bound applies to the sited
+pairs alone, and no balance row is dropped.
 
 ```python
 from nimopt.models import sector

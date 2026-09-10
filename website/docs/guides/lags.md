@@ -41,7 +41,8 @@ print(m.assemble().to_dense())
 <!-- /output -->
 
 Each row references its own column and the previous one. The first member
-has no predecessor, so its row is not produced: three members give two rows.
+has no predecessor, and its row is not produced. Three members give two
+rows.
 
 `T + 1` references the following member by the same rule.
 
@@ -141,7 +142,7 @@ ValueError: parameter 'rate' is read at a lag ['T']; write the lag at the variab
 <!-- /output -->
 
 A lag is an integer number of members. A fractional lag raises `ValueError`
-rather than being truncated to a different lag.
+and is not truncated to a different lag.
 
 ```python raises=ValueError
 import numpy as np

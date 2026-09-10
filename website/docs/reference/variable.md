@@ -83,7 +83,7 @@ requires. The same rule applies to a parameter, read as `cost[G, T]`, and as
 
 Comparing a variable expresses a row, and `==` between two variables
 expresses a row as well. A list of variables therefore cannot be searched
-with `in` or `.index`, as both compare their items. Both raise `TypeError`
+with `in` or `.index`. Both compare their items and raise `TypeError`
 and report the first variable they compare. A dict and a set match on
 identity. Store variables in one of them, or search them by `name`.
 

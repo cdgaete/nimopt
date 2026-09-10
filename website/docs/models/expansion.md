@@ -13,7 +13,7 @@ capacity applies to every scenario. `p` and `shed` are indexed by scenario as
 well and may differ across it.
 
 ```text
-minimise    Σ_g capital[g] · cap[g]
+minimize    Σ_g capital[g] · cap[g]
             + Σ_{s,g,t} weight[s] · cost[s,g] · p[s,g,t]
             + Σ_{s,t}   weight[s] · voll[s]  · shed[s,t]
 subject to  p[s,g,t] ≤ cap[g]                              for each s, g, t

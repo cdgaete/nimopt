@@ -1,6 +1,6 @@
 ---
 title: A variable over a subset
-description: Declare a variable over the members of a set product that exist in the model, so that the others have no column.
+description: Declare a variable over the members of a set product that exist in the model, leaving the others with no column.
 ---
 
 # A variable over a subset
@@ -90,7 +90,7 @@ print(by_label.labels())
 <!-- /output -->
 
 Both list the same two members, `(p0, w0)` and `(p1, w2)`. `subset_of`
-avoids resolving labels when positions are already at hand.
+resolves no label when positions are already known.
 
 ## Constraints over a subset variable
 

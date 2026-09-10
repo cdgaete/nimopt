@@ -6,7 +6,7 @@ description: An LP/MILP builder in which a variable is a dimension. Models are d
 
 # nimopt
 
-`nimopt` is a Python library for building linear and mixed-integer programs. A model is declared symbolically over named index sets, as parameters, variables and constraints. The declaration is expanded into a coefficient matrix at assembly or at solve. Solutions are returned as arrays over the same index sets. A primal value is read by label, not by column position.
+`nimopt` is a Python library for building linear and mixed-integer programs. A model is declared symbolically over named index sets, in the form of parameters, variables and constraints. The declaration is expanded into a coefficient matrix at assembly or at solve. Solutions are returned as arrays over the same index sets. A primal value is read by label, not by column position.
 
 `nimopt` is built on `nimblend`, a labeled sparse N-dimensional array library. `nimblend` contains no optimization vocabulary and does not import `nimopt`. It is documented in [its own section](/nimblend).
 

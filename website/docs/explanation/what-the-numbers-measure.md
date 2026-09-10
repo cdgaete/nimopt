@@ -30,8 +30,8 @@ those counts.
 
 **What it does not claim.** It does not claim that `nimblend` allocates more
 bytes than `nimopt`. The totals follow from the nonzeros per column of the
-model, and a model with one entry per column puts `nimopt` above `nimblend`.
-The measure is the gradient, not the totals.
+model. A model with one entry per column puts `nimopt` above `nimblend` with
+no boundary violation. The measure is the gradient, not the totals.
 
 ## Two models
 
@@ -157,7 +157,8 @@ over dense grids and aligns by position. The model is also built twice, once
 to measure the shape of each constraint and once to write it. Resident memory
 is close on both sides: both store the same dense coefficient grids.
 
-**Integrality.** Making the flow an integer column changes neither build: nimopt 8.6 MB and 27.3 ms against its own 10.7 MB and 27.9 ms as an LP,
+**Integrality.** Making the flow an integer column changes neither build:
+nimopt 8.6 MB and 27.3 ms against its own 10.7 MB and 27.9 ms as an LP,
 linopy 108.4 MB and 204.4 ms against 107.5 MB and 206.5 ms. Integrality is a
 column vector, not a matrix.
 

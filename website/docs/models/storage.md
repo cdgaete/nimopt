@@ -13,7 +13,7 @@ first hour has no predecessor, and that row is not produced. The model
 exercises both lag rules.
 
 ```text
-minimise    Σ_{g,t} cost[g,t] · gen[g,t]
+minimize    Σ_{g,t} cost[g,t] · gen[g,t]
 subject to  Σ_g gen[g,t] + Σ_s discharge[s,t] − Σ_s charge[s,t] == load[t]
             soc[s,t] − soc[s,t−1] − charge_eta[s,t] · charge[s,t]
                 + discharge_eta[s,t] · discharge[s,t] == 0     (t−1 wraps)

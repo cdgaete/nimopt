@@ -85,8 +85,8 @@ True
 </details>
 <!-- /output -->
 
-`from_dense` stores every cell it was given, so this array has four entries
-and not two: the zeros are stored, and stored means present.
+`from_dense` stores every cell it was given, and this array has four entries
+and not two. The zeros are stored, and a stored value is present.
 
 ## `SparseArray`
 
@@ -303,8 +303,8 @@ print(nb.combined_dims(("P",), ("P", "Q")))
 </details>
 <!-- /output -->
 
-Frames sharing no dimension have nothing to align on, so `combined_dims`
-raises: their combination would be an outer product no caller asked for.
+Frames sharing no dimension have no common dimension to align on, and
+`combined_dims` raises. Their combination would be an outer product.
 
 ```python raises=ValueError
 import nimblend

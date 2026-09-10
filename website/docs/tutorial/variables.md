@@ -41,17 +41,17 @@ print(x.n_columns)
 </details>
 <!-- /output -->
 
-Two plants by three warehouses gives six members, so `x` occupies six
-columns of the coefficient matrix. A column index is computed from a
-member's positions in each set; nothing stores a column per member, so a
+Two plants by three warehouses give six members. `x` therefore occupies six
+columns of the coefficient matrix. A column index is computed from the
+positions of a member in each set, and nothing stores a column per member. A
 variable over a million members costs the same to declare as one over six.
 
 ## Bounds and integrality
 
 A variable has a lower bound of 0 and no upper bound unless declared
 otherwise. `lower=` and `upper=` take a number that applies to every column.
-`integer=True` restricts the columns to integer values, which makes the
-model a MILP.
+`integer=True` restricts the columns to integer values and makes the model a
+MILP.
 
 ```python
 import numpy as np

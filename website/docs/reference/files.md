@@ -10,7 +10,7 @@ description: The file a definition or a model writes, the meaning of each key, t
 | Function | Does |
 | --- | --- |
 | `load(path, data=None)` | reads a file; returns a `Definition`, or a `Model` where the file contains data or `data=` gives it |
-| `loads(text, data=None)` | the same over text; a sidecar name in text raises `ValueError`, as text has no directory |
+| `loads(text, data=None)` | the same over text; a sidecar name in text raises `ValueError`. Text has no directory |
 | `save(what, path, inline=False, instructions=False)` | writes a definition's file, or a model's with an `.npz` beside it, or one file with an inline block when `inline=True`; `instructions=True` writes the comment block that describes the format at the top of the file |
 
 `data=` is the mapping `build` takes or the path of an `.npz`. A file that

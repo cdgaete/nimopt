@@ -11,13 +11,13 @@ parameter over generators and snapshots. A solar unit is bounded by its
 hourly availability, and a thermal unit by its rating.
 
 ```text
-minimise    Σ_{t,g} cost[g] · gen[t,g]
+minimize    Σ_{t,g} cost[g] · gen[t,g]
 subject to  Σ_g gen[t,g] == load[t]          for each snapshot t
             0 ≤ gen[t,g] ≤ profile[g,t]
 ```
 
 The profile is indexed `(G, T)` and the variable `(T, G)`. A bound is read
-in the dimension order of the variable it bounds, so both orderings select
+in the dimension order of the variable it bounds, and both orderings select
 the same columns.
 
 ```python
@@ -42,8 +42,8 @@ profiled  min  not built
 </details>
 <!-- /output -->
 
-Each snapshot is independent, so the optimum is the merit order against that
-hour's capacities.
+Each snapshot is independent. The optimum is the merit order against the
+capacities of that hour.
 
 ```python
 from nimopt.models import profiled

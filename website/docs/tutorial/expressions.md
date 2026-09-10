@@ -80,7 +80,7 @@ print(Sum(P, W, x[P, W]).frame)
 
 The frame determines the shape of a constraint built on the expression: an
 expression with frame `(P,)` produces one row per plant. An expression with
-an empty frame is a scalar, which is the form an objective takes.
+an empty frame is a scalar, and an objective takes that form.
 
 ## Coefficients
 

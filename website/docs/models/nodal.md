@@ -12,7 +12,7 @@ over buses. The coefficient introduces `B`, a dimension no variable has, and
 the balance is indexed over the dimensions the lookup defines.
 
 ```text
-minimise    Σ_{t,g} cost[g] · gen[t,g]
+minimize    Σ_{t,g} cost[g] · gen[t,g]
 subject to  Σ_g at[g,b] · gen[t,g] == demand[b,t]    for each bus b and hour t
             0 ≤ gen[t,g] ≤ p_max[g]
 ```
@@ -39,8 +39,8 @@ nodal  min  not built
 </details>
 <!-- /output -->
 
-Each bus meets its own demand from the generators sited at it, so the
-optimum is a merit order per bus and hour.
+Each bus meets its own demand from the generators sited at it. The optimum
+is a merit order per bus and hour.
 
 ```python
 from nimopt.models import nodal

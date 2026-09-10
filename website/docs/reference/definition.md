@@ -90,8 +90,8 @@ ValueError: parameter 'S' is already declared as a set; declare another name
 </details>
 <!-- /output -->
 
-Equations are in no data mapping, so a constraint may take the name of the
-parameter that bounds it.
+Equations are in no data mapping. A constraint may therefore take the name
+of the parameter that bounds it.
 
 ```python
 from nimopt import Definition, Sum

@@ -11,7 +11,7 @@ are added into one balance row. The optimum is the same merit order, and the
 cost of the declaration differs.
 
 ```text
-minimise    Σ_t Σ_u cost_u[t] · u[t]
+minimize    Σ_t Σ_u cost_u[t] · u[t]
 subject to  Σ_u u[t] == load[t]          for each snapshot t
             0 ≤ u[t] ≤ p_max_u[t]        for each unit u
 ```

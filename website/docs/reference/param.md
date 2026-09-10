@@ -11,9 +11,9 @@ Coefficients over a set product. A parameter is data, not a model object:
 it has no columns and produces no rows. It supplies a term's coefficient
 and a constraint's right-hand side.
 
-A parameter's array declares `absence="empty"`. A coordinate it does not
-have is a coefficient that is not there, which is the additive identity a
-sum needs.
+The array of a parameter declares `absence="empty"`. A coordinate it does
+not have contributes no coefficient. Absence is the additive identity a sum
+requires.
 
 ### `Param.from_dense(name, sets, values)`
 
@@ -45,8 +45,8 @@ print(cost.dims, cost.nnz)
 ### `Param.from_long(name, sets, columns, values)`
 
 Coefficients from one label column per set and one value column. `columns`
-is a mapping keyed by set name; each column and `values` are read in
-parallel, so all have the same length.
+is a mapping keyed by set name. Each column and `values` are read in
+parallel and have the same length.
 
 ```python
 import numpy as np

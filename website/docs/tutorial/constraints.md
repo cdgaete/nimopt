@@ -102,8 +102,9 @@ parameter is read at its sets here as it is anywhere else: `supply[P]`, not
 `supply`. A parameter without a bracket raises `TypeError` and reports the
 reading it requires.
 
-Supply is indexed over `P`, as are the supply rows. A parameter read over any
-other index set raises `ValueError`, and the message gives both index sets.
+Supply is indexed over `P`, and so are the supply rows. A parameter read over
+any other index set raises `ValueError`, and the message gives both index
+sets.
 
 ```python raises=TypeError
 import numpy as np

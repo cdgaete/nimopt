@@ -38,8 +38,8 @@ coordinates are present, and it records no numbering origin.
 | `identity(into, coord, start=0)` | each member paired with its own position along `into`, valued 1.0 |
 
 That table is the whole surface. **A domain's `codes` are the raw ravelled
-members of the layer below it, as an array's `.index` and `.data` are its
-raw buffers; never read them.** `coordinates()` and `labels()` report which
+members of the layer below it. An array's `.index` and `.data` are its raw
+buffers. Never read them.** `coordinates()` and `labels()` report which
 members are present, and `positions_of_coordinates` reports the position of
 one. `as_coord` numbers them, and `array` and `identity` return an array over
 them. No layer above builds an index matrix. A test in this repository fails
@@ -139,9 +139,9 @@ print(numbered.to_position(asked[:, :2]))
 </details>
 <!-- /output -->
 
-`("porto", "rome")` is not a member, so it returns `-1`. The other two are
-the domain's first and second members, and `as_coord(100)` numbers them
-from 100.
+`("porto", "rome")` is not a member, and the query returns `-1`. The other
+two are the first and second members of the domain, and `as_coord(100)`
+numbers them from 100.
 
 ## Crossing a domain with further dimensions
 
@@ -337,8 +337,8 @@ dimension determines which of the three is used.
 | `ProductCoord(sizes, start=0)` | positions of a full product, numbered from `start` | a dimension whose positions are computed, such as a variable's columns |
 | `SubsetCoord(codes, sizes, start=0)` | positions of a subset of a product, numbered from `start` in code order | a variable over a subset, where a position is a rank among the codes |
 
-`SubsetCoord` gives an entry's position as its rank among the codes, so a
-block already in canonical order needs no lookup at all.
+`SubsetCoord` gives the position of an entry as its rank among the codes. A
+block already in canonical order needs no lookup.
 
 ```python
 import numpy as np
@@ -425,5 +425,5 @@ print(array.to_dense())
 </details>
 <!-- /output -->
 
-The slices `reserve` hands out are views of the one allocation, so writing
-into them is writing into the array that comes out.
+`reserve` returns views of the one allocation. A write into a slice writes
+into the returned array.

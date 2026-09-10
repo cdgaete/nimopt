@@ -11,7 +11,7 @@ one balance row per snapshot, and each generator has a cost. Every other
 model in the corpus adds one axis to this one.
 
 ```text
-minimise    Σ_{t,g} cost[g] · p[t,g]
+minimize    Σ_{t,g} cost[g] · p[t,g]
 subject to  Σ_g p[t,g] == load[t]        for each snapshot t
             0 ≤ p[t,g] ≤ p_max[g]
 ```
@@ -41,8 +41,8 @@ dispatch  min  not built
 </details>
 <!-- /output -->
 
-Snapshots are independent, so the optimum is the merit order per snapshot,
-and `reference` computes it without a solver.
+Snapshots are independent, and the optimum is the merit order per snapshot.
+`reference` computes it without a solver.
 
 ```python
 from nimopt.models import dispatch
@@ -65,8 +65,8 @@ optimal
 </details>
 <!-- /output -->
 
-The balance row is produced for every snapshot in the load, so `absent`
-reports no dropped rows.
+The balance row is produced for every snapshot in the load, and `absent`
+reports no dropped row.
 
 ```python
 from nimopt.models import dispatch

@@ -66,7 +66,7 @@
 - [Interior point and first-order methods](/guides/highs-methods): The HiGHS simplex, IPX, HiPO and PDLP methods through the options of nimopt, the memory each requires, and how to install a HiGHS with HiPO and GPU support.
 - [Lags](/guides/lags): Reference a variable at the previous or next member of a set, and choose whether the boundary row is dropped or wraps around.
 - [Saving and loading a model](/guides/saving-and-loading): Write a definition or a built model to a file in the expression syntax of nimopt, read it back, and store the data inline or beside it.
-- [A variable over a subset](/guides/subsets): Declare a variable over the members of a set product that exist in the model, so that the others have no column.
+- [A variable over a subset](/guides/subsets): Declare a variable over the members of a set product that exist in the model, leaving the others with no column.
 
 ## Worked models
 

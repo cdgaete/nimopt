@@ -56,8 +56,8 @@ readable after any solve. `objective` and `primal` raise `ValueError` where
 `feasible` is False. `dual` raises `ValueError` where `status` is not
 `optimal`.
 
-Raising Berlin's demand to 40 makes total demand 70 against total supply
-55, so the model is infeasible.
+Raising the demand of Berlin to 40 makes total demand 70 against total
+supply 55. The model is infeasible.
 
 ```python raises=ValueError
 import numpy as np

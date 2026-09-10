@@ -56,7 +56,7 @@ print(P.position_of(np.array(["porto"])))
 <!-- /output -->
 
 `P` has two members and `W` three. `position_of` maps labels to their
-integer positions, which are the indices used internally.
+integer positions. Those positions are the indices used internally.
 
 ## Parameters
 

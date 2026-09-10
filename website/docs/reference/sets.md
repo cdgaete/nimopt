@@ -143,4 +143,4 @@ print(subset_of((P, W), np.array([[0, 1], [0, 1]])).size)
 <!-- /output -->
 
 The product has six members. Both subsets have two, `lisbon` with `berlin`
-and `porto` with `paris`, because the columns are read in parallel.
+and `porto` with `paris`. The columns are read in parallel.

@@ -43,8 +43,8 @@ solution = model.solve(
 
 Gurobi and Mosek support `crossover` and `method` up to `barrier`.
 `newton_system`, `pdlp_tol`, `hipo` and `pdlp` are specific to HiGHS. Passing
-one of them to another solver raises and reports the option, as the
-[solvers reference](/reference/solvers) records.
+one of them to another solver raises and reports the option. The
+[solvers reference](/reference/solvers) records the same rule.
 
 ## Crossover
 

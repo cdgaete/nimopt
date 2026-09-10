@@ -21,7 +21,7 @@ unit shipped on route `(p, w)` costs `c[p, w]`. The decision variable
 `x[p, w]` is the quantity shipped on each route.
 
 ```text
-minimise    Σ_{p,w} c[p,w] · x[p,w]
+minimize    Σ_{p,w} c[p,w] · x[p,w]
 subject to  Σ_w x[p,w] ≤ s[p]        for each plant p
             Σ_p x[p,w] ≥ d[w]        for each warehouse w
             x[p,w] ≥ 0
@@ -114,9 +114,9 @@ Rows are plants and columns are warehouses. Lisbon ships 20 to Berlin and 10
 to Rome; Porto ships 15 to Paris and 5 to Rome. The duals of the demand rows
 are 3, 1 and 6: the marginal cost of one additional unit at each warehouse.
 
-Every code block in this documentation is self-contained, which is why the
-second block repeats the model. Each block can be pasted into a Python
-session as it is, or opened in the playground with "Run this example".
+Every code block in this documentation is self-contained. The second block
+therefore repeats the model. Each block runs in a Python session as it is, or
+opens in the playground with "Run this example".
 
 ## Next
 

@@ -42,7 +42,7 @@ two nodes of one node set.
 column in the matrix.
 
 **Coefficient.** The multiplier of a variable in a row. A parameter indexed
-at its sets, `cost[P, W]`, is a coefficient, as is an arithmetic
+at its sets, `cost[P, W]`, is a coefficient, and so is an arithmetic
 combination of such readings, `price[G, T] / eta[G, T]`.
 
 **Variable.** A decision variable. `m.var("x", (P, W))` declares one
@@ -91,8 +91,8 @@ row per member of its expression's frame.
 constraint over two plants produces two rows.
 
 **Right-hand side.** The scalar or parameter on the other side of the
-relation. A scalar applies to every row. A parameter must be indexed over
-exactly the constraint's frame, so that each row has its own value.
+relation. A scalar applies to every row. A parameter is indexed over exactly
+the frame of the constraint, and each row then has its own value.
 
 **Objective.** A scalar expression, one with an empty frame, that the solver
 minimizes or maximizes. `Sum(P, W, cost[P, W] * x[P, W])` is the total

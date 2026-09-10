@@ -118,9 +118,9 @@ The two rules differ in what they remove. A coefficient absent inside a sum
 removes a **term** and keeps the row. A term absent along a **free**
 dimension removes the **row**.
 
-Under `over=` the rows are given explicitly, so nothing is dropped and a
-right-hand side that misses one raises instead. An empty `dropped_rows`
-beside `stated_by="over"` is structural.
+Under `over=` the rows are given explicitly. Nothing is dropped, and a
+right-hand side that omits one raises instead. An empty `dropped_rows` beside
+`stated_by="over"` follows from that rule.
 
 ```python
 import numpy as np

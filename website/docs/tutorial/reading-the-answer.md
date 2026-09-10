@@ -57,9 +57,9 @@ print(solution.dual("demand").to_dense())
 Rows are plants and columns are warehouses: Lisbon ships 20 to Berlin and
 10 to Rome, Porto ships 15 to Paris and 5 to Rome. The dual of a demand row
 is the increase in total cost per additional unit of demand at that
-warehouse: 3 in Berlin, 1 in Paris, 6 in Rome. Lisbon's supply constraint
-binds, so each marginal unit is served from Porto at the cost of Porto's
-route.
+warehouse: 3 in Berlin, 1 in Paris, 6 in Rome. The supply constraint of
+Lisbon binds, and each marginal unit is served from Porto at the cost of the
+route from Porto.
 
 ## A variable over a subset
 
@@ -110,8 +110,8 @@ SparseArray
 </details>
 <!-- /output -->
 
-Five columns instead of six. The objective is unchanged at 135, because
-Rome is served from Lisbon in both solutions. The array type differs: a
+Five columns instead of six. The objective is unchanged at 135. Rome is
+served from Lisbon in both solutions. The array type differs: a
 variable over a full product returns a `DenseArray`, a variable over a
 subset a `SparseArray` with an entry per member and nothing elsewhere.
 
@@ -119,7 +119,7 @@ subset a `SparseArray` with an entry per member and nothing elsewhere.
 
 The model contains no decision for the route Porto to Rome. Every array a
 solution returns declares `absence="unknown"`. `to_dense()` raises
-`ValueError` and fills the missing coordinate with no value the model did not
+`ValueError`. It supplies no value for a coordinate the model does not
 produce.
 
 ```python raises=ValueError

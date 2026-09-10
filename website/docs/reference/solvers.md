@@ -265,9 +265,9 @@ An `Option` has a `name`, the `kind` it takes, what it `does`, and its
 
 A choice each solver writes differently is given once and translated. The
 value a caller writes has one meaning for every solver. No solver
-supports every option or every choice: `newton_system` and `pdlp_tol` are
-HiGHS's, as are `hipo` and `pdlp` under `method`. Asking Gurobi or Mosek
-for one of them raises, and the message identifies it. No solver runs a
+supports every option or every choice. `newton_system` and `pdlp_tol` are
+specific to HiGHS, and so are `hipo` and `pdlp` under `method`. Passing one
+of them to Gurobi or Mosek raises, and the message identifies it. No solver runs a
 different algorithm in its place. Mosek runs only its mixed-integer
 optimizer on a model with integer columns. `method` is `choose` there, and
 any other choice raises. The guide on [interior point and first-order

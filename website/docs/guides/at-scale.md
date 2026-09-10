@@ -86,8 +86,8 @@ slice(200, 300, None)
 <!-- /output -->
 
 `indices` and `values` are views of that buffer; only `indptr` is built.
-`row_of(name)` gives a constraint's rows as a slice, which is how a named
-row block is located in a matrix too large to print.
+`row_of(name)` gives the rows of a constraint as a slice. A caller locates a
+named row block in a matrix too large to print.
 
 ## Reading a large solution
 

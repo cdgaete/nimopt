@@ -12,7 +12,7 @@ indexed by the scenario as well. One commitment applies to every scenario,
 and the binary column is therefore taken under uncertainty.
 
 ```text
-minimise    Σ_{t,g}   no_load[g] · on[t,g]
+minimize    Σ_{t,g}   no_load[g] · on[t,g]
             + Σ_{s,g,t} weight[s] · cost[s,g] · p[s,g,t]
             + Σ_{s,t}   weight[s] · voll[s]  · shed[s,t]
 subject to  p[s,g,t] ≤ p_max[g] · on[t,g]                  for each s, g, t
@@ -49,10 +49,10 @@ recourse  min  not built
 </details>
 <!-- /output -->
 
-Nothing couples one hour to the next, so the commitment is chosen hour by
+No row couples one hour to the next, and the commitment is chosen hour by
 hour. `reference` enumerates every on-off subset of the fleet and scores each
-by its expected recourse across the scenarios, which is exact and cheap:
-three units make eight subsets.
+by its expected recourse across the scenarios. That enumeration is exact and
+cheap: three units make eight subsets.
 
 ```python
 from nimopt.models import recourse
