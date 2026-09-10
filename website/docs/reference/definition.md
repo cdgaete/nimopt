@@ -12,12 +12,12 @@ Definition(name="definition", sense="min")
 ```
 
 A definition declares the sets, parameters and variables a model is written
-from, and its constraints, in the expression syntax a model uses. It holds
-no data: a set declared here names a dimension and has no members, and a
-parameter names a shape and has no values.
+from, and its constraints, in the expression syntax a model uses. It contains
+no data. A set declared here identifies a dimension and has no members, and a
+parameter identifies a shape and has no values.
 
-An expression holds references rather than arrays, so an equation's free
-dimensions and its sense are read off the relation rather than declared
+An expression contains references, not arrays. The free dimensions of an
+equation and its sense are read from the relation, and neither is declared
 beside it. `sense` is `"min"` or `"max"`, set once here.
 
 | Member | Returns |
@@ -67,9 +67,9 @@ print(list(d.variables), d)
 
 ## One namespace for sets and parameters
 
-Sets and parameters share one key space, because the data a definition is
-built from is keyed by declared name and one would otherwise shadow the
-other. Declaring a parameter under a set's name raises `ValueError`.
+Sets and parameters share one key space. The data a definition is built from
+is keyed by declared name, and one key identifies one symbol. Declaring a
+parameter under the name of a set raises `ValueError`.
 
 ```python raises=ValueError
 from nimopt import Definition
@@ -119,10 +119,11 @@ print(list(d.parameters), list(d.constraints))
 
 ## An alias in a definition
 
-`alias(name, base)` declares a second name for one of the definition's sets,
-which is how a model relates a set to itself. The alias carries no data of
-its own: it reads the labels its base set binds, so `build` takes members for
-the set and none for the alias, and naming the alias in `data` is refused.
+`alias(name, base)` declares a second name for one of the sets of the
+definition. A model relates a set to itself through an alias. The alias has
+no data of its own and reads the labels bound to its base set. `build` takes
+members for the set and none for the alias, and an alias in `data` raises
+`ValueError`.
 
 ```python
 import numpy as np
@@ -153,26 +154,26 @@ print(m.n_columns, m.n_rows)
 
 ## Domains in a definition
 
-A `Domain` resolves labels through each set's coordinate, and a declared
-set has none. `where=` and `over=` on `constraint`, and `subset=` on `var`,
-therefore take a tuple of the definition's sets, meaning their full
-product, or one of its parameters, whose coefficients are the coordinates.
-Both forms resolve to the same domain, so a model and a definition declare
-a sparse variable or an explicit row domain the same way.
+A `Domain` resolves labels through the coordinate of each set, and a
+declared set has none. `where=` and `over=` on `constraint`, and `subset=` on
+`var`, therefore take a tuple of the sets of the definition, meaning their
+full product. They also take one of its parameters, whose coefficients are
+the coordinates. Both forms resolve to the same domain. A model and a
+definition declare a sparse variable or an explicit row domain the same
+way.
 
 ## Building
 
 `build(data)` copies the declaration graph, binds the copy, numbers the
-columns and returns a `Model`. `data` maps a declared set's name to its
-members and a declared parameter's name to its values. The definition is
-unchanged, so it builds as many models as it is given datasets.
+columns and returns a `Model`. `data` maps the name of a declared set to its
+members and the name of a declared parameter to its values. The definition is
+unchanged, and it builds one model per dataset it is given.
 
-A parameter's values arrive dense over its product, as an array of one
-value per cell, or long over its entries, as a pair of one mapping of label
-columns and one value column. The long form is how a parameter with
-coefficients at some coordinates and none at the rest is given, and it is
-what a variable declared with `subset=` that parameter takes its members
-from.
+The values of a parameter are given dense over its product, as an array of
+one value per cell. They are also given long over its entries, as one mapping
+of label columns and one value column. The long form gives a parameter with
+coefficients at some coordinates and none at the rest. A variable declared
+with `subset=` that parameter takes its members from those coordinates.
 
 ```python
 import numpy as np
@@ -218,7 +219,7 @@ optimal
 </details>
 <!-- /output -->
 
-Data that misses a declaration, or names something the definition never
+Data that omits a declaration, or contains a key the definition never
 declared, raises `ValueError` before anything is bound.
 
 ```python raises=ValueError

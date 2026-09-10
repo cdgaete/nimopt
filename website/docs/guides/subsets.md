@@ -50,10 +50,9 @@ print(m.assemble().to_dense())
 </details>
 <!-- /output -->
 
-The product has six members and the subset three, so `x` has three columns.
-The assembled matrix is empty because no constraint has been added. A model
-over a sparse network pays for its arcs, not for the grid that contains
-them.
+The product has six members and the subset three, and `x` has three columns.
+The assembled matrix is empty: no constraint has been added. A model over a
+sparse network costs its arcs, not the grid that contains them.
 
 ## By label or by position
 
@@ -95,8 +94,8 @@ avoids resolving labels when positions are already at hand.
 
 ## Constraints over a subset variable
 
-A sum over a subset variable runs over the members the variable has, so a
-row contains the arcs at that member and nothing else.
+A sum over a subset variable runs over the members the variable has. A row
+therefore contains the arcs at that member and nothing else.
 
 ```python
 import numpy as np
@@ -136,8 +135,8 @@ Two rows over three columns: `p0` has two arcs and `p1` one.
 ## Bounds over a subset
 
 A bound applies to every column of the variable. A parameter indexed over
-fewer dimensions than the variable is broadcast over the rest, so a bound
-per plant applies to each of that plant's arcs.
+fewer dimensions than the variable is broadcast over the rest. A bound per
+plant therefore applies to each arc of that plant.
 
 ```python
 import numpy as np

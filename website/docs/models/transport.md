@@ -6,10 +6,10 @@ description: Plants shipping to warehouses over a network that is not complete.
 # Transport
 
 `nimopt.models.transport` ships from plants to warehouses over an incomplete
-network: a plant serves a band of nearby warehouses rather than all of
-them. The cost parameter has one entry per arc, and the flow variable takes
-its members from that parameter, so the model has one column per arc rather
-than one per cell of the plant-warehouse product.
+network: a plant serves a band of nearby warehouses and not all of them. The
+cost parameter has one entry per arc, and the flow variable takes its members
+from that parameter. The model therefore has one column per arc, not one per
+cell of the plant-warehouse product.
 
 ```text
 minimise    Σ_{(p,w) ∈ arcs} cost[p,w] · flow[p,w]
@@ -41,9 +41,9 @@ transport  min  not built
 </details>
 <!-- /output -->
 
-Supply is twice the total demand of a plant's band, so no supply row binds
-and each warehouse buys from the cheapest plant that reaches it. `reference`
-computes that sum.
+Supply is twice the total demand of the band of a plant. No supply row binds
+therefore, and each warehouse buys from the cheapest plant connected to it.
+`reference` computes that sum.
 
 ```python
 from nimopt.models import transport

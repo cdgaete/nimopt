@@ -6,10 +6,10 @@ description: Generators sited at buses, grouped into bus balance rows by a looku
 # Nodal
 
 `nimopt.models.nodal` groups generators into buses through a lookup
-parameter. `at[G, B]` has an entry where generator `g` sits at bus `b`, and
-multiplying the generation by it maps a row over generators to a row over
-buses. The coefficient introduces `B`, a dimension no variable has, so the
-balance is indexed over the dimensions the lookup defines.
+parameter. `at[G, B]` has an entry where generator `g` is located at bus
+`b`. Multiplying the generation by it maps a row over generators to a row
+over buses. The coefficient introduces `B`, a dimension no variable has, and
+the balance is indexed over the dimensions the lookup defines.
 
 ```text
 minimise    Σ_{t,g} cost[g] · gen[t,g]

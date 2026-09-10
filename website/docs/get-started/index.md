@@ -27,9 +27,10 @@ subject to  Σ_w x[p,w] ≤ s[p]        for each plant p
             x[p,w] ≥ 0
 ```
 
-In `nimopt`, the sets index every declaration, the parameters hold the data,
-`m.var` declares the decision variable, `m.constraint` adds each constraint family
-under a name, and `set_objective` sets the objective function.
+In `nimopt` the sets index every declaration and the parameters contain the
+data. `m.var` declares the decision variable, `m.constraint` adds each
+constraint family under a name, and `set_objective` sets the objective
+function.
 
 ```python
 import numpy as np

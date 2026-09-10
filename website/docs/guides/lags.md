@@ -6,9 +6,9 @@ description: Reference a variable at the previous or next member of a set, and c
 # Lags
 
 Time-coupled constraints reference the previous period. A storage balance
-relates the state of charge at `t` to that at `t-1`; a ramp limit bounds
-the change in output between consecutive periods. `T - 1` is the set `T`
-lagged by one member, and `x[T - 1]` references the variable at the
+relates the stored energy at `t` to the stored energy at `t-1`. A ramp limit
+bounds the change in output between consecutive periods. `T - 1` is the set
+`T` lagged by one member, and `x[T - 1]` references the variable at the
 previous member.
 
 ## A lag that drops the boundary row
@@ -80,8 +80,8 @@ print(m.assemble().to_dense())
 
 Three rows, and the first references the last column: the `-1` in row 0 is
 in the final position. A storage balance over a repeating horizon is written
-this way, so that the level at the end of the horizon carries into the
-beginning.
+this way, and the level at the end of the horizon enters the row of the first
+period.
 
 ## A lag applies to a reference, not to a sum
 

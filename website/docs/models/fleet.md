@@ -1,14 +1,14 @@
 ---
 title: Fleet
-description: The dispatch model declared as one variable per unit rather than one variable over a product.
+description: The dispatch model declared as one variable per unit, instead of one variable over a product.
 ---
 
 # Fleet
 
-`nimopt.models.fleet` is the same problem as `dispatch`, declared as one
-variable per unit over the snapshots alone, with the units' terms added into
-one balance row. The answer is the same merit order; what differs is the
-cost of declaring it.
+`nimopt.models.fleet` is the same problem as `dispatch`. It is declared as
+one variable per unit over the snapshots alone, and the terms of the units
+are added into one balance row. The optimum is the same merit order, and the
+cost of the declaration differs.
 
 ```text
 minimise    Σ_t Σ_u cost_u[t] · u[t]
@@ -16,8 +16,8 @@ subject to  Σ_u u[t] == load[t]          for each snapshot t
             0 ≤ u[t] ≤ p_max_u[t]        for each unit u
 ```
 
-`definition` takes a scale here, because the number of variables is a
-property of the declaration rather than of the data.
+`definition` takes a scale here: the number of variables is a property of
+the declaration, not of the data.
 
 ```python
 from nimopt.models import fleet

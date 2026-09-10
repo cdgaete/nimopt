@@ -6,10 +6,10 @@ description: Technologies sited in some regions, running in every hour. Sparse i
 # Sector
 
 `nimopt.models.sector` has mixed density. The region-technology map is
-sparse, since a technology exists in some regions and not others, while
-every sited pair runs in every hour. The generation variable takes its
-members from a parameter over the sited pairs crossed with the whole
-horizon, so it is sparse in one axis and dense in the other.
+sparse: a technology exists in some regions and not in others. Every sited
+pair runs in every hour. The generation variable takes its members from a
+parameter over the sited pairs crossed with the whole horizon. It is
+therefore sparse in one axis and dense in the other.
 
 ```text
 minimise    Σ_{(r,k) sited, t} cost[r,k] · gen[r,k,t]

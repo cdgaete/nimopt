@@ -1,14 +1,14 @@
 ---
 title: Saving and loading a model
-description: Write a definition or a built model to a file in nimopt's own spelling, read it back, and carry the data inline or beside it.
+description: Write a definition or a built model to a file in the expression syntax of nimopt, read it back, and store the data inline or beside it.
 ---
 
 # Saving and loading a model
 
-A definition writes itself to a YAML file whose expressions are spelled as
-they are typed in Python. The file is the model's final form: every derived
-coefficient spelled out, every term with its own sum and sign, the constant
-last.
+A definition writes a YAML file whose expressions are written as they are
+typed in Python. The file is the canonical form of the model: every derived
+coefficient written out, every term with its own sum and sign, and the
+constant last.
 
 ```python
 from nimopt import Definition, Sum
@@ -51,8 +51,9 @@ objective: Sum(G, T, ((price[G, T] / eta[G, T]) * 2) * gen[G, T])
 </details>
 <!-- /output -->
 
-The structure section is the data's schema: every set, and every parameter
-with its dimensions. `build` refuses a mapping that misses any of them by name.
+The structure section is the schema of the data: every set, and every
+parameter with its dimensions. `build` raises `ValueError` for a mapping that
+omits one of them.
 
 ## Reading a file back
 
@@ -106,10 +107,10 @@ print(m.solve().objective)
 
 ## Editing by hand
 
-The text is read through the same operators a Python model is built from,
-so an edit is accepted where Python accepts it and normalised the same way.
-Adding a scalar, reordering terms, or writing a comparison the other way
-round all read, and the file written back is the canonical form.
+The text is read through the same operators a Python model is built from. An
+edit is accepted where Python accepts it, and is normalized the same way.
+Adding a scalar, reordering terms and reversing a comparison all parse. The
+file written back is the canonical form.
 
 ```python
 from nimopt import loads
@@ -144,8 +145,8 @@ relation: 2 * Sum(G, gen[G, T]) == load[T]
 </details>
 <!-- /output -->
 
-An edit Python refuses is refused here with the same message, and a
-construct outside the spelling is refused naming it.
+An edit that raises in Python raises here with the same message. A construct
+outside the expression syntax raises and reports it.
 
 ```python raises=ValueError
 from nimopt import loads
@@ -180,9 +181,9 @@ ValueError: 'max(gen[G, T]) <= 10': the syntax supports one call; write Sum
 ## Data inline, for a model small enough to read
 
 A built model writes its data into the file with `inline=True`. A set is a
-list, a dense parameter is nested lists, and a parameter carrying some
-coordinates of its product is a table of the dimensions then `value`. A
-file carrying data loads to a built `Model`.
+list, and a dense parameter is nested lists. A parameter with values at some
+coordinates of its product is a table of the dimensions then `value`. A file
+containing data loads to a built `Model`.
 
 ```python
 from nimopt import loads
@@ -226,11 +227,11 @@ data:
 </details>
 <!-- /output -->
 
-## Data beside the file, for a model of size
+## Data beside the file, for a large model
 
 `save` writes a model's file and its data as an `.npz` beside it, under the
-file's stem, and the file names that sidecar. `load` reads both. The pair
-moves together; the file names no path and no machine.
+file's stem. The file records the sidecar name. `load` reads both. The file
+records no path and no machine name.
 
 ```python
 import tempfile
@@ -261,22 +262,20 @@ optimal
 <!-- /output -->
 
 A definition's file takes data from the caller instead: `load(path, data=...)`
-with the mapping `build` takes or the path of an `.npz`. A file that carries
-data and a `data=` together is refused, because two sources for one model is
-a choice the library does not make.
+with the mapping `build` takes or the path of an `.npz`. A file that contains
+data and a `data=` together raises `ValueError`: one model takes one data
+source.
 
 ## A file that describes its own format
 
 `instructions=True` on `save`, `Definition.to_yaml` and `Model.to_yaml` writes
 a comment block at the top of the file. The block is the same in every file.
 It describes the format, not the model: the keys and their order, the
-defaults, the rules that decide which rows a constraint has, and the
-expression syntax. A reader given one file can interpret it without this
-package.
+defaults, the rules that determine which rows a constraint has, and the
+expression syntax. A reader with one file interprets it without this package.
 
-The block is a YAML comment, so a file that carries it loads to the same
-model as one that does not, and writing the loaded model with the flag gives
-the same text.
+The block is a YAML comment. A file with it loads to the same model as one
+without it, and writing the loaded model with the flag gives the same text.
 
 ```python
 from nimopt import Definition, loads

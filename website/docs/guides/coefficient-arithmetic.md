@@ -1,6 +1,6 @@
 ---
 title: Coefficient arithmetic
-description: Combine parameters into a coefficient, divide by a parameter, carry a constant, and the forms that are refused with the form to write instead.
+description: Combine parameters into a coefficient, divide by a parameter, add a constant, and the forms that raise with the form to write instead.
 ---
 
 # Coefficient arithmetic
@@ -9,8 +9,8 @@ A coefficient is often derived from several parameters: fuel price divided
 by efficiency, a cost scaled by a factor. In `nimopt` a coefficient is a
 parameter read at its sets or an arithmetic combination of such readings.
 `+`, `-`, `*`, `/` and a power by a number combine them. The combination is
-symbolic: it holds references, derives its dimensions from its operands, and
-is evaluated once, when the term it multiplies is materialised. A derived
+symbolic: it contains references, derives its dimensions from its operands,
+and is evaluated once, when the term it multiplies is materialised. A derived
 coefficient can therefore appear in a definition before any data exists.
 
 ```python
@@ -84,9 +84,9 @@ the parameter at its sets first and combine the references.
 Two operands with the same dimensions align entry by entry. Operands whose
 dimensions nest or overlap align on the shared dimensions and broadcast over
 the rest, with the left operand's order first. Operands sharing no dimension
-raise `ValueError`: their product would be an outer product, which a linear
-model does not require. The same rule applies when a coefficient multiplies
-a variable. A number has no dimensions and scales.
+raise `ValueError`. Their product would be an outer product, and a linear
+model does not require one. The same rule applies when a coefficient
+multiplies a variable. A number has no dimensions and scales.
 
 ```python raises=ValueError
 import numpy as np
@@ -118,11 +118,11 @@ defines rows over those dimensions: this is how a term maps rows to columns.
 
 ## Division by zero
 
-A divisor that is zero raises `ZeroDivisionError`; the message gives the
-coordinate. Substituting infinity would hand the solver a model nobody
-wrote. The check covers a Python number, a NumPy scalar and a coefficient
-with a zero at any coordinate, because a NumPy scalar divides to infinity
-where a Python number raises.
+A divisor that is zero raises `ZeroDivisionError`, and the message gives the
+coordinate. A quotient of infinity is not passed to a solver. The check
+covers a Python number, a NumPy scalar and a coefficient with a zero at any
+coordinate. A NumPy scalar divides to infinity where a Python number
+raises.
 
 ```python raises=ZeroDivisionError
 import numpy as np
@@ -183,18 +183,18 @@ print(m.solve().objective)
 </details>
 <!-- /output -->
 
-## Refused forms
+## Forms that raise
 
-A line of modelling arithmetic produces a linear term, or raises with a
+A line of modeling arithmetic produces a linear term, or raises with a
 message that gives the form to write instead. There is no third outcome.
 
-| Written | The message says to write |
+| Written | Form to write instead |
 | --- | --- |
 | `x[P] * y[P]` | a linear term has one variable; a coefficient multiplies it |
 | `x[P] ** 2` | a coefficient takes the power, and a variable multiplies it |
 | `x[P] / y[P]` | a variable in a denominator is not linear |
 | `2.0 / x[P]` | the same: write the reciprocal as a coefficient |
-| `x[P] / 0.0` | a divisor of zero is handled before it reaches an expression |
+| `x[P] / 0.0` | a divisor of zero is handled before it is passed to an expression |
 | `x[P] < 1.0` | `<=` and `>=`; an LP has no row for a strict inequality |
 | `x[P] > 1.0` | the same |
 | `x[P] != 1.0` | one bound per equation |
@@ -207,8 +207,8 @@ message that gives the form to write instead. There is no third outcome.
 | `Sum(P - 1, x[P])` | `Sum(P, x[P - 1])`: the lag belongs on the reference |
 | `T - 1.7` | a lag is a whole number of members |
 
-Each raises a `nimopt` message rather than a bare Python error, and the test
-suite executes both the table and the rewrites the messages name.
+Each raises with a `nimopt` message, not with a bare Python error. The test
+suite executes the table and the replacement forms the messages give.
 
 ```python raises=TypeError
 import numpy as np
@@ -232,6 +232,6 @@ TypeError: a coefficient is a parameter; build one with `Param.from_dense` or `P
 </details>
 <!-- /output -->
 
-A NumPy array multiplying a term would let NumPy handle the operator and
-return an array of expressions. The expression types refuse the ufunc, and
-the message says how a coefficient is built.
+A NumPy array multiplying a term would let NumPy apply the operator and
+return an array of expressions. The expression types reject the ufunc, and
+the message describes how a coefficient is built.

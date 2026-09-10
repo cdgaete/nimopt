@@ -1,15 +1,15 @@
 ---
 title: Storage
-description: A generator fleet and batteries meeting an hourly load, with the hours coupled through the state of charge.
+description: A generator fleet and batteries meeting an hourly load, with the hours coupled through the stored energy.
 ---
 
 # Storage
 
 `nimopt.models.storage` dispatches a generator fleet and a set of batteries
-against an hourly load. The state-of-charge row references the previous
-hour through `T.cyclic - 1`, so the row at the first hour references the
-last hour and every hour has a row. The ramp row references `T - 1`; the
-first hour has no predecessor, so that row is not produced. The model
+against an hourly load. The `state_of_charge` row references the previous
+hour through `T.cyclic - 1`. The row at the first hour therefore references
+the last hour, and every hour has a row. The ramp row references `T - 1`. The
+first hour has no predecessor, and that row is not produced. The model
 exercises both lag rules.
 
 ```text
@@ -24,7 +24,7 @@ subject to  Σ_g gen[g,t] + Σ_s discharge[s,t] − Σ_s charge[s,t] == load[t]
             soc[s,t] ≤ energy[s,t]
 ```
 
-Every limit is a constraint rather than a bound, so that each has a dual
+Every limit is a constraint and not a bound, and each therefore has a dual
 value.
 
 ```python
@@ -56,10 +56,10 @@ storage  min  not built
 <!-- /output -->
 
 The batteries are lossy, with a round-trip efficiency of `0.95 · 0.93`, and
-the fleet's costs span 50.0 to 55.0. Shifting energy through the store never
-pays, so the store stays idle and the optimum is the hourly merit order. A
-store that cycles requires data with a wider cost spread; the benchmarks
-supply it.
+the costs of the fleet span 50.0 to 55.0. Shifting energy through the store
+costs more than it saves. The store is therefore idle, and the optimum is the
+hourly merit order. A store that cycles requires data with a wider cost
+spread, and the benchmarks supply it.
 
 ```python
 from nimopt.models import storage
@@ -82,8 +82,8 @@ store moved: 0.0
 </details>
 <!-- /output -->
 
-Every hour has a state-of-charge row, because that lag wraps. The ramp row
-at the first hour is not produced, because that lag does not.
+Every hour has a `state_of_charge` row: that lag wraps. The ramp row at the
+first hour is not produced: that lag does not wrap.
 
 ```python
 from nimopt.models import storage

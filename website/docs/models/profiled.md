@@ -6,9 +6,9 @@ description: A dispatch whose capacity is a profile, with one bound per generato
 # Profiled
 
 `nimopt.models.profiled` is a dispatch whose capacity varies by hour.
-`dispatch` bounds a generator by a single number; here `p_max` is a
-parameter over generators and snapshots, so a solar unit is bounded by its
-hourly availability and a thermal unit by its rating.
+`dispatch` bounds a generator by a single number. Here `p_max` is a
+parameter over generators and snapshots. A solar unit is bounded by its
+hourly availability, and a thermal unit by its rating.
 
 ```text
 minimise    Σ_{t,g} cost[g] · gen[t,g]

@@ -1,15 +1,15 @@
 ---
 title: Conditions on a sum and on a constraint
-description: Restrict the members a sum runs over, restrict the rows a constraint produces, or state the rows explicitly.
+description: Restrict the members a sum runs over, restrict the rows a constraint produces, or declare the rows explicitly.
 ---
 
 # Conditions on a sum and on a constraint
 
-Two situations call for a condition. A constraint may sum over part of a
-variable's members, such as the arcs of a network when the variable is
-indexed over the full product. And a constraint may apply to some members
-of its frame only, such as a capacity limit on one plant. `where=` handles
-both. `over=` states a constraint's rows explicitly.
+Two cases require a condition. A constraint may sum over part of the members
+of a variable, such as the arcs of a network where the variable is indexed
+over the full product. A constraint may also apply to some members of its
+frame only, such as a capacity limit on one plant. `where=` covers both
+cases. `over=` declares the rows of a constraint explicitly.
 
 ## Restricting a sum
 
@@ -51,11 +51,11 @@ print(m.assemble().to_dense())
 </details>
 <!-- /output -->
 
-The variable is over the full product and has six columns; the condition
-leaves three of them with a coefficient. A subset variable would have three
-columns in the first place. Use a condition when the variable is over the
-product and one constraint reads part of it; declare a subset when the
-model never uses the other members.
+The variable is over the full product and has six columns. The condition
+gives three of them a coefficient. A variable over a subset would have three
+columns from the start. Use a condition where the variable is over the
+product and one constraint reads part of it. Declare a subset where the model
+never uses the other members.
 
 ## Restricting the rows
 
@@ -92,8 +92,8 @@ print(m.assemble().to_dense())
 
 One row, for `p0`. `p1` has no capacity row.
 
-A condition over dimensions other than the constraint's frame raises
-`ValueError`; the message gives both index sets.
+A condition over dimensions other than the frame of the constraint raises
+`ValueError`, and the message gives both index sets.
 
 ```python raises=ValueError
 import numpy as np
@@ -120,14 +120,14 @@ ValueError: constraint 'capacity' has free dimensions ('P',); its condition is o
 </details>
 <!-- /output -->
 
-## Stating the rows explicitly
+## Declaring the rows explicitly
 
-By default the rows of a constraint are derived from its terms: a row
-exists where every term has a value and the right-hand side has a value. A
-term with no value along a frame dimension removes the row, because a row
-missing one of its terms would express a constraint that was not written.
+By default the rows of a constraint are derived from its terms: a row exists
+where every term has a value and the right-hand side has a value. A term with
+no value along a frame dimension removes the row. A row missing one of its
+terms would express a constraint that was not written.
 
-`over=domain` states the rows instead of deriving them. A term with values
+`over=domain` declares the rows instead of deriving them. A term with values
 at some of the rows contributes where it has them, and every row in the
 domain is produced.
 
@@ -158,7 +158,7 @@ print(rows.n_rows)
 
 ## `over` or `where`, not both
 
-`over=` states the rows and `where=` restricts them, so passing both raises
+`over=` declares the rows and `where=` restricts them. Passing both raises
 `ValueError`.
 
 ```python raises=ValueError
@@ -190,5 +190,5 @@ ValueError: constraint 'capacity' is given over= and where= together; pass one o
 </details>
 <!-- /output -->
 
-A condition on a sum and a condition on the constraint compose: the first
-restricts what is summed, the second which rows exist.
+A condition on a sum and a condition on the constraint compose. The first
+restricts what is summed, and the second restricts which rows exist.

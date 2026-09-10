@@ -2,21 +2,21 @@
 
 The documentation site is at <https://cdgaete.github.io/nimopt/>.
 
-`nimopt` is a Python library for building linear and mixed-integer programs. A model is declared symbolically over named index sets — as parameters, variables and constraints — and is expanded into a coefficient matrix only when it is assembled or solved. Solutions are returned as arrays over those same index sets, so a primal value is read by label rather than by column position.
+`nimopt` is a Python library for building linear and mixed-integer programs. A model is declared symbolically over named index sets, as parameters, variables and constraints. The declaration is expanded into a coefficient matrix at assembly or at solve. Solutions are returned as arrays over the same index sets. A primal value is read by label, not by column position.
 
-`nimopt` is built on `nimblend`, a labelled sparse N-dimensional array library with no knowledge of optimisation. The dependency runs in one direction, and `nimblend` is documented in [its own section](website/docs/nimblend/index.md).
+`nimopt` is built on `nimblend`, a labeled sparse N-dimensional array library. `nimblend` contains no optimization vocabulary and does not import `nimopt`. It is documented in [its own section](website/docs/nimblend/index.md).
 
 ## Design
 
-**A variable is a dimension.** A constraint is an array indexed over its free sets crossed with the model's column space, with the coefficients as values. There is no assembly step converting the model into a matrix, because the array is the matrix.
+**A variable is a dimension.** A constraint is an array indexed over its free sets crossed with the model's column space, with the coefficients as values. There is no assembly step converting the model into a matrix: the array is the matrix.
 
-**Absence is distinct from zero.** An entry is either stored or absent, and every array declares what absence means: `"empty"` for a coordinate that contributes nothing, `"unknown"` for one that was never modelled. A missing result is never counted as zero, and division by an absent value raises rather than producing an infinity.
+**Absence is distinct from zero.** An entry is either stored or absent, and every array declares what absence means: `"empty"` for a coordinate that contributes nothing, `"unknown"` for one that was never modeled. A missing result is never counted as zero. Division by an absent value raises an error; it does not return an infinity.
 
-**A subset stays a subset.** A variable declared over a subset of a set product has one column per member of the subset and none for the rest. The full product is never materialised, at declaration or at any point after it.
+**A subset determines the columns.** A variable declared over a subset of a set product has one column per member of the subset and none for the rest. The full product is never materialised, at declaration or after it.
 
-**Expressions are symbolic.** An expression holds references to variables and parameters rather than their values. `cost[P, W] * x[P, W]` costs the same to write over a million routes as over six; the values are read when the matrix is built.
+**Expressions are symbolic.** An expression contains references to variables and parameters, not their values. `cost[P, W] * x[P, W]` is the same expression over a million routes and over six. The values are read when the matrix is built.
 
-**Dropped rows are reported.** A row whose terms have no value at some coordinate is dropped rather than written incompletely. `absent()` lists every dropped row with the rule that dropped it, and `row()` returns one row of the assembled matrix as the solver receives it.
+**Dropped rows are reported.** A row whose terms have no value at some coordinate is dropped; it is not written incompletely. `absent()` lists every dropped row with the rule that dropped it. `row()` returns one row of the assembled matrix in the form passed to the solver.
 
 ## Install
 
@@ -26,9 +26,9 @@ pip install "nimopt[highs]"
 
 The extra installs `nimopt` and its dependency `nimblend` from PyPI, with HiGHS as the solver backend.
 
-HiGHS is the default solver, and `[highs]` installs it. `[gurobi]` and `[mosek]` add those adapters instead, `[bench]` adds the comparison suite and `[dev]` the test and lint tooling. `available()` reports the solvers whose backend can be imported in the current environment, and `capabilities(name)` answers for an adapter whether or not its backend is installed.
+HiGHS is the default solver, and `[highs]` installs it. `[gurobi]` and `[mosek]` add those adapters instead, `[bench]` adds the comparison suite and `[dev]` the test and lint tooling. `available()` reports the solvers whose backend can be imported in the current environment. `capabilities(name)` reports what one adapter supports, whether or not its backend is installed.
 
-Working on the package installs from a checkout instead. `nimblend` is a dependency and installs first, from wherever it is cloned; `nimopt` then installs from its own root:
+Development installs come from a checkout. `nimblend` is a dependency and installs first, from its clone. `nimopt` then installs from its own root:
 
 ```bash
 pip install /path/to/nimblend
@@ -79,7 +79,7 @@ The primal values are returned as a 2 by 3 array over plants and warehouses, in 
 
 ## Declaring before the data exists
 
-A `Definition` states the same model without binding any data. Its sets and parameters are declared by name, its constraints are written in the same expression syntax, and `explain()` reports the whole declaration before a single value has been read.
+A `Definition` declares the same model without binding data. Its sets and parameters are declared by name and its constraints use the same expression syntax. `explain()` reports the whole declaration before any value is read.
 
 ```python
 import numpy as np
@@ -116,7 +116,7 @@ transport  min  not built
 </details>
 <!-- /output -->
 
-A definition is copied before it is bound, so one definition builds as many models as it is given datasets for and is unchanged by any of them. The built model is inspected the same way, and `row()` reads one row back out of the assembled matrix as the solver receives it.
+A definition is copied before it is bound. One definition builds a model for each dataset it is given, and no build changes the definition. The built model is inspected the same way. `row()` reads one row out of the assembled matrix in the form passed to the solver.
 
 ```python
 import numpy as np
@@ -161,7 +161,7 @@ demand  3 of 3 rows  stated by terms
 
 ## A variable over a subset
 
-Where a variable spans an arc list rather than a full product, it has a column per arc and the product is never built. A thousand plants each serving three warehouses is three thousand columns, not a million.
+Where a variable spans an arc list instead of a full product, it has one column per arc and the product is never built. A thousand plants each serving three warehouses is three thousand columns, not a million.
 
 ```python
 import numpy as np
@@ -200,18 +200,18 @@ print(f"{m.n_columns} columns over a product of {len(P) * len(W)}")
 - `explain()` on a definition or a built model, `row()` into the assembled matrix, and `absent()` reporting dropped rows and the rule that dropped each
 - A `Session` that keeps the solved instance open, and `diagnose()` reporting the conflicting rows of an infeasible model or the ray of an unbounded one
 - Primals and duals returned over their index sets, with absence distinct from zero
-- Continuous and integer columns, solved through HiGHS, Gurobi or Mosek behind one adapter contract, with `capabilities()` stating what each adapter does and which capabilities it refuses together
-- One option vocabulary translated into each solver's own spelling, so a time limit is stated the same way whatever solves the model
+- Continuous and integer columns, solved through HiGHS, Gurobi or Mosek behind one adapter contract, with `capabilities()` reporting what each adapter supports and which capabilities it rejects together
+- One option vocabulary translated into each solver's own option names, with a time limit written the same way for every solver
 - A model written to and read back from YAML, with its data inline or in a sidecar
-- A corpus of worked models under `nimopt.models`, each stating its formulation, inputs at any size, and an objective computed by arithmetic rather than by a solver
+- A corpus of worked models under `nimopt.models`, each with its formulation, its inputs at any size, and an objective computed by arithmetic instead of by a solver
 
 ## Performance
 
-Where a variable's columns are a subset of a set product, not materialising the product is worth a great deal. On a transport model of 400 000 arcs over a 20 000 000-cell product, `nimopt` builds the same matrix in 72.9 MB of resident memory against a dense rival's 1 682.9 MB, and in 292.9 ms against 844.5 ms.
+Where a variable's columns are a subset of a set product, not materialising the product saves memory and time. On a transport model of 400 000 arcs over a 20 000 000-cell product, `nimopt` builds the matrix in 72.9 MB of resident memory against linopy's 1 682.9 MB. The build takes 292.9 ms against 844.5 ms.
 
-Where nothing is sparse, the alignment work is a cost with no corresponding saving. On a fully dense temporally-coupled model at 2 111 080 rows, the same comparison reverses: the rival builds the matrix three times faster, for seven per cent more resident memory.
+Where nothing is sparse, the alignment work costs time and saves nothing. On a fully dense temporally coupled model at 2 111 080 rows, the comparison reverses: linopy builds the matrix three times faster, for seven percent more resident memory.
 
-Both rows are in the suite for the same reason. The [benchmark page](website/docs/explanation/what-the-numbers-measure.md) gives each figure, the baseline it is measured against, and what it does not claim.
+The benchmark suite measures both models. The [benchmark page](website/docs/explanation/what-the-numbers-measure.md) gives each figure, the baseline it is measured against, and what it does not claim.
 
 ## Documentation
 
@@ -223,13 +223,13 @@ Both rows are in the suite for the same reason. The [benchmark page](website/doc
 
 Every Python example on this site is executed by the test suite and shows the output it produced.
 
-## Licence
+## License
 
 MIT. See `LICENSE`.
 
 ## Citing
 
-The package carries a `CITATION.cff`. Cite it by author, name and version:
+The package includes a `CITATION.cff`. Cite it by author, name and version:
 
 > Gaete-Morales, Carlos. *nimopt* (version 0.1.2). MIT.
 

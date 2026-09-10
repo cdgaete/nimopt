@@ -6,9 +6,9 @@ description: Reference one member of a dimension by its label, removing that dim
 # A member fixed at a label
 
 Initial conditions, terminal conditions and boundary rows reference one
-member of a set: the state at the first period, the level at the last. A
-label in place of a set in a reference fixes that dimension at one member
-and removes it from the frame.
+member of a set, such as the stored energy at the first period or the level
+at the last. A label in place of a set in a reference fixes that dimension at
+one member and removes it from the frame.
 
 ```python
 import numpy as np

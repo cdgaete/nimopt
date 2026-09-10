@@ -103,13 +103,13 @@ ValueError: status is 'infeasible' and the solver reports no feasible point; rea
 
 ## The array type of a value
 
-A variable over a full product has a value at every cell of its frame, and
-the solver returns them in column order, so they reshape into a
-`DenseArray` with no index built at all. A variable over a subset has
-values at its members alone, and a dense frame would be the grid it was
-declared to avoid, so those stay a `SparseArray`. A dual follows its
-constraint's rows by the same rule.
+A variable over a full product has a value at every cell of its frame. The
+solver returns those values in column order, and they reshape into a
+`DenseArray` with no index built. A variable over a subset has values at its
+members alone. A dense frame would be the grid the declaration avoids, and
+those values remain a `SparseArray`. A dual follows the rows of its
+constraint by the same rule.
 
-Every array declares `absence="unknown"`: a coordinate the model did not
-have has no value, and combining two models' results must not invent a zero
-for it.
+Every array declares `absence="unknown"`. A coordinate the model does not
+have has no value, and combining the results of two models adds no zero for
+it.

@@ -13,17 +13,17 @@ description: Ten complete models, each with its formulation, its data at any sca
 | `data(scale=1)` | the inputs, at a given size |
 | `reference(data)` | the optimal objective, computed by direct arithmetic |
 
-The three serve different readers. This documentation calls `explain()`, a
-benchmark calls `build(data(100))`, and a test compares a solve against
-`reference(data(1))`. A reference is arithmetic over the inputs that uses
-nothing from `nimopt`, so a formulation error is not checked against a copy
-of itself.
+The three functions have different callers. This documentation calls
+`explain()`, a benchmark calls `build(data(100))`, and a test compares a
+solve against `reference(data(1))`. A reference is arithmetic over the inputs
+and calls nothing from `nimopt`. A formulation error is therefore not checked
+against a copy of itself.
 
 | Model | Exercises |
 | --- | --- |
 | [`dispatch`](/models/dispatch) | the baseline formulation |
 | [`transport`](/models/transport) | a sparse network over a subset of a product |
-| [`storage`](/models/storage) | temporal coupling and a cyclic state |
+| [`storage`](/models/storage) | temporal coupling and a cyclic lag |
 | [`nodal`](/models/nodal) | grouping through a lookup parameter |
 | [`commitment`](/models/commitment) | binary columns |
 | [`fleet`](/models/fleet) | many small declarations rather than one large one |

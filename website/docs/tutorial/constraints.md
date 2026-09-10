@@ -97,13 +97,13 @@ route into its warehouse: twelve nonzeros in total.
 ## The right-hand side
 
 The right-hand side is a scalar, applied to every row, or a parameter read
-at exactly the constraint's frame, giving each row its own value. The
+at exactly the frame of the constraint, giving each row its own value. The
 parameter is read at its sets here as it is anywhere else: `supply[P]`, not
-`supply`. A bare name raises `TypeError` and names the reading it wants,
-because a row bounded by a bare name reads as one bounded by a scalar.
+`supply`. A parameter without a bracket raises `TypeError` and reports the
+reading it requires.
 
 Supply is indexed over `P`, as are the supply rows. A parameter read over any
-other index set raises `ValueError`; the message gives both index sets.
+other index set raises `ValueError`, and the message gives both index sets.
 
 ```python raises=TypeError
 import numpy as np
@@ -158,9 +158,9 @@ ValueError: constraint 'supply' has free dimensions ('P',); its right-hand side 
 ## One bound per constraint
 
 Python evaluates the chained comparison `0 <= expr <= 10` as
-`(0 <= expr) and (expr <= 10)`, which discards the first relation. `nimopt`
-raises `TypeError` on the chained form rather than dropping a bound. Each
-bound is written as its own constraint.
+`(0 <= expr) and (expr <= 10)` and discards the first relation. `nimopt`
+raises `TypeError` on the chained form and drops no bound. Each bound is
+written as its own constraint.
 
 ```python raises=TypeError
 import numpy as np

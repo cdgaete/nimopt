@@ -11,43 +11,45 @@ The whole manual is at [`/llms-full.txt`](/llms-full.txt); the index is at
 
 **A variable is a dimension.** `m.var("x", (P, W))` occupies a block of the
 model's single column space. A member's column is computed from its
-multi-index rather than stored, so a variable over millions of columns
-costs its members and not its columns.
+multi-index and is not stored. A variable over millions of columns costs
+its members, not its columns.
 
-**An expression is symbolic.** `cost[P, W] * x[P, W]` holds references,
-not arrays. Writing it costs nothing. It becomes matrix entries only when a
+**An expression is symbolic.** `cost[P, W] * x[P, W]` contains references,
+not arrays. Writing it allocates nothing. It becomes matrix entries when a
 constraint is materialised.
 
 **A constraint is an array.** It is a `nimblend` array over its free sets
-crossed with the column space, so there is no assembly step: the array is
-the matrix.
+crossed with the column space. There is no assembly step: the array is the
+matrix.
 
-**A definition is a model without its data.** `Definition` mirrors the
+**A definition is a model without its data.** `Definition` provides the
 vocabulary a model is written in, `set`, `param`, `var`, `constraint` and
 `set_objective`, over symbols declared with no members and no values.
-`explain()` reports what it declares; `build(data)` binds a copy and returns
-a `Model`, so one definition builds as many models as it is given datasets.
+`explain()` reports what it declares. `build(data)` binds a copy and returns
+a `Model`. One definition builds a model for each dataset it is given.
 
-**A built model answers questions about itself.** `explain()` reports what
-it built, `row(name, **coords)` reads one row back out of the assembled
-matrix, and `absent(name)` reports which coordinates were dropped from a
-constraint and by which rule. All three read what was built rather than
-walking the expression a second time.
+**A built model is inspected through three methods.** `explain()` reports
+what it built, and `row(name, **coords)` reads one row out of the assembled
+matrix. `absent(name)` reports which coordinates were dropped from a
+constraint and by which rule. All three read the assembled model, and none
+walks the expression a second time.
 
 **A session keeps the solver open.** `model.session()` assembles once and
-keeps the solver's model, so `diagnose()` asks the solved instance which
-rows conflict, or which direction an unbounded model runs off in.
-`available()` lists the adapters installed and `capabilities(name)` reports
-what each does, including what it refuses: a model with integer columns has
-no duals, because a mixed-integer model's duals are not its relaxation's.
+keeps the solver's model. `diagnose()` queries the solved instance for the
+conflicting rows of an infeasible model, or for the ray of an unbounded one.
+`available()` lists the installed adapters. `capabilities(name)` reports what
+one adapter supports and which capabilities it rejects together. A model with
+integer columns has no duals: a mixed-integer model's duals are not its
+relaxation's.
 
-**`nimblend` is the layer below.** It knows dimensions, labels, entries and
-alignment, and nothing about optimization. Import from `nimblend` itself,
-never from `nimblend.sparse` or another submodule, and never read an array's
-`.index` or `.data` or a domain's `.codes`. Each has a reader above it:
+**`nimblend` is the layer below.** Its vocabulary is dimensions, labels,
+entries and alignment, and it contains no optimization term. Import from
+`nimblend` itself, never from `nimblend.sparse` or another submodule, and
+never read an array's `.index` or `.data` or a domain's `.codes`. Each of the
+three has a reader above it:
 `coordinates()`, `values()`, `positions_of_coordinates()` and `as_coord()`.
-Nor build one: a domain returns the array over its own members through
-`array(values)` and `identity(into, coord, start)`.
+Do not build an index matrix either: a domain returns the array over its own
+members through `array(values)` and `identity(into, coord, start)`.
 
 ## The public surface
 
@@ -62,26 +64,26 @@ Nor build one: a domain returns the array over its own members through
 or an arithmetic combination of such readings: `price[G, T] / eta[G, T]` is
 a coefficient written before any data exists, read at its sets like a
 parameter, and evaluated once when the matrix is built. `+`, `-`, `*`, `/`
-and a power by a number combine coefficients. An expression also carries a
-constant, so `x + 1 <= 5` produces the row `x <= 4`.
+and a power by a number combine coefficients. An expression also contains a
+constant: `x + 1 <= 5` produces the row `x <= 4`.
 
 ## What goes wrong
 
 **A chained comparison.** `0 <= expr <= 10` raises `TypeError`. Python
-evaluates it as two comparisons joined by `and`, which keeps only the
-second, so a relation has no truth value rather than letting the first
-bound be dropped. Write each bound as its own constraint.
+evaluates it as two comparisons joined by `and` and keeps only the second.
+A relation has no truth value, and the chained form raises instead of
+dropping the first bound. Write each bound as its own constraint.
 
 **A sum over a lag.** `Sum(T - 1, ...)` raises: a sum runs over a set's
 members. Put the lag on the variable reference, `x[T - 1]`.
 
 **The built-in `sum` over a set's members.** `sum(x[S, t] for t in members)`
-gives the correct answer at a cost: it produces one term per member, where
-`Sum(T, x[S, T])` produces one term and reduces a dimension. The terms
-concatenate pairwise and each materialises its own block, so building a
-model that way runs 24 times slower at 25 members and 275 times at 400, and
-the gap widens. Use the built-in `sum` for a short list of distinct
-expressions and `Sum` for a set's members.
+returns the correct expression at a cost: it produces one term per member,
+where `Sum(T, x[S, T])` produces one term and reduces a dimension. The terms
+concatenate pairwise and each materialises its own block. Building a model
+that way runs 24 times slower at 25 members and 275 times slower at 400, and
+the factor grows with the member count. Use the built-in `sum` for a short
+list of distinct expressions and `Sum` for a set's members.
 
 **A right-hand side over the wrong dimensions.** A constraint's right-hand
 side is a parameter over exactly its free dimensions. The error message
@@ -100,42 +102,43 @@ whose coefficients are the coordinates.
 
 **A row that is not there.** `row()` raises for a coordinate at which the
 constraint has no row. `absent()` reports which rule dropped it: a
-coefficient absent inside a sum removes a **term** and leaves the row
-standing; a term absent along a **free** dimension removes the **row**.
+coefficient absent inside a sum removes a **term** and keeps the row; a term
+absent along a **free** dimension removes the **row**.
 
-**Reading a MILP's duals.** A model with integer columns has none, and
-`dual()` raises rather than returning the relaxation's. Read `primal`.
+**Reading a MILP's duals.** A model with integer columns has no duals.
+`dual()` raises; it does not return the relaxation's duals. Read `primal`.
 
 **A conflict HiGHS cannot prove.** HiGHS computes its conflict over the
-linear relaxation, so a model infeasible only through its integrality
-produces none and `diagnose()` raises. Gurobi's covers the integrality.
+linear relaxation. A model infeasible only through its integrality produces
+no conflict, and `diagnose()` raises. The Gurobi conflict covers the
+integrality.
 
 **Two operands that share no dimension.** Every binary operator combines two
-dimensioned operands only where they share a dimension, and the rule
-applies to a coefficient meeting a variable exactly as it applies to two
-coefficients. Frames sharing nothing raise: their combination would be an
-outer product no model asks for. A number has no dimension and scales.
+dimensioned operands only where they share a dimension. The rule applies to a
+coefficient multiplied by a variable and to two coefficients alike. Frames
+sharing no dimension raise `ValueError`; their combination would be an outer
+product. A number has no dimension and scales every entry.
 
 **A division by zero.** A divisor that is zero raises `ZeroDivisionError`
 with the coordinate, for a Python number, a NumPy scalar and a coefficient
-with a zero at one coordinate alike. Handle the divisor before it reaches an
-expression.
+with a zero at one coordinate alike. Handle the divisor before it is passed
+to an expression.
 
 **A derived coefficient read at the wrong sets.** A combination is read at
 its sets as a parameter is, and the reading is checked against the
-dimensions it has: `unit_cost[T, G]` raises where it is written, naming
+dimensions it has. `unit_cost[T, G]` raises where it is written and reports
 `('G', 'T')`.
 
-**Reaching into `nimblend`.** A test fails on an import from a `nimblend`
-submodule, on any read of an array's `.index` or `.data` or a domain's
-`.codes`, and on a module of the package assembling an index matrix of its
-own.
+**Bypassing the `nimblend` interface.** A test fails on an import from a
+`nimblend` submodule. It also fails on a read of an array's `.index` or
+`.data` or a domain's `.codes`, and on a module of the package that assembles
+an index matrix of its own.
 
-## Every refusal, and where it is shown
+## Every error, and where it is shown
 
-The prose above covers the mistakes worth explaining. This is every
-refusal the documentation demonstrates, each executed to produce the
-message beside it.
+The prose above covers the common mistakes. The table lists every error the
+documentation demonstrates. Each row is executed to produce the message
+beside it.
 
 <!-- refusals -->
 | Raises | Message | Shown at |

@@ -1,10 +1,10 @@
 ---
-title: Reading the answer
+title: Reading the solution
 description: Read primal and dual values over their index sets, and the distinction between an absent value and a zero.
 sidebar_position: 6
 ---
 
-# Reading the answer
+# Reading the solution
 
 A solver returns primal and dual values as flat vectors. `nimopt` returns
 them as arrays over the sets each variable and constraint was declared on.
@@ -118,9 +118,9 @@ subset a `SparseArray` with an entry per member and nothing elsewhere.
 ## Absence is not zero
 
 The model contains no decision for the route Porto to Rome. Every array a
-solution returns declares `absence="unknown"`, and `to_dense()` raises
-`ValueError` rather than filling the missing coordinate with a value the
-model never produced.
+solution returns declares `absence="unknown"`. `to_dense()` raises
+`ValueError` and fills the missing coordinate with no value the model did not
+produce.
 
 ```python raises=ValueError
 import numpy as np
@@ -206,13 +206,13 @@ unknown 5
 <!-- /output -->
 
 Lisbon serves Rome alone, and the Porto to Rome cell reads `nan`. A stored
-`0.0` would denote a route that exists and carries nothing.
+`0.0` would denote a route that exists and ships nothing.
 
 ## Summary
 
 The tutorial declared index sets and parameters, a decision variable,
-expressions, two constraint families and an objective, solved the model,
-and read the solution back over its sets. The [guides](/guides/subsets)
-cover variables over sparse networks, conditions on rows, lags, bounds from
-data, and models with millions of rows. The [worked models](/models) show
-eight complete formulations.
+expressions, two constraint families and an objective. It solved the model
+and read the solution back over its sets. The [guides](/guides/subsets) cover
+variables over sparse networks, conditions on rows, lags, bounds from data,
+and models with millions of rows. The [worked models](/models) present ten
+complete formulations.

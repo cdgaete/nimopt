@@ -99,8 +99,8 @@ print(supply.dims, demand.dims)
 array, and `to_dense()` renders it as a NumPy array with axes in the
 declared set order.
 
-A shape mismatch raises `ValueError`; the message gives the expected and the
-actual shape.
+A shape mismatch raises `ValueError`, and the message gives the expected
+shape and the actual shape.
 
 ```python raises=ValueError
 import numpy as np
@@ -128,7 +128,7 @@ ValueError: parameter 'cost' is over sets of shape (2, 3); got values of shape (
 In a sparse network, a plant serves a subset of the warehouses, and the cost
 parameter has entries only on existing routes. `Param.from_long` takes the
 entries in long form: one label column per set and one value column, read in
-parallel, so the k-th entry of each column belongs to the same route.
+parallel. The k-th entry of each column belongs to the same route.
 
 ```python
 import numpy as np

@@ -24,22 +24,22 @@ Model.constraint(name, relation, where=None, over=None)
 | Member | Returns |
 | --- | --- |
 | `n_rows` | the number of rows it produces |
-| `nnz` | the number of coefficients they hold |
-| `row_of(name)` on the `Assembled` | where those rows sit in the matrix |
+| `nnz` | the number of coefficients they contain |
+| `row_of(name)` on the `Assembled` | the position of those rows in the matrix |
 
 A row derived from the terms exists where every term has a value and the
-right-hand side has a value. A coefficient absent inside a sum removes a
-term and leaves the row standing; a term absent along a free dimension
-removes the row, because a row missing one of its terms would express a
-constraint that was not written.
+right-hand side has a value. A coefficient absent inside a sum removes a term
+and keeps the row. A term absent along a free dimension removes the row: a
+row missing one of its terms would express a constraint that was not
+written.
 
-`over=` gives the rows explicitly instead, so a term covering some of them
-contributes where it has values. A condition given with `where=`
-intersects the row domain, so a row outside the condition is not produced.
+`over=` gives the rows explicitly instead, and a term covering some of them
+contributes where it has values. A condition given with `where=` intersects
+the row domain, and a row outside the condition is not produced.
 
-The expression is symbolic, so the constraint holds the recipe rather than
-a block: it is materialised once to compute its shape and once to write it,
-and holds nothing in between.
+The expression is symbolic, and the constraint stores the term list and no
+block. The expression is materialised once to compute its shape and once to
+write it, and it stores nothing between the two.
 
 ```python
 import numpy as np
@@ -70,9 +70,9 @@ slice(0, 2, None)
 <!-- /output -->
 
 The right-hand side is a number, applied to every row, or a parameter over
-exactly the constraint's free dimensions, giving each row its own value. A
-parameter over other dimensions raises `ValueError`; the message gives the
-constraint's free dimensions and the parameter's.
+exactly the free dimensions of the constraint. A parameter gives each row its
+own value. A parameter over other dimensions raises `ValueError`, and the
+message gives both sets of dimensions.
 
 ```python raises=ValueError
 import numpy as np

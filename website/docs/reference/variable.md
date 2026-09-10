@@ -24,8 +24,8 @@ Model.var(name, sets, subset=None, lower=0.0, upper=inf, integer=False)
 
 The variable's columns are a virtual coordinate: a member's column is
 computed from its multi-index by stride arithmetic for a full product, or
-is its rank among a subset's codes. Nothing stores a column index, which is
-why a variable over millions of columns costs only its members.
+is its rank among the codes of a subset. Nothing stores a column index. A
+variable over millions of columns therefore costs only its members.
 
 | Member | Returns |
 | --- | --- |
@@ -66,26 +66,26 @@ print(m.integrality())
 </details>
 <!-- /output -->
 
-Each variable occupies the next range of the model's one column space, so
-`m.n_columns` counts every column declared so far.
+Each variable occupies the next range of the single column space of the
+model. `m.n_columns` counts every column declared so far.
 
 ## A variable over no dimension
 
-A variable's bracket lists the dimensions it carries, so a variable over
-none carries no bracket and enters a row on its own. It is one column: a
-value-at-risk level, a budget slack, a bound every row of a family shares.
-`theta[()]` is the same term written out.
+The bracket of a variable lists the dimensions it is declared over. A
+variable over no dimension takes no bracket and enters a row on its own. It
+is one column: a value-at-risk level, a budget slack, or a bound shared by
+every row of a family. `theta[()]` is the same term written out.
 
-A variable that does carry dimensions states no term until it is read, and
-using one bare raises `TypeError` naming the reading it wants. The same rule
-holds for a parameter, which is read `cost[G, T]` and, over no dimension,
-`k`.
+A variable over one or more dimensions expresses no term until it is read.
+Using one without a bracket raises `TypeError` and reports the reading it
+requires. The same rule applies to a parameter, read as `cost[G, T]`, and as
+`k` over no dimension.
 
-Comparing a variable states a row, so `==` between two variables states one
-too rather than answering true or false. A list of variables therefore cannot
-be searched with `in` or `.index`, which compare their items: those raise the
-reading refusal, naming whichever variable they reached first. Keep variables
-in a dict or a set, which match on identity, or search them by `name`.
+Comparing a variable expresses a row, and `==` between two variables
+expresses a row as well. A list of variables therefore cannot be searched
+with `in` or `.index`, as both compare their items. Both raise `TypeError`
+and report the first variable they compare. A dict and a set match on
+identity. Store variables in one of them, or search them by `name`.
 
 ```python
 import numpy as np
@@ -118,13 +118,13 @@ theta - Sum(S, p[S]) >= 0
 ## `COLUMN` and `ROW`
 
 The dimension names `nimopt` reserves. `COLUMN` is `"__column__"` and `ROW`
-is `"__row__"`; both are spelled so that no ordinary set name collides
-with them.
+is `"__row__"`. Both are written so that no ordinary set name collides with
+them.
 
 A variable's terms are an array over `(*dims, COLUMN)`, and a constraint's
-block is one over `(ROW, COLUMN)`. That is the whole of the correspondence
-between a model and its matrix: the column space is a dimension, so the
-array is the matrix.
+block is one over `(ROW, COLUMN)`. That is the whole correspondence between
+a model and its matrix: the column space is a dimension, and the array is the
+matrix.
 
 ```python
 import numpy as np
@@ -154,5 +154,5 @@ __column__ __row__
 </details>
 <!-- /output -->
 
-A caller writes neither name. They exist to be recognised when a `nimblend`
-array from inside a model is inspected.
+A caller writes neither name. Both appear when a `nimblend` array from
+inside a model is inspected.

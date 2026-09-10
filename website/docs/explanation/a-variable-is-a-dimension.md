@@ -73,8 +73,8 @@ Member `(0, 2)` is column 2 and `(1, 0)` is column 3: stride arithmetic and
 nothing else.
 
 For a variable over a subset, the column is the member's rank among the
-subset's codes. `SubsetCoord` holds the codes in order, so a block already
-in canonical order needs no lookup at all.
+subset's codes. `SubsetCoord` stores the codes in order, and a block already
+in canonical order needs no lookup.
 
 ```python
 import numpy as np
@@ -99,15 +99,15 @@ Codes `0` and `4` are members `(0, 0)` and `(1, 1)`, with ranks `0` and `1`.
 
 ## Consequences
 
-Nothing stores a column index. A variable over a million members holds its
+Nothing stores a column index. A variable over a million members stores its
 set sizes, the start of its block and, for a subset, the codes of its
-members. It does not hold a million integers recording which column each
-member is, because that number is recoverable from the member itself.
+members. It stores no integer per member: the column is computed from the
+member itself.
 
 The cost of declaring a variable is therefore the cost of its members, not
 of its columns. A variable over a full product costs nothing per column:
 two set sizes and a start.
 
-A subset variable is not a special case. Both kinds answer the same
-question, which position a member occupies, and differ only in whether the
-answer is arithmetic or a rank.
+A subset variable is not a special case. Both kinds report the position a
+member occupies. They differ in whether that position is computed by
+arithmetic or by a rank.

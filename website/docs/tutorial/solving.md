@@ -105,9 +105,9 @@ solver proved about the optimum, an upper bound under sense `max` and a
 lower bound under sense `min`. `gap` returns the relative distance from the
 objective to that bound.
 
-A search stopped after one node returns whichever point the solver found
-there. The solver's thread count determines that point. The example below
-reports what holds of every such point.
+A search stopped after one node returns the point the solver found there.
+The thread count of the solver determines that point. The example below
+reports the properties every such point has.
 
 ```python
 import numpy as np
@@ -146,8 +146,8 @@ the gap is positive: True
 </details>
 <!-- /output -->
 
-The status names the limit the solver stopped at. HiGHS reports a stop at
-`node_limit` as `solution_limit`. `gap` is `None` where the solver proved
+The status identifies the limit the solver stopped at. HiGHS reports a stop
+at `node_limit` as `solution_limit`. `gap` is `None` where the solver proved
 no bound, and `feasible` is False where it found no point.
 
 ## The matrix
@@ -198,4 +198,4 @@ and 1 are the supply rows, each with a 1 under its plant's three routes.
 Rows 2 to 4 are the demand rows, each with a 1 under the two routes into its
 warehouse. `row_of("demand")` returns that range.
 
-Next: [Reading the answer](/tutorial/reading-the-answer).
+Next: [Reading the solution](/tutorial/reading-the-answer).

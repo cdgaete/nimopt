@@ -95,18 +95,18 @@ relation. A scalar applies to every row. A parameter must be indexed over
 exactly the constraint's frame, so that each row has its own value.
 
 **Objective.** A scalar expression, one with an empty frame, that the solver
-minimises or maximises. `Sum(P, W, cost[P, W] * x[P, W])` is the total
+minimizes or maximizes. `Sum(P, W, cost[P, W] * x[P, W])` is the total
 shipping cost.
 
-**Sense.** The optimisation direction, `"min"` or `"max"`, set once on the
+**Sense.** The optimization direction, `"min"` or `"max"`, set once on the
 `Model`.
 
 **Materialise.** Evaluate a parameter or an expression into an array of
-values. This happens when the matrix is built, not when the expression is
-written.
+values. Materialisation runs when the matrix is built, not when the
+expression is written.
 
 **Assemble.** Build the coefficient matrix from every constraint. `solve()`
-assembles before calling the solver; `assemble()` returns the matrix without
+assembles before calling the solver. `assemble()` returns the matrix without
 solving.
 
 **Nonzero.** One stored coefficient of the matrix. `nnz` is the count.
@@ -129,10 +129,11 @@ Returned over the constraint's frame.
 **Absence.** A coordinate at which an array has no value, as distinct from
 a stored zero. Every array declares the meaning of absence: `"empty"` for a
 coordinate that contributes nothing, used by parameters, or `"unknown"` for
-one that was never modelled, used by solutions.
+one that was never modeled, used by solutions.
 
-**Session.** A solver instance kept open on one assembled model, so that
-questions can be asked of it after the solve, such as which rows conflict.
+**Session.** A solver instance kept open on one assembled model. A caller
+queries it after the solve, for the conflicting rows of an infeasible
+model.
 
 **Definition.** A model written before its data exists, in the same
 vocabulary. `build(data)` produces a `Model` for one dataset.

@@ -108,7 +108,7 @@ ValueError: parameter 'cost': label column 'P' has length 1 and the value column
 
 | Member | Returns |
 | --- | --- |
-| `dims` | the names of the sets it is indexed over |
+| `dims` | the sets it is indexed over |
 | `nnz` | the number of coefficients |
 | `materialise()` | the coefficients as a `nimblend` array |
 | `param[sets]` | a reference, with the sets given checked against `dims` |
@@ -144,13 +144,12 @@ print(cost[P, "berlin"].dims)
 ## `Coefficient`
 
 What a term reads as its coefficient: a `name` to report, the `dims` it is
-indexed over, the array it `materialise()`s to, and a reading at its sets.
-A parameter read at its sets is one, and so is an arithmetic combination of
-coefficients, so a function that reports a coefficient handles either
-through one interface.
+indexed over, the array it `materialise()`s to, and a reading at its sets. A
+parameter read at its sets is a coefficient, and so is an arithmetic
+combination of coefficients. One interface therefore covers both.
 
 `+`, `-`, `*`, `/` and a power by a number combine coefficients. The
-combination is symbolic: it holds references, derives its dimensions from
+combination is symbolic: it contains references, derives its dimensions from
 its operands, and is evaluated once, when the term it multiplies is
 materialised. It can therefore be written in a definition before any data
 exists.

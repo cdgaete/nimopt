@@ -6,9 +6,9 @@ description: Unit commitment with a binary on-off column per generator and snaps
 # Commitment
 
 `nimopt.models.commitment` is unit commitment. A committed unit runs between
-its minimum and its maximum output and pays a no-load cost for being on; an
-uncommitted unit produces nothing. The `capacity` and `minimum` rows are
-written against the binary column. This is the corpus's only MILP.
+its minimum and its maximum output and incurs a no-load cost. An uncommitted
+unit produces nothing. The `capacity` and `minimum` rows are written against
+the binary column. This is the only MILP in the corpus.
 
 ```text
 minimise    Σ_{t,g} cost[g] · gen[t,g] + Σ_{t,g} no_load[g] · on[t,g]

@@ -6,20 +6,20 @@ description: A labeled sparse N-dimensional array library, and the layer nimopt'
 # nimblend
 
 `nimblend` is a labeled sparse N-dimensional array library. Its vocabulary is
-dimensions, labels, entries and alignment, and it knows nothing about
-optimization. It depends on NumPy and nothing else.
+dimensions, labels, entries and alignment, and it contains no optimization
+term. It depends on NumPy and nothing else.
 
-`nimopt` imports it, never the reverse. A model reaches `nimblend` in two
-places: a solution is returned as a `nimblend` array, and a constraint's rows
-are a `nimblend` domain. A reader who wants labeled sparse data and no model
-at all can use it on its own.
+`nimopt` imports it, never the reverse. A model uses `nimblend` in two places:
+a solution is returned as a `nimblend` array, and the rows of a constraint are
+a `nimblend` domain. `nimblend` is also usable on its own, for labeled sparse
+data outside a model.
 
 ## Design
 
 **Absence is distinct from zero.** An entry is either stored or absent, and
 every array declares the meaning of absence: `"empty"` for a coordinate
-that contributes nothing, `"unknown"` for one that was never modelled.
-Division by an absent value raises instead of producing infinity.
+that contributes nothing, `"unknown"` for one that was never modeled.
+Division by an absent value raises an error and returns no infinity.
 
 **One contract, two implementations.** `Array` defines what an array does.
 `SparseArray` stores only the entries it has; `DenseArray` stores a grid and
@@ -27,12 +27,12 @@ the presence its declaration implies. Both are tested against the same
 conformance suite.
 
 **A coordinate is computed, not stored.** A dimension spanning millions of
-positions costs nothing to hold: `ProductCoord` computes a position by
-stride arithmetic and `SubsetCoord` by rank among the members of a domain.
+positions costs no storage: `ProductCoord` computes a position by stride
+arithmetic and `SubsetCoord` by rank among the members of a domain.
 
-**A domain is a set of coordinates.** It reports which members it has and
-where each sits, and through `array` and `identity` it returns an array
-over them, so a caller never assembles an index matrix.
+**A domain is a set of coordinates.** It reports which members it has and the
+position of each. Through `array` and `identity` it returns an array over
+those members, and a caller assembles no index matrix.
 
 ## Pages
 

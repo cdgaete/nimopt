@@ -7,8 +7,8 @@ description: Why a constraint needs no assembly step, and what a model's build d
 
 A constraint is a `nimblend` array indexed over its free sets and the column
 space, or over `(ROW, COLUMN)` once its frame has been grouped into rows.
-The values of that array are the coefficients. No step converts a model
-into a matrix, because the array already is one.
+The values of that array are the coefficients. No step converts a model into
+a matrix: the array is the matrix.
 
 ```python
 import numpy as np
@@ -40,39 +40,37 @@ print(m.assemble().to_dense())
 
 The variable's coefficients are indexed over `('P', 'W', '__column__')`.
 Grouping the frame into rows puts the same entries over `('__row__',
-'__column__')`, which is a matrix in every sense that matters: a row index,
-a column index and a value.
+'__column__')`. That is a matrix: a row index, a column index and a value.
 
 ## One buffer
 
 A model allocates one `nimblend.EntryBuffer` for its whole matrix. Each
 constraint reserves the slice its coefficients need and groups its block
-directly into that slice, so the block never exists as a second object.
+directly into that slice. The block never exists as a second object.
 
-The frame precedes the column dimension in canonical order, so the grouping
-reads a leading prefix and the result is canonical as written: no sort
-afterwards, no copy into place.
+The frame precedes the column dimension in canonical order. The grouping
+reads a leading prefix, and the result is canonical as written, with no sort
+afterwards and no copy into place.
 
-Handing the matrix to a solver is then a matter of returning views.
-`indices` and `values` are the buffer; only `indptr` is built. A model of
-four million nonzeros hands over its matrix without copying it.
+Passing the matrix to a solver returns views. `indices` and `values` are the
+buffer, and only `indptr` is built. A model of four million nonzeros passes
+its matrix without copying it.
 
 ## Why the shape is computed first
 
-Reserving a slice requires its size, so a constraint computes its shape when
-it is added and writes its entries when the model is assembled. The two must
-agree, and the model checks that they do.
+Reserving a slice requires its size. A constraint computes its shape when it
+is added and writes its entries when the model is assembled. The model checks
+that the two agree.
 
-If a parameter's data changes between the two, the constraint computed one
-number of coefficients and built another. The model raises rather than
-writing a matrix that does not match the shape it reported.
+Where the data of a parameter changes between the two, the constraint
+computes one number of coefficients and writes another. The model raises, and
+it writes no matrix that differs from the shape it reported.
 
-## What the design gives up
+## What the design costs
 
-Materialising the expression twice costs build time. That is the price of
-holding one expression at a time rather than every constraint's block at
-once, and it is a deliberate trade: peak memory is set by the largest
-constraint, not by the sum of all of them.
+Materialising the expression twice costs build time. One expression exists at
+a time, and the blocks of the constraints never exist together. Peak memory
+is set by the largest constraint, not by the sum of all of them.
 
-It also means a model's declared shape is exact before anything is built.
-`n_rows`, `n_columns` and `nnz` are facts, not estimates.
+The declared shape of a model is also exact before anything is built.
+`n_rows`, `n_columns` and `nnz` are exact counts, not estimates.

@@ -16,8 +16,8 @@ subject to  Σ_g p[t,g] == load[t]        for each snapshot t
             0 ≤ p[t,g] ≤ p_max[g]
 ```
 
-The balance row has no coefficient: a sum over a dimension needs none, and
-the corpus writes no coefficient a model does not need.
+The balance row has no coefficient. A sum over a dimension requires none,
+and the corpus writes no coefficient a model does not require.
 
 ```python
 from nimopt.models import dispatch

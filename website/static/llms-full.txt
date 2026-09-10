@@ -9,43 +9,45 @@ The whole manual is at [`/llms-full.txt`](/llms-full.txt); the index is at
 
 **A variable is a dimension.** `m.var("x", (P, W))` occupies a block of the
 model's single column space. A member's column is computed from its
-multi-index rather than stored, so a variable over millions of columns
-costs its members and not its columns.
+multi-index and is not stored. A variable over millions of columns costs
+its members, not its columns.
 
-**An expression is symbolic.** `cost[P, W] * x[P, W]` holds references,
-not arrays. Writing it costs nothing. It becomes matrix entries only when a
+**An expression is symbolic.** `cost[P, W] * x[P, W]` contains references,
+not arrays. Writing it allocates nothing. It becomes matrix entries when a
 constraint is materialised.
 
 **A constraint is an array.** It is a `nimblend` array over its free sets
-crossed with the column space, so there is no assembly step: the array is
-the matrix.
+crossed with the column space. There is no assembly step: the array is the
+matrix.
 
-**A definition is a model without its data.** `Definition` mirrors the
+**A definition is a model without its data.** `Definition` provides the
 vocabulary a model is written in, `set`, `param`, `var`, `constraint` and
 `set_objective`, over symbols declared with no members and no values.
-`explain()` reports what it declares; `build(data)` binds a copy and returns
-a `Model`, so one definition builds as many models as it is given datasets.
+`explain()` reports what it declares. `build(data)` binds a copy and returns
+a `Model`. One definition builds a model for each dataset it is given.
 
-**A built model answers questions about itself.** `explain()` reports what
-it built, `row(name, **coords)` reads one row back out of the assembled
-matrix, and `absent(name)` reports which coordinates were dropped from a
-constraint and by which rule. All three read what was built rather than
-walking the expression a second time.
+**A built model is inspected through three methods.** `explain()` reports
+what it built, and `row(name, **coords)` reads one row out of the assembled
+matrix. `absent(name)` reports which coordinates were dropped from a
+constraint and by which rule. All three read the assembled model, and none
+walks the expression a second time.
 
 **A session keeps the solver open.** `model.session()` assembles once and
-keeps the solver's model, so `diagnose()` asks the solved instance which
-rows conflict, or which direction an unbounded model runs off in.
-`available()` lists the adapters installed and `capabilities(name)` reports
-what each does, including what it refuses: a model with integer columns has
-no duals, because a mixed-integer model's duals are not its relaxation's.
+keeps the solver's model. `diagnose()` queries the solved instance for the
+conflicting rows of an infeasible model, or for the ray of an unbounded one.
+`available()` lists the installed adapters. `capabilities(name)` reports what
+one adapter supports and which capabilities it rejects together. A model with
+integer columns has no duals: a mixed-integer model's duals are not its
+relaxation's.
 
-**`nimblend` is the layer below.** It knows dimensions, labels, entries and
-alignment, and nothing about optimization. Import from `nimblend` itself,
-never from `nimblend.sparse` or another submodule, and never read an array's
-`.index` or `.data` or a domain's `.codes`. Each has a reader above it:
+**`nimblend` is the layer below.** Its vocabulary is dimensions, labels,
+entries and alignment, and it contains no optimization term. Import from
+`nimblend` itself, never from `nimblend.sparse` or another submodule, and
+never read an array's `.index` or `.data` or a domain's `.codes`. Each of the
+three has a reader above it:
 `coordinates()`, `values()`, `positions_of_coordinates()` and `as_coord()`.
-Nor build one: a domain returns the array over its own members through
-`array(values)` and `identity(into, coord, start)`.
+Do not build an index matrix either: a domain returns the array over its own
+members through `array(values)` and `identity(into, coord, start)`.
 
 ## The public surface
 
@@ -58,26 +60,26 @@ Nor build one: a domain returns the array over its own members through
 or an arithmetic combination of such readings: `price[G, T] / eta[G, T]` is
 a coefficient written before any data exists, read at its sets like a
 parameter, and evaluated once when the matrix is built. `+`, `-`, `*`, `/`
-and a power by a number combine coefficients. An expression also carries a
-constant, so `x + 1 <= 5` produces the row `x <= 4`.
+and a power by a number combine coefficients. An expression also contains a
+constant: `x + 1 <= 5` produces the row `x <= 4`.
 
 ## What goes wrong
 
 **A chained comparison.** `0 <= expr <= 10` raises `TypeError`. Python
-evaluates it as two comparisons joined by `and`, which keeps only the
-second, so a relation has no truth value rather than letting the first
-bound be dropped. Write each bound as its own constraint.
+evaluates it as two comparisons joined by `and` and keeps only the second.
+A relation has no truth value, and the chained form raises instead of
+dropping the first bound. Write each bound as its own constraint.
 
 **A sum over a lag.** `Sum(T - 1, ...)` raises: a sum runs over a set's
 members. Put the lag on the variable reference, `x[T - 1]`.
 
 **The built-in `sum` over a set's members.** `sum(x[S, t] for t in members)`
-gives the correct answer at a cost: it produces one term per member, where
-`Sum(T, x[S, T])` produces one term and reduces a dimension. The terms
-concatenate pairwise and each materialises its own block, so building a
-model that way runs 24 times slower at 25 members and 275 times at 400, and
-the gap widens. Use the built-in `sum` for a short list of distinct
-expressions and `Sum` for a set's members.
+returns the correct expression at a cost: it produces one term per member,
+where `Sum(T, x[S, T])` produces one term and reduces a dimension. The terms
+concatenate pairwise and each materialises its own block. Building a model
+that way runs 24 times slower at 25 members and 275 times slower at 400, and
+the factor grows with the member count. Use the built-in `sum` for a short
+list of distinct expressions and `Sum` for a set's members.
 
 **A right-hand side over the wrong dimensions.** A constraint's right-hand
 side is a parameter over exactly its free dimensions. The error message
@@ -96,42 +98,43 @@ whose coefficients are the coordinates.
 
 **A row that is not there.** `row()` raises for a coordinate at which the
 constraint has no row. `absent()` reports which rule dropped it: a
-coefficient absent inside a sum removes a **term** and leaves the row
-standing; a term absent along a **free** dimension removes the **row**.
+coefficient absent inside a sum removes a **term** and keeps the row; a term
+absent along a **free** dimension removes the **row**.
 
-**Reading a MILP's duals.** A model with integer columns has none, and
-`dual()` raises rather than returning the relaxation's. Read `primal`.
+**Reading a MILP's duals.** A model with integer columns has no duals.
+`dual()` raises; it does not return the relaxation's duals. Read `primal`.
 
 **A conflict HiGHS cannot prove.** HiGHS computes its conflict over the
-linear relaxation, so a model infeasible only through its integrality
-produces none and `diagnose()` raises. Gurobi's covers the integrality.
+linear relaxation. A model infeasible only through its integrality produces
+no conflict, and `diagnose()` raises. The Gurobi conflict covers the
+integrality.
 
 **Two operands that share no dimension.** Every binary operator combines two
-dimensioned operands only where they share a dimension, and the rule
-applies to a coefficient meeting a variable exactly as it applies to two
-coefficients. Frames sharing nothing raise: their combination would be an
-outer product no model asks for. A number has no dimension and scales.
+dimensioned operands only where they share a dimension. The rule applies to a
+coefficient multiplied by a variable and to two coefficients alike. Frames
+sharing no dimension raise `ValueError`; their combination would be an outer
+product. A number has no dimension and scales every entry.
 
 **A division by zero.** A divisor that is zero raises `ZeroDivisionError`
 with the coordinate, for a Python number, a NumPy scalar and a coefficient
-with a zero at one coordinate alike. Handle the divisor before it reaches an
-expression.
+with a zero at one coordinate alike. Handle the divisor before it is passed
+to an expression.
 
 **A derived coefficient read at the wrong sets.** A combination is read at
 its sets as a parameter is, and the reading is checked against the
-dimensions it has: `unit_cost[T, G]` raises where it is written, naming
+dimensions it has. `unit_cost[T, G]` raises where it is written and reports
 `('G', 'T')`.
 
-**Reaching into `nimblend`.** A test fails on an import from a `nimblend`
-submodule, on any read of an array's `.index` or `.data` or a domain's
-`.codes`, and on a module of the package assembling an index matrix of its
-own.
+**Bypassing the `nimblend` interface.** A test fails on an import from a
+`nimblend` submodule. It also fails on a read of an array's `.index` or
+`.data` or a domain's `.codes`, and on a module of the package that assembles
+an index matrix of its own.
 
-## Every refusal, and where it is shown
+## Every error, and where it is shown
 
-The prose above covers the mistakes worth explaining. This is every
-refusal the documentation demonstrates, each executed to produce the
-message beside it.
+The prose above covers the common mistakes. The table lists every error the
+documentation demonstrates. Each row is executed to produce the message
+beside it.
 
 | Raises | Message | Shown at |
 | --- | --- | --- |
@@ -182,21 +185,21 @@ message beside it.
 
 # nimopt
 
-`nimopt` is a Python library for building linear and mixed-integer programs. A model is declared symbolically over named index sets — as parameters, variables and constraints — and is expanded into a coefficient matrix only when it is assembled or solved. Solutions are returned as arrays over those same index sets, so a primal value is read by label rather than by column position.
+`nimopt` is a Python library for building linear and mixed-integer programs. A model is declared symbolically over named index sets, as parameters, variables and constraints. The declaration is expanded into a coefficient matrix at assembly or at solve. Solutions are returned as arrays over the same index sets. A primal value is read by label, not by column position.
 
-`nimopt` is built on `nimblend`, a labelled sparse N-dimensional array library with no knowledge of optimisation. The dependency runs in one direction, and `nimblend` is documented in [its own section](/nimblend).
+`nimopt` is built on `nimblend`, a labeled sparse N-dimensional array library. `nimblend` contains no optimization vocabulary and does not import `nimopt`. It is documented in [its own section](/nimblend).
 
 ## Design
 
-**A variable is a dimension.** A constraint is an array indexed over its free sets crossed with the model's column space, with the coefficients as values. There is no assembly step converting the model into a matrix, because the array is the matrix.
+**A variable is a dimension.** A constraint is an array indexed over its free sets crossed with the model's column space, with the coefficients as values. There is no assembly step converting the model into a matrix: the array is the matrix.
 
-**Absence is distinct from zero.** An entry is either stored or absent, and every array declares what absence means: `"empty"` for a coordinate that contributes nothing, `"unknown"` for one that was never modelled. A missing result is never counted as zero, and division by an absent value raises rather than producing an infinity.
+**Absence is distinct from zero.** An entry is either stored or absent, and every array declares what absence means: `"empty"` for a coordinate that contributes nothing, `"unknown"` for one that was never modeled. A missing result is never counted as zero. Division by an absent value raises an error; it does not return an infinity.
 
-**A subset stays a subset.** A variable declared over a subset of a set product has one column per member of the subset and none for the rest. The full product is never materialised, at declaration or at any point after it.
+**A subset determines the columns.** A variable declared over a subset of a set product has one column per member of the subset and none for the rest. The full product is never materialised, at declaration or after it.
 
-**Expressions are symbolic.** An expression holds references to variables and parameters rather than their values. `cost[P, W] * x[P, W]` costs the same to write over a million routes as over six; the values are read when the matrix is built.
+**Expressions are symbolic.** An expression contains references to variables and parameters, not their values. `cost[P, W] * x[P, W]` is the same expression over a million routes and over six. The values are read when the matrix is built.
 
-**Dropped rows are reported.** A row whose terms have no value at some coordinate is dropped rather than written incompletely. `absent()` lists every dropped row with the rule that dropped it, and `row()` returns one row of the assembled matrix as the solver receives it.
+**Dropped rows are reported.** A row whose terms have no value at some coordinate is dropped; it is not written incompletely. `absent()` lists every dropped row with the rule that dropped it. `row()` returns one row of the assembled matrix in the form passed to the solver.
 
 ## Install
 
@@ -206,9 +209,9 @@ pip install "nimopt[highs]"
 
 The extra installs `nimopt` and its dependency `nimblend` from PyPI, with HiGHS as the solver backend.
 
-HiGHS is the default solver, and `[highs]` installs it. `[gurobi]` and `[mosek]` add those adapters instead, `[bench]` adds the comparison suite and `[dev]` the test and lint tooling. `available()` reports the solvers whose backend can be imported in the current environment, and `capabilities(name)` answers for an adapter whether or not its backend is installed.
+HiGHS is the default solver, and `[highs]` installs it. `[gurobi]` and `[mosek]` add those adapters instead, `[bench]` adds the comparison suite and `[dev]` the test and lint tooling. `available()` reports the solvers whose backend can be imported in the current environment. `capabilities(name)` reports what one adapter supports, whether or not its backend is installed.
 
-Working on the package installs from a checkout instead. `nimblend` is a dependency and installs first, from wherever it is cloned; `nimopt` then installs from its own root:
+Development installs come from a checkout. `nimblend` is a dependency and installs first, from its clone. `nimopt` then installs from its own root:
 
 ```bash
 pip install /path/to/nimblend
@@ -254,7 +257,7 @@ The primal values are returned as a 2 by 3 array over plants and warehouses, in 
 
 ## Declaring before the data exists
 
-A `Definition` states the same model without binding any data. Its sets and parameters are declared by name, its constraints are written in the same expression syntax, and `explain()` reports the whole declaration before a single value has been read.
+A `Definition` declares the same model without binding data. Its sets and parameters are declared by name and its constraints use the same expression syntax. `explain()` reports the whole declaration before any value is read.
 
 ```python
 import numpy as np
@@ -286,7 +289,7 @@ transport  min  not built
   objective   min  Sum(P, W, cost[P, W] * x[P, W])
 ```
 
-A definition is copied before it is bound, so one definition builds as many models as it is given datasets for and is unchanged by any of them. The built model is inspected the same way, and `row()` reads one row back out of the assembled matrix as the solver receives it.
+A definition is copied before it is bound. One definition builds a model for each dataset it is given, and no build changes the definition. The built model is inspected the same way. `row()` reads one row out of the assembled matrix in the form passed to the solver.
 
 ```python
 import numpy as np
@@ -326,7 +329,7 @@ demand  3 of 3 rows  stated by terms
 
 ## A variable over a subset
 
-Where a variable spans an arc list rather than a full product, it has a column per arc and the product is never built. A thousand plants each serving three warehouses is three thousand columns, not a million.
+Where a variable spans an arc list instead of a full product, it has one column per arc and the product is never built. A thousand plants each serving three warehouses is three thousand columns, not a million.
 
 ```python
 import numpy as np
@@ -360,18 +363,18 @@ Output:
 - `explain()` on a definition or a built model, `row()` into the assembled matrix, and `absent()` reporting dropped rows and the rule that dropped each
 - A `Session` that keeps the solved instance open, and `diagnose()` reporting the conflicting rows of an infeasible model or the ray of an unbounded one
 - Primals and duals returned over their index sets, with absence distinct from zero
-- Continuous and integer columns, solved through HiGHS, Gurobi or Mosek behind one adapter contract, with `capabilities()` stating what each adapter does and which capabilities it refuses together
-- One option vocabulary translated into each solver's own spelling, so a time limit is stated the same way whatever solves the model
+- Continuous and integer columns, solved through HiGHS, Gurobi or Mosek behind one adapter contract, with `capabilities()` reporting what each adapter supports and which capabilities it rejects together
+- One option vocabulary translated into each solver's own option names, with a time limit written the same way for every solver
 - A model written to and read back from YAML, with its data inline or in a sidecar
-- A corpus of worked models under `nimopt.models`, each stating its formulation, inputs at any size, and an objective computed by arithmetic rather than by a solver
+- A corpus of worked models under `nimopt.models`, each with its formulation, its inputs at any size, and an objective computed by arithmetic instead of by a solver
 
 ## Performance
 
-Where a variable's columns are a subset of a set product, not materialising the product is worth a great deal. On a transport model of 400 000 arcs over a 20 000 000-cell product, `nimopt` builds the same matrix in 72.9 MB of resident memory against a dense rival's 1 682.9 MB, and in 292.9 ms against 844.5 ms.
+Where a variable's columns are a subset of a set product, not materialising the product saves memory and time. On a transport model of 400 000 arcs over a 20 000 000-cell product, `nimopt` builds the matrix in 72.9 MB of resident memory against linopy's 1 682.9 MB. The build takes 292.9 ms against 844.5 ms.
 
-Where nothing is sparse, the alignment work is a cost with no corresponding saving. On a fully dense temporally-coupled model at 2 111 080 rows, the same comparison reverses: the rival builds the matrix three times faster, for seven per cent more resident memory.
+Where nothing is sparse, the alignment work costs time and saves nothing. On a fully dense temporally coupled model at 2 111 080 rows, the comparison reverses: linopy builds the matrix three times faster, for seven percent more resident memory.
 
-Both rows are in the suite for the same reason. The [benchmark page](/explanation/what-the-numbers-measure) gives each figure, the baseline it is measured against, and what it does not claim.
+The benchmark suite measures both models. The [benchmark page](/explanation/what-the-numbers-measure) gives each figure, the baseline it is measured against, and what it does not claim.
 
 ## Documentation
 
@@ -383,13 +386,13 @@ Both rows are in the suite for the same reason. The [benchmark page](/explanatio
 
 Every Python example on this site is executed by the test suite and shows the output it produced.
 
-## Licence
+## License
 
 MIT. See `LICENSE`.
 
 ## Citing
 
-The package carries a `CITATION.cff`. Cite it by author, name and version:
+The package includes a `CITATION.cff`. Cite it by author, name and version:
 
 > Gaete-Morales, Carlos. *nimopt* (version 0.1.2). MIT.
 
@@ -425,9 +428,10 @@ subject to  Σ_w x[p,w] ≤ s[p]        for each plant p
             x[p,w] ≥ 0
 ```
 
-In `nimopt`, the sets index every declaration, the parameters hold the data,
-`m.var` declares the decision variable, `m.constraint` adds each constraint family
-under a name, and `set_objective` sets the objective function.
+In `nimopt` the sets index every declaration and the parameters contain the
+data. `m.var` declares the decision variable, `m.constraint` adds each
+constraint family under a name, and `set_objective` sets the objective
+function.
 
 ```python
 import numpy as np
@@ -612,18 +616,18 @@ relation. A scalar applies to every row. A parameter must be indexed over
 exactly the constraint's frame, so that each row has its own value.
 
 **Objective.** A scalar expression, one with an empty frame, that the solver
-minimises or maximises. `Sum(P, W, cost[P, W] * x[P, W])` is the total
+minimizes or maximizes. `Sum(P, W, cost[P, W] * x[P, W])` is the total
 shipping cost.
 
-**Sense.** The optimisation direction, `"min"` or `"max"`, set once on the
+**Sense.** The optimization direction, `"min"` or `"max"`, set once on the
 `Model`.
 
 **Materialise.** Evaluate a parameter or an expression into an array of
-values. This happens when the matrix is built, not when the expression is
-written.
+values. Materialisation runs when the matrix is built, not when the
+expression is written.
 
 **Assemble.** Build the coefficient matrix from every constraint. `solve()`
-assembles before calling the solver; `assemble()` returns the matrix without
+assembles before calling the solver. `assemble()` returns the matrix without
 solving.
 
 **Nonzero.** One stored coefficient of the matrix. `nnz` is the count.
@@ -646,10 +650,11 @@ Returned over the constraint's frame.
 **Absence.** A coordinate at which an array has no value, as distinct from
 a stored zero. Every array declares the meaning of absence: `"empty"` for a
 coordinate that contributes nothing, used by parameters, or `"unknown"` for
-one that was never modelled, used by solutions.
+one that was never modeled, used by solutions.
 
-**Session.** A solver instance kept open on one assembled model, so that
-questions can be asked of it after the solve, such as which rows conflict.
+**Session.** A solver instance kept open on one assembled model. A caller
+queries it after the solve, for the conflicting rows of an infeasible
+model.
 
 **Definition.** A model written before its data exists, in the same
 vocabulary. `build(data)` produces a `Model` for one dataset.
@@ -679,22 +684,22 @@ Model.constraint(name, relation, where=None, over=None)
 | Member | Returns |
 | --- | --- |
 | `n_rows` | the number of rows it produces |
-| `nnz` | the number of coefficients they hold |
-| `row_of(name)` on the `Assembled` | where those rows sit in the matrix |
+| `nnz` | the number of coefficients they contain |
+| `row_of(name)` on the `Assembled` | the position of those rows in the matrix |
 
 A row derived from the terms exists where every term has a value and the
-right-hand side has a value. A coefficient absent inside a sum removes a
-term and leaves the row standing; a term absent along a free dimension
-removes the row, because a row missing one of its terms would express a
-constraint that was not written.
+right-hand side has a value. A coefficient absent inside a sum removes a term
+and keeps the row. A term absent along a free dimension removes the row: a
+row missing one of its terms would express a constraint that was not
+written.
 
-`over=` gives the rows explicitly instead, so a term covering some of them
-contributes where it has values. A condition given with `where=`
-intersects the row domain, so a row outside the condition is not produced.
+`over=` gives the rows explicitly instead, and a term covering some of them
+contributes where it has values. A condition given with `where=` intersects
+the row domain, and a row outside the condition is not produced.
 
-The expression is symbolic, so the constraint holds the recipe rather than
-a block: it is materialised once to compute its shape and once to write it,
-and holds nothing in between.
+The expression is symbolic, and the constraint stores the term list and no
+block. The expression is materialised once to compute its shape and once to
+write it, and it stores nothing between the two.
 
 ```python
 import numpy as np
@@ -720,9 +725,9 @@ slice(0, 2, None)
 ```
 
 The right-hand side is a number, applied to every row, or a parameter over
-exactly the constraint's free dimensions, giving each row its own value. A
-parameter over other dimensions raises `ValueError`; the message gives the
-constraint's free dimensions and the parameter's.
+exactly the free dimensions of the constraint. A parameter gives each row its
+own value. A parameter over other dimensions raises `ValueError`, and the
+message gives both sets of dimensions.
 
 ```python raises=ValueError
 import numpy as np
@@ -757,12 +762,12 @@ Definition(name="definition", sense="min")
 ```
 
 A definition declares the sets, parameters and variables a model is written
-from, and its constraints, in the expression syntax a model uses. It holds
-no data: a set declared here names a dimension and has no members, and a
-parameter names a shape and has no values.
+from, and its constraints, in the expression syntax a model uses. It contains
+no data. A set declared here identifies a dimension and has no members, and a
+parameter identifies a shape and has no values.
 
-An expression holds references rather than arrays, so an equation's free
-dimensions and its sense are read off the relation rather than declared
+An expression contains references, not arrays. The free dimensions of an
+equation and its sense are read from the relation, and neither is declared
 beside it. `sense` is `"min"` or `"max"`, set once here.
 
 | Member | Returns |
@@ -807,9 +812,9 @@ Output:
 
 ## One namespace for sets and parameters
 
-Sets and parameters share one key space, because the data a definition is
-built from is keyed by declared name and one would otherwise shadow the
-other. Declaring a parameter under a set's name raises `ValueError`.
+Sets and parameters share one key space. The data a definition is built from
+is keyed by declared name, and one key identifies one symbol. Declaring a
+parameter under the name of a set raises `ValueError`.
 
 ```python raises=ValueError
 from nimopt import Definition
@@ -849,10 +854,11 @@ Output:
 
 ## An alias in a definition
 
-`alias(name, base)` declares a second name for one of the definition's sets,
-which is how a model relates a set to itself. The alias carries no data of
-its own: it reads the labels its base set binds, so `build` takes members for
-the set and none for the alias, and naming the alias in `data` is refused.
+`alias(name, base)` declares a second name for one of the sets of the
+definition. A model relates a set to itself through an alias. The alias has
+no data of its own and reads the labels bound to its base set. `build` takes
+members for the set and none for the alias, and an alias in `data` raises
+`ValueError`.
 
 ```python
 import numpy as np
@@ -878,26 +884,26 @@ Output:
 
 ## Domains in a definition
 
-A `Domain` resolves labels through each set's coordinate, and a declared
-set has none. `where=` and `over=` on `constraint`, and `subset=` on `var`,
-therefore take a tuple of the definition's sets, meaning their full
-product, or one of its parameters, whose coefficients are the coordinates.
-Both forms resolve to the same domain, so a model and a definition declare
-a sparse variable or an explicit row domain the same way.
+A `Domain` resolves labels through the coordinate of each set, and a
+declared set has none. `where=` and `over=` on `constraint`, and `subset=` on
+`var`, therefore take a tuple of the sets of the definition, meaning their
+full product. They also take one of its parameters, whose coefficients are
+the coordinates. Both forms resolve to the same domain. A model and a
+definition declare a sparse variable or an explicit row domain the same
+way.
 
 ## Building
 
 `build(data)` copies the declaration graph, binds the copy, numbers the
-columns and returns a `Model`. `data` maps a declared set's name to its
-members and a declared parameter's name to its values. The definition is
-unchanged, so it builds as many models as it is given datasets.
+columns and returns a `Model`. `data` maps the name of a declared set to its
+members and the name of a declared parameter to its values. The definition is
+unchanged, and it builds one model per dataset it is given.
 
-A parameter's values arrive dense over its product, as an array of one
-value per cell, or long over its entries, as a pair of one mapping of label
-columns and one value column. The long form is how a parameter with
-coefficients at some coordinates and none at the rest is given, and it is
-what a variable declared with `subset=` that parameter takes its members
-from.
+The values of a parameter are given dense over its product, as an array of
+one value per cell. They are also given long over its entries, as one mapping
+of label columns and one value column. The long form gives a parameter with
+coefficients at some coordinates and none at the rest. A variable declared
+with `subset=` that parameter takes its members from those coordinates.
 
 ```python
 import numpy as np
@@ -938,7 +944,7 @@ Output:
 optimal
 ```
 
-Data that misses a declaration, or names something the definition never
+Data that omits a declaration, or contains a key the definition never
 declared, raises `ValueError` before anything is bound.
 
 ```python raises=ValueError
@@ -965,22 +971,22 @@ ValueError: data does not cover ['S']; add an entry for each
 
 Returned by `Definition.explain` and `Model.explain`. A frozen record of
 every declaration and what it built. The shapes it is made of are frozen
-too, so a reader takes a field rather than parsing a rendering.
+too. A reader takes a field and parses no rendered text.
 
-| Field | Holds |
+| Field | Contains |
 | --- | --- |
-| `name`, `sense` | the declaration's name and the direction it optimises |
+| `name`, `sense` | the name of the declaration and the direction it optimizes |
 | `built` | whether counts are facts about data or absent |
 | `sets` | one `SetShape` per dimension |
 | `parameters` | one `ParamShape` per parameter |
 | `variables` | one `VariableShape` per variable |
 | `constraints` | one `ConstraintShape` per equation |
-| `objective` | the objective's spelling, or `None` |
+| `objective` | the objective expression, or `None` |
 | `columns`, `rows`, `nonzeros` | the model's shape, or `None` |
 
-A count is `None` where nothing is bound. It is never zero: a count of zero
-is a fact a caller acts on, and reporting one for a declaration would be
-false.
+A count is `None` where nothing is bound. It is never zero. A count of zero
+is a value a caller acts on, and a declaration with no data reports no
+count.
 
 | Shape | Fields |
 | --- | --- |
@@ -1037,9 +1043,9 @@ transport  min  not built
 ## `Term`
 
 One variable, an optional coefficient, the dimensions summed over, and a
-scale factor. A term is the recipe for a block of coefficients and holds
-references rather than arrays, so writing it costs nothing: an expression
-over a million columns costs the same as one over ten.
+scale factor. A term describes a block of coefficients and contains
+references, not arrays. Writing it allocates nothing: an expression over a
+million columns costs the same as one over ten.
 
 | Member | Returns |
 | --- | --- |
@@ -1063,7 +1069,7 @@ materialised.
 
 | Member | Returns |
 | --- | --- |
-| `terms` | the terms it holds |
+| `terms` | the terms it contains |
 | `frame` | the dimensions it is indexed over |
 | `coords` | the coordinates of that frame |
 | `materialise()` | its coefficients as a `nimblend` array |
@@ -1101,8 +1107,8 @@ Sum(I, J, ..., expression, where=None)
 ```
 
 The expression reduced over the named sets. Each set named leaves the
-frame. `where=` takes a domain and restricts each term's entries before the
-reduction, so the sum runs over the coordinates given rather than every
+frame. `where=` takes a domain and restricts the entries of each term before
+the reduction. The sum then runs over the coordinates given, not over every
 coordinate of the product.
 
 ```python
@@ -1128,8 +1134,8 @@ Output:
 ()
 ```
 
-A sum runs over the members of a set, so it takes the set and not a lag of
-it. The lag belongs on the variable reference.
+A sum is over the members of a set and takes the set, not a lag of it. Write
+the lag at the variable reference.
 
 ```python raises=ValueError
 import numpy as np
@@ -1176,8 +1182,8 @@ Relation <=
 ```
 
 A relation has no truth value. Python evaluates `0 <= expr <= 10` as two
-comparisons joined by `and`, which keeps only the second, so the chained
-form raises rather than letting the first bound be dropped.
+comparisons joined by `and` and keeps only the second. The chained form
+raises, and the first bound is not dropped.
 
 ```python raises=TypeError
 import numpy as np
@@ -1279,9 +1285,8 @@ Raises TypeError:
 TypeError: an LP has no row for a strict inequality; write `<=` or `>=`, and reduce with `Sum` in place of `min` or `max`
 ```
 
-The built-in `sum` of expressions with no set to reduce over reaches
-`Expression.sum`, which would otherwise return the expression unchanged
-having reduced nothing.
+The built-in `sum` of expressions with no set to reduce over calls
+`Expression.sum`. That call raises, and it returns no unreduced expression.
 
 ```python raises=TypeError
 import numpy as np
@@ -1299,8 +1304,8 @@ Raises TypeError:
 TypeError: an expression is reduced over the sets it is summed across; specify them with `Sum(I, J, expression)`
 ```
 
-A relation expresses one bound. Comparing it a second time raises rather
-than dropping the first.
+A relation expresses one bound. Comparing it a second time raises, and the
+first bound is not dropped.
 
 ```python raises=TypeError
 import numpy as np
@@ -1318,8 +1323,8 @@ Raises TypeError:
 TypeError: a relation is already an equation with one bound; compare the expression again in its own equation
 ```
 
-A dimension is reduced once; a second reduction has nothing left to
-reduce.
+A dimension is reduced once. A second reduction over the same dimension
+raises.
 
 ```python raises=ValueError
 import numpy as np
@@ -1345,50 +1350,50 @@ ValueError: term 'x' already sums over ['T']; sum over each dimension once
 
 ## `load`, `loads`, `save`
 
-| Verb | Does |
+| Function | Does |
 | --- | --- |
-| `load(path, data=None)` | reads a file; a `Definition`, or a `Model` where the file carries data or `data=` gives it |
-| `loads(text, data=None)` | the same over text; a sidecar name in text is refused, because text has no directory |
+| `load(path, data=None)` | reads a file; returns a `Definition`, or a `Model` where the file contains data or `data=` gives it |
+| `loads(text, data=None)` | the same over text; a sidecar name in text raises `ValueError`, as text has no directory |
 | `save(what, path, inline=False, instructions=False)` | writes a definition's file, or a model's with an `.npz` beside it, or one file with an inline block when `inline=True`; `instructions=True` writes the comment block that describes the format at the top of the file |
 
 `data=` is the mapping `build` takes or the path of an `.npz`. A file that
-carries data and a `data=` together is refused.
+contains data and a `data=` together raises `ValueError`.
 
 `Definition.to_yaml(instructions=False)` and `Model.to_yaml(inline=False,
 instructions=False)` return the text `save` writes, without a sidecar line:
-only `save` writes a sidecar and the line that names it.
+only `save` writes a sidecar and the line that identifies it.
 
 With `instructions=True`, every writer puts a fixed comment block at the top
 of the text. The block describes the format: the keys and their order, the
-defaults, the rules that decide which rows a constraint has, and the
-expression syntax. It is the same text in every file and describes the
-format rather than the model, so a reader given one file can interpret it
-without this package. The block is a YAML comment: a file with it and a
-file without it load to the same model.
+defaults, the rules that determine which rows a constraint has, and the
+expression syntax. The text is the same in every file and describes the
+format, not the model. A reader with one file interprets it without this
+package. The block is a YAML comment: a file with it and a file without it
+load to the same model.
 
 ## The file
 
-| Key | Carries |
+| Key | Contains |
 | --- | --- |
-| `version` | `2`; any other value is refused naming the one this reader understands |
+| `version` | `2`; any other value raises `ValueError` and reports the version this reader accepts |
 | `name`, `sense` | the model's |
 | `sets` | a list of names |
-| `aliases` | each alias to the set it names; absent where the model declares none |
+| `aliases` | each alias to its base set; absent where the model declares none |
 | `parameters` | each name to its dimensions |
 | `variables` | each name to `sets`, and to `subset`, `lower`, `upper`, `integer` where they differ from no subset, `0`, infinity and `false` |
 | `constraints` | each name to `relation`, and to `where` or `over` where given |
-| `objective` | the expression's spelling; absent where the model states none |
+| `objective` | the objective expression; absent where the model declares none |
 | `data` | an inline mapping, or the name of an `.npz` beside the file |
 
 `subset`, `where` and `over` take a parameter's name, meaning the coordinates
-it carries, or a list of set names, meaning their full product. A symbol's
-name is a Python identifier other than `Sum`. A dimension named in
-`parameters`, in a variable's `sets`, or in a list of set names is a set or
-an alias; an alias is declared after the set it names.
+it contains, or a list of set names, meaning their full product. A symbol's
+name is a Python identifier other than `Sum`. A dimension listed in
+`parameters`, in a variable's `sets`, or in a list of set names is a set or an
+alias. An alias is declared after its base set.
 
-The expressions are spelled as they are typed in Python and read back through
-the same operators, so the file is a fixed point: reading it and writing it
-again gives the same text.
+The expressions are written as they are typed in Python and are read back
+through the same operators. The file is a fixed point: reading it and writing
+it again gives the same text.
 
 ```python
 from nimopt import Definition, Sum, loads
@@ -1423,8 +1428,8 @@ constraints:
 True
 ```
 
-A key the format does not carry is refused, at the top level and inside an
-entry.
+A key the format does not define raises `ValueError`, at the top level and
+inside an entry.
 
 ```python raises=ValueError
 from nimopt import loads
@@ -1443,7 +1448,7 @@ ValueError: variable 'x' contains the unknown keys ['bound']; write only ('sets'
 
 ## Data
 
-The data a file carries is the mapping `build` takes, in three shapes.
+The data in a file is the mapping `build` takes, in three shapes.
 
 | Shape | Inline | In the `.npz` |
 | --- | --- | --- |
@@ -1452,9 +1457,9 @@ The data a file carries is the mapping `build` takes, in three shapes.
 | a long parameter | `columns`, the dimensions then `value`, and `rows` | a structured array with one field per dimension and `value` |
 
 A parameter is written dense where its array covers its full product and
-long otherwise. The `.npz` is read with `allow_pickle=False`; an array of
-object dtype is refused at save, naming the symbol, because the container
-would pickle it silently and the reader would then refuse the file.
+long otherwise. The `.npz` is read with `allow_pickle=False`. An array of
+object dtype raises `ValueError` at save and reports the symbol: the
+container would pickle it, and the reader rejects a pickled array.
 
 ```python raises=ValueError
 from nimopt import loads
@@ -1471,13 +1476,13 @@ Raises ValueError:
 ValueError: parameter 'c' is given columns ['value', 'S']; a table lists the dimensions then value: ['S', 'value']
 ```
 
-## What is refused before anything is written
+## What raises before anything is written
 
-| Written | Refused because |
+| Written | Reason |
 | --- | --- |
 | a model whose `subset`, `where` or `over` is a domain with no name | declare the members as a parameter |
 | two parameter objects or two set objects sharing a name in one model | the file keys a symbol by name |
-| a symbol whose name is not an identifier, or is `Sum` | the spelling cannot address it |
+| a symbol whose name is not an identifier, or is `Sum` | the expression syntax cannot address it |
 | an array of object dtype | the container would pickle it |
 
 ```python raises=ValueError
@@ -1506,10 +1511,10 @@ ValueError: constraint 'cap' gives where= a domain with no name; declare its mem
 ## `Row`
 
 Returned by `Model.row(name, **coords)`. One row as the assembled matrix
-holds it, not a second walk of the expression, so what is shown is what
-the solver receives.
+stores it. The row is read from the matrix, not from a second walk of the
+expression, and it shows what is passed to the solver.
 
-| Field | Holds |
+| Field | Contains |
 | --- | --- |
 | `constraint` | the equation this row belongs to |
 | `coordinate` | the row's own coordinate, per free dimension |
@@ -1517,16 +1522,16 @@ the solver receives.
 | `terms` | one `RowTerm` per coefficient |
 | `sense`, `lower`, `upper` | read from the row's bounds |
 
-| `RowTerm` field | Holds |
+| `RowTerm` field | Contains |
 | --- | --- |
 | `column` | the solver's own column number |
 | `variable` | the variable that column belongs to |
 | `coordinate` | that column's coordinate, per dimension |
 | `coefficient` | the value in the matrix |
 
-A variable occupies a contiguous range of the column space from its
-`start`, so a column resolves to its variable by that range and to a
-coordinate through the variable's own numbering rule.
+A variable occupies a contiguous range of the column space from its `start`.
+A column resolves to its variable through that range, and to a coordinate
+through the numbering rule of that variable.
 
 `sense` is read from the bounds: equal bounds are `==`, an infinite lower
 bound is `<=`, an infinite upper bound is `>=`.
@@ -1582,11 +1587,11 @@ ValueError: constraint 'cap' has no row at {'P': 'p3'}; read `absent('cap')` for
 Returned by `Model.absent(name)`. What a constraint set out to produce,
 what it produced, and which coordinates were dropped.
 
-| Field | Holds |
+| Field | Contains |
 | --- | --- |
 | `constraint` | the equation this is about |
 | `stated_by` | `"terms"` where the rows are derived, `"over"` where given explicitly |
-| `expected`, `standing` | rows set out, rows kept |
+| `expected`, `standing` | rows expected, rows kept |
 | `dropped_rows` | one `DroppedRow(coordinate, rule, detail)` per row lost |
 | `dropped_terms` | one `DroppedTerm(coordinate, variable, rule, detail)` per term lost |
 
@@ -1594,17 +1599,17 @@ what it produced, and which coordinates were dropped.
 
 | `dropped_rows` rule | Meaning |
 | --- | --- |
-| `term-does-not-reach` | a term has no value at that coordinate, so the row would express something unwritten |
+| `term-does-not-reach` | a term has no value at that coordinate; the row would express a constraint that was not written |
 | `where` | the condition excludes it |
 | `absent-rhs` | the right-hand side has no value there |
 
 | `dropped_terms` rule | Meaning |
 | --- | --- |
-| `absent-coefficient` | a coefficient absent inside a sum, so the row stands with one term fewer |
+| `absent-coefficient` | a coefficient absent inside a sum; the row is kept with one term fewer |
 
-The row and term split is the distinction to hold onto: a coefficient
-absent inside a sum removes a **term** and leaves the row standing; a term
-absent along a **free** dimension removes the **row**.
+The two rules differ in what they remove. A coefficient absent inside a sum
+removes a **term** and keeps the row. A term absent along a **free**
+dimension removes the **row**.
 
 Under `over=` the rows are given explicitly, so nothing is dropped and a
 right-hand side that misses one raises instead. An empty `dropped_rows`
@@ -1651,9 +1656,9 @@ supply  2 of 2 rows  stated by terms
 Model(name="model", sense="min")
 ```
 
-A model holds one column space, the constraints declared against it, and an
-objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
-`"max"`, set once here; any other value raises.
+A model contains one column space, the constraints declared against it, and
+an objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
+`"max"`, set once here. Any other value raises `ValueError`.
 
 | Member | Returns |
 | --- | --- |
@@ -1747,13 +1752,13 @@ slice(0, 2, None)
 ## What a model built
 
 `explain()` reports every declaration with the count it built, and has
-`built=True`. It returns the same record type a `Definition` returns with
-every count absent, so one reader serves both.
+`built=True`. It returns the record type a `Definition` returns with every
+count absent, and one reader covers both.
 
-A model holds variables and constraints; its sets and parameters are
-collected from them, in order of first appearance. A dimension a
-coefficient introduces belongs to no variable and is found through the
-parameter that has it.
+A model contains variables and constraints. Its sets and parameters are
+collected from them, in order of first appearance. A dimension introduced by
+a coefficient belongs to no variable and is found through the parameter that
+has it.
 
 ```python
 import numpy as np
@@ -1877,7 +1882,7 @@ ValueError: parameter 'cost': label column 'P' has length 1 and the value column
 
 | Member | Returns |
 | --- | --- |
-| `dims` | the names of the sets it is indexed over |
+| `dims` | the sets it is indexed over |
 | `nnz` | the number of coefficients |
 | `materialise()` | the coefficients as a `nimblend` array |
 | `param[sets]` | a reference, with the sets given checked against `dims` |
@@ -1908,13 +1913,12 @@ Output:
 ## `Coefficient`
 
 What a term reads as its coefficient: a `name` to report, the `dims` it is
-indexed over, the array it `materialise()`s to, and a reading at its sets.
-A parameter read at its sets is one, and so is an arithmetic combination of
-coefficients, so a function that reports a coefficient handles either
-through one interface.
+indexed over, the array it `materialise()`s to, and a reading at its sets. A
+parameter read at its sets is a coefficient, and so is an arithmetic
+combination of coefficients. One interface therefore covers both.
 
 `+`, `-`, `*`, `/` and a power by a number combine coefficients. The
-combination is symbolic: it holds references, derives its dimensions from
+combination is symbolic: it contains references, derives its dimensions from
 its operands, and is evaluated once, when the term it multiplies is
 materialised. It can therefore be written in a definition before any data
 exists.
@@ -1980,8 +1984,8 @@ reference to the dimension uses.
 | `len(set)` | the number of members |
 | `position_of(labels)` | the position of each label given |
 | `coord` | the coordinate the labels resolve through |
-| `cyclic` | the same set, with a lag that wraps rather than drops |
-| `set - 1` | the set lagged, dropping the members a lag runs off |
+| `cyclic` | the same set, with a lag that wraps instead of dropping |
+| `set - 1` | the set lagged, dropping the members outside the set |
 
 ```python
 import numpy as np
@@ -2008,11 +2012,10 @@ T 3
 Alias(name, set)
 ```
 
-A second name for a set, sharing its labels and its coordinate. A
-parameter over a set and its alias is an ordinary two-dimensional array,
-so a model relating a set to itself does so without declaring a second
-set. No labels are copied: the alias uses the coordinate the set already
-built.
+A second name for a set, sharing its labels and its coordinate. A parameter
+over a set and its alias is an ordinary two-dimensional array. A model
+relates a set to itself without declaring a second set. No labels are
+copied: the alias uses the coordinate the set already built.
 
 ```python
 import numpy as np
@@ -2040,9 +2043,9 @@ Output:
 product(sets)
 ```
 
-Every member of a set product, as a domain. Passed to `over=`, it states
-the rows of a constraint explicitly, for a constraint whose terms each
-cover some of its rows.
+Every member of a set product, as a domain. Passed to `over=`, it declares
+the rows of a constraint explicitly, for a constraint whose terms each cover
+some of its rows.
 
 ## `subset`
 
@@ -2050,10 +2053,10 @@ cover some of its rows.
 subset(sets, columns)
 ```
 
-The members of a set product a model uses, given by label. `columns` holds
-one label column per set, keyed by the set's name, read in parallel: the
-k-th entry of each column belongs to the same member. It is a list of
-members, not a cross product.
+The members of a set product a model uses, given by label. `columns`
+contains one label column per set, keyed by the name of the set. The columns
+are read in parallel: the k-th entry of each column belongs to the same
+member. The result is a list of members, not a cross product.
 
 ## `subset_of`
 
@@ -2061,9 +2064,8 @@ members, not a cross product.
 subset_of(sets, index)
 ```
 
-The same, given by position. Each column of `index` is one member. A
-caller holding positions passes them directly rather than building labels
-to resolve back.
+The same, given by position. Each column of `index` is one member. A caller
+with positions passes them directly and builds no labels to resolve back.
 
 ```python
 import numpy as np
@@ -2186,16 +2188,16 @@ ValueError: status is 'infeasible' and the solver reports no feasible point; rea
 
 ## The array type of a value
 
-A variable over a full product has a value at every cell of its frame, and
-the solver returns them in column order, so they reshape into a
-`DenseArray` with no index built at all. A variable over a subset has
-values at its members alone, and a dense frame would be the grid it was
-declared to avoid, so those stay a `SparseArray`. A dual follows its
-constraint's rows by the same rule.
+A variable over a full product has a value at every cell of its frame. The
+solver returns those values in column order, and they reshape into a
+`DenseArray` with no index built. A variable over a subset has values at its
+members alone. A dense frame would be the grid the declaration avoids, and
+those values remain a `SparseArray`. A dual follows the rows of its
+constraint by the same rule.
 
-Every array declares `absence="unknown"`: a coordinate the model did not
-have has no value, and combining two models' results must not invent a zero
-for it.
+Every array declares `absence="unknown"`. A coordinate the model does not
+have has no value, and combining the results of two models adds no zero for
+it.
 
 ---
 
@@ -2206,10 +2208,10 @@ for it.
 ## `available` and `capabilities`
 
 `available()` lists every adapter whose backend can be imported in the
-current environment, with what each declares. `capabilities(name)` reports
-for an adapter whether or not its backend is installed. A descriptor
-describes what the adapter does as shipped. A caller reads one to choose
-what to install.
+current environment, with the capabilities each declares. `capabilities(name)`
+reports for an adapter whether or not its backend is installed. A descriptor
+describes the adapter as shipped. A caller reads one to choose what to
+install.
 
 A descriptor describes the adapter, not the library behind it: a solver
 feature the adapter does not call is `absent`.
@@ -2274,10 +2276,9 @@ ValueError: model 'm' has integer columns and 'highs' reports no duals for it; r
 
 ## `Session`
 
-Returned by `Model.session(solver="highs", options=None)`. One solver's
-model, opened on one assembled model and kept: a solve hands the matrix
-across, and a question asked afterwards is asked of the same solved
-instance.
+Returned by `Model.session(solver="highs", options=None)`. The model of one
+solver, opened on one assembled model and kept open. A solve passes the
+matrix to the solver, and a later query reads the same solved instance.
 
 | Member | Returns |
 | --- | --- |
@@ -2379,14 +2380,12 @@ computes no conflict. A session on it raises, and the message refers to
 
 ## `options` and `Option`
 
-`options()` lists every option a caller can set, under `nimopt`'s own
-names. An option outside the list raises. It is not passed to a solver that
-would ignore it, and a misspelled name stops a solve instead of running a
-different one.
+`options()` lists every option a caller can set, under the names of
+`nimopt`. An option outside the list raises `ValueError`. No option is passed
+to a solver that ignores it, and an unrecognized name stops the solve.
 
-`options(solver)` lists the same options with that solver's own name and
-values, which is how a caller follows one into the solver's own
-documentation.
+`options(solver)` lists the same options with the name and the values of that
+solver. A caller follows those names into the documentation of the solver.
 
 ```python
 from nimopt import options
@@ -2438,32 +2437,31 @@ An `Option` has a `name`, the `kind` it takes, what it `does`, and its
 | `pdlp_tol` | float | relative tolerance at which the first-order method stops | `pdlp_optimality_tolerance` | not supported | not supported |
 
 A choice each solver writes differently is given once and translated. The
-value a caller writes means one thing whichever solver reads it. No solver
+value a caller writes has one meaning for every solver. No solver
 supports every option or every choice: `newton_system` and `pdlp_tol` are
 HiGHS's, as are `hipo` and `pdlp` under `method`. Asking Gurobi or Mosek
 for one of them raises, and the message identifies it. No solver runs a
 different algorithm in its place. Mosek runs only its mixed-integer
 optimizer on a model with integer columns. `method` is `choose` there, and
-any other choice raises with that cause. What each method stores in
-memory, and how to install a HiGHS with HiPO and a GPU, is in the guide on
-[interior point and first-order methods](/guides/highs-methods).
+any other choice raises. The guide on [interior point and first-order
+methods](/guides/highs-methods) gives the memory each method requires and the
+installation of a HiGHS with HiPO and a GPU.
 
 ## Progress reporting
 
 `build()`, `assemble()`, `session()` and `solve()` take `progress=`.
 `progress=True` draws a report in a terminal and nothing where output is
-redirected. A reporter of your own is used as given, so a notebook or an
-interface writes there: it implements `start(total, what)`, `step(done,
-what)` and `done()`, and that is the whole contract.
+redirected. A reporter given by the caller is used as passed, and a notebook
+or another interface writes through it. A reporter implements
+`start(total, what)`, `step(done, what)` and `done()`. That is the whole
+contract.
 
-The report covers building. Its resolution is the model's own structure:
-the measuring pass counts constraints and the writing pass counts nonzeros,
-so a model with one constraint of one term reports one step and no
-fraction.
+The report covers building. Its resolution is the structure of the model. The
+measuring pass counts constraints and the writing pass counts nonzeros. A
+model with one constraint of one term reports one step and no fraction.
 
-A solver's own account of a solve is the solver's to give, and `log=True`
-asks for it. Building finishes before a solver starts, so the report and
-the log never interleave.
+`log=True` requests the log of the solver. Building finishes before a solver
+starts, and the report and the log do not interleave.
 
 ---
 
@@ -2490,8 +2488,8 @@ Model.var(name, sets, subset=None, lower=0.0, upper=inf, integer=False)
 
 The variable's columns are a virtual coordinate: a member's column is
 computed from its multi-index by stride arithmetic for a full product, or
-is its rank among a subset's codes. Nothing stores a column index, which is
-why a variable over millions of columns costs only its members.
+is its rank among the codes of a subset. Nothing stores a column index. A
+variable over millions of columns therefore costs only its members.
 
 | Member | Returns |
 | --- | --- |
@@ -2527,26 +2525,26 @@ Output:
 [0 0 0 0 0 0 1 1]
 ```
 
-Each variable occupies the next range of the model's one column space, so
-`m.n_columns` counts every column declared so far.
+Each variable occupies the next range of the single column space of the
+model. `m.n_columns` counts every column declared so far.
 
 ## A variable over no dimension
 
-A variable's bracket lists the dimensions it carries, so a variable over
-none carries no bracket and enters a row on its own. It is one column: a
-value-at-risk level, a budget slack, a bound every row of a family shares.
-`theta[()]` is the same term written out.
+The bracket of a variable lists the dimensions it is declared over. A
+variable over no dimension takes no bracket and enters a row on its own. It
+is one column: a value-at-risk level, a budget slack, or a bound shared by
+every row of a family. `theta[()]` is the same term written out.
 
-A variable that does carry dimensions states no term until it is read, and
-using one bare raises `TypeError` naming the reading it wants. The same rule
-holds for a parameter, which is read `cost[G, T]` and, over no dimension,
-`k`.
+A variable over one or more dimensions expresses no term until it is read.
+Using one without a bracket raises `TypeError` and reports the reading it
+requires. The same rule applies to a parameter, read as `cost[G, T]`, and as
+`k` over no dimension.
 
-Comparing a variable states a row, so `==` between two variables states one
-too rather than answering true or false. A list of variables therefore cannot
-be searched with `in` or `.index`, which compare their items: those raise the
-reading refusal, naming whichever variable they reached first. Keep variables
-in a dict or a set, which match on identity, or search them by `name`.
+Comparing a variable expresses a row, and `==` between two variables
+expresses a row as well. A list of variables therefore cannot be searched
+with `in` or `.index`, as both compare their items. Both raise `TypeError`
+and report the first variable they compare. A dict and a set match on
+identity. Store variables in one of them, or search them by `name`.
 
 ```python
 import numpy as np
@@ -2574,13 +2572,13 @@ theta - Sum(S, p[S]) >= 0
 ## `COLUMN` and `ROW`
 
 The dimension names `nimopt` reserves. `COLUMN` is `"__column__"` and `ROW`
-is `"__row__"`; both are spelled so that no ordinary set name collides
-with them.
+is `"__row__"`. Both are written so that no ordinary set name collides with
+them.
 
 A variable's terms are an array over `(*dims, COLUMN)`, and a constraint's
-block is one over `(ROW, COLUMN)`. That is the whole of the correspondence
-between a model and its matrix: the column space is a dimension, so the
-array is the matrix.
+block is one over `(ROW, COLUMN)`. That is the whole correspondence between
+a model and its matrix: the column space is a dimension, and the array is the
+matrix.
 
 ```python
 import numpy as np
@@ -2605,8 +2603,8 @@ __column__ __row__
 ('P', 'W')
 ```
 
-A caller writes neither name. They exist to be recognised when a `nimblend`
-array from inside a model is inspected.
+A caller writes neither name. Both appear when a `nimblend` array from
+inside a model is inspected.
 
 ---
 
@@ -2614,35 +2612,35 @@ array from inside a model is inspected.
 
 # nimblend arrays
 
-`nimblend` is the layer below `nimopt`. It knows dimensions, labels, entries
-and alignment, and nothing about optimization. A `nimopt` caller meets these
-names when reading a solution or inspecting what a model built.
+`nimblend` is the layer below `nimopt`. Its vocabulary is dimensions, labels,
+entries and alignment, and it contains no optimization term. A `nimopt` caller
+uses these names when reading a solution or inspecting what a model built.
 
-**Import from `nimblend` itself, never from a submodule, and never read an
+**Import from `nimblend` itself, never from a submodule. Never read an
 array's `.index` or `.data` or a domain's `.codes`.** Those are the raw
-index matrix, value buffer and ravelled members of the layer below the
-array layer; reading them bypasses the contract. A test in this repository
-fails on any of them.
+index matrix, the value buffer and the ravelled members of the layer below
+the array layer. Reading them bypasses the contract, and a test in this
+repository fails on any of them.
 
-Nor assemble one. `SparseArray.from_canonical` below takes an index matrix
-the caller built, which is the array layer's own work: `nimopt`'s modules
-call it nowhere, and a test holds them to that. A `Domain` returns the
-array over its own members instead.
+Do not assemble one either. `SparseArray.from_canonical` below takes an index
+matrix built by the caller, and that is the work of the array layer. No module
+of `nimopt` calls it, and a test enforces that. A `Domain` returns the array
+over its own members instead.
 
 ## `Array`
 
-A labeled N-dimensional array. `Array` is the contract both
-implementations satisfy, and what a caller writes against.
+A labeled N-dimensional array. `Array` is the contract both implementations
+satisfy, and the interface a caller writes against.
 
-`absence` declares what a coordinate the array does not have means:
-`"empty"` that it contributes nothing, `"unknown"` that it was not
-modelled. Operators and reductions follow from that declaration, so it is
-part of the array's meaning and not a hint.
+`absence` declares the meaning of a coordinate the array does not have:
+`"empty"` that it contributes nothing, `"unknown"` that it was not modeled.
+Operators and reductions follow from that declaration. The declaration is
+part of the definition of the array, not a hint.
 
 | Member | Returns |
 | --- | --- |
 | `dims`, `shape`, `nnz` | the dimensions, their sizes, and the number of entries |
-| `coords` | each dimension's coordinate, which resolves its labels |
+| `coords` | the coordinate of each dimension, resolving its labels |
 | `absence` | the meaning of a coordinate the array does not have |
 | `as_empty()`, `as_unknown()` | the array under the other absence declaration |
 | `values()`, `coordinates()` | the entries and their multi-indices |
@@ -2661,12 +2659,11 @@ implementations behave alike, including over frames that differ. One frame
 nested inside the other broadcasts over the wider; frames sharing some
 dimensions align on those and multiply out the rest. Frames sharing no
 dimension raise. A product mixing the two implementations returns a
-`SparseArray`, because a product intersects presence and so has at most
-what the sparse operand has.
+`SparseArray`: a product intersects presence and has at most the entries of
+the sparse operand.
 
-Absence and zero stay distinct. A stored `0.0` is a coordinate that is
-present with value zero, which is not the same as one the array does not
-have.
+Absence and zero remain distinct. A stored `0.0` is a coordinate present with
+the value zero. A coordinate the array does not have is a different case.
 
 ```python
 import numpy as np
@@ -2734,16 +2731,16 @@ unknown
 
 An ndarray over labeled dimensions, distinguishing absence from zero.
 
-How presence is stored follows the absence declaration, because the two
-declarations need opposite things from an operator. An `"unknown"` array
-tags absence with NaN, which propagates through arithmetic at no cost and
-needs no storage beside the values. An `"empty"` array carries a boolean
-mask, because absence is the additive identity there and substituting it is
-cheaper than tagging.
+The storage of presence follows the absence declaration: the two
+declarations require opposite behavior from an operator. An `"unknown"` array
+marks absence with NaN. NaN propagates through arithmetic at no cost and
+requires no storage beside the values. An `"empty"` array stores a boolean
+mask: absence is the additive identity there, and substituting it costs less
+than marking it.
 
-`Solution.primal` returns one of these for a variable over a full product:
-the solver returns a value at every cell of the frame in column order, so
-they reshape with no index built at all.
+`Solution.primal` returns one of these for a variable over a full product.
+The solver returns a value at every cell of the frame in column order, and
+the values reshape with no index built.
 
 ```python
 import numpy as np
@@ -2781,10 +2778,9 @@ not already an ndarray.
 | `is_canonical(index, shape)` | whether buffers are in the order `from_canonical` takes |
 
 `from_long` resolves each label through the coordinate that dimension
-already has, so a caller holding coordinates, which is any caller with sets
-of its own, gives its entries as labels rather than resolving them to
-positions first. The columns are read in parallel, so they must have equal
-length.
+already has. A caller with coordinates of its own therefore gives its entries
+as labels and resolves no position itself. The columns are read in parallel
+and must have equal length.
 
 ```python
 import numpy as np
@@ -2830,10 +2826,10 @@ Raises ValueError:
 ValueError: label column 't' has length 2 and the value column has length 1; they name the same entries
 ```
 
-`is_canonical` answers the question `SparseArray.from_canonical` asks a
-caller to answer about buffers the caller built: entries sorted by ravel
-key with no repeat. Verifying it inside `from_canonical` would cost the
-ravel that path exists to avoid.
+`is_canonical` reports whether buffers meet the precondition of
+`SparseArray.from_canonical`: entries sorted by ravel key, with no repeat.
+Verifying it inside `from_canonical` would cost the ravel that this path
+avoids.
 
 ```python
 import numpy as np
@@ -2854,9 +2850,9 @@ False
 ## The frame of a binary result
 
 `combined_dims(left, right)` returns the dimensions a binary operator's
-result has, from the two operands' dimensions alone. A caller reads it
-before materialising either operand, which is what lets a combination
-report its frame while its data is still unbound.
+result has, from the dimensions of the two operands alone. A caller reads it
+before materialising either operand. A combination therefore reports its
+frame while its data is unbound.
 
 | Operands | Result |
 | --- | --- |
@@ -2963,10 +2959,10 @@ Output:
 
 A sorted, unique set of multi-indices over named dimensions.
 
-A coordinate resolves labels for one dimension; a domain does so for a
-tuple of them: which multi-indices it has, what position each occupies, and
-which multi-index sits at a position. It records which coordinates are
-present and nothing about where they are numbered from.
+A coordinate resolves labels for one dimension, and a domain resolves them
+for a tuple of dimensions. It reports the multi-indices it has, the position
+of each, and the multi-index at a given position. It records which
+coordinates are present, and it records no numbering origin.
 
 | Constructor | Returns |
 | --- | --- |
@@ -2994,10 +2990,10 @@ present and nothing about where they are numbered from.
 That table is the whole surface. **A domain's `codes` are the raw ravelled
 members of the layer below it, as an array's `.index` and `.data` are its
 raw buffers; never read them.** `coordinates()` and `labels()` report which
-members are present, `positions_of_coordinates` reports where one sits,
-`as_coord` numbers them, and `array` and `identity` return an array over
-them, so nothing above needs to build an index matrix either. A test in
-this repository fails on a read of any of the three.
+members are present, and `positions_of_coordinates` reports the position of
+one. `as_coord` numbers them, and `array` and `identity` return an array over
+them. No layer above builds an index matrix. A test in this repository fails
+on a read of any of the three.
 
 The label columns of `from_labels` are read in parallel: the k-th entry of
 each column belongs to the same member. A domain is a list of members, not
@@ -3073,13 +3069,13 @@ from 100.
 
 ## Crossing a domain with further dimensions
 
-`expand` replicates every member across the full extent of the named
-dimensions, which is how the coordinates a term *could* have are enumerated
-before asking which of them it does. The new dimensions are appended;
-`transpose` reads the result in another order. A member's code is its own
-scaled by the appended extent, plus each position within it, so the cross
-product is arithmetic on the members and no index matrix is built to hold
-it.
+`expand` replicates every member across the full extent of the given
+dimensions. That enumerates the coordinates a term can have, before the test
+of which ones it does have. The new dimensions are appended, and `transpose`
+reads the result in another order. The code of a member is its own code
+scaled by the appended extent, plus each position within it. The cross
+product is therefore arithmetic on the members, and it builds no index
+matrix.
 
 ```python
 import numpy as np
@@ -3110,20 +3106,19 @@ Output:
 ('H', 'P', 'W')
 ```
 
-Two members crossed with two hours are four, and `transpose` presents them
-over the dimensions in another order without changing which members are
-present.
+Two members crossed with two hours are four members, and `transpose`
+presents them over the dimensions in another order. The members present do
+not change.
 
 ## A domain returns an array
 
-A caller holding one value per member, or wanting each member paired with
-its own position along a new dimension, asks the domain rather than
-building an index matrix. Both are readers standing above the raw members,
-as `coordinates()` and `as_coord()` are.
+A caller with one value per member calls the domain, and so does a caller
+that pairs each member with its own position along a new dimension. Neither
+builds an index matrix. Both calls read above the raw members, as
+`coordinates()` and `as_coord()` do.
 
-`array(values)` assigns one value to each member, in the order they are
-held. The members ascend, so the entries are canonical as written and no
-sort runs.
+`array(values)` assigns one value to each member, in their stored order. The
+members ascend, the entries are canonical as written, and no sort runs.
 
 ```python
 import numpy as np
@@ -3140,8 +3135,8 @@ Output:
 [1. 2. 3.]
 ```
 
-A full domain's members ascend with the ravel key, which is the order
-`values.ravel()` reads a grid in, so a whole array is built in one call.
+The members of a full domain ascend with the ravel key. That is the order
+`values.ravel()` reads a grid in, and a whole array is built in one call.
 
 ```python
 import numpy as np
@@ -3180,12 +3175,12 @@ Raises ValueError:
 ValueError: a domain of 3 member(s) takes one value each, as a column of that length; got shape (2,)
 ```
 
-`identity(into, coord, start)` pairs each member with its own position
-along a new dimension, valued 1.0. A member's position is its rank plus
-`start`, which is the numbering `as_coord(start)` uses, so an array built
-one way and a coordinate built the other place a member alike. `coord` is
-the coordinate of the new dimension and spans the whole extent the
-positions are numbered into, wider than these members where several
+`identity(into, coord, start)` pairs each member with its own position along
+a new dimension, valued 1.0. The position of a member is its rank plus
+`start`, the numbering `as_coord(start)` uses. An array built one way and a
+coordinate built the other place a member at the same position. `coord` is
+the coordinate of the new dimension. It spans the whole extent the positions
+are numbered into. That extent is wider than these members where several
 domains share one numbering.
 
 ```python
@@ -3207,8 +3202,8 @@ Output:
  [10 11 12]]
 ```
 
-A destination too short for the members it is asked to number raises
-`ValueError` rather than writing a position outside it.
+A destination too short for the members to be numbered raises `ValueError`,
+and it writes no position outside itself.
 
 ```python raises=ValueError
 import numpy as np
@@ -3227,12 +3222,12 @@ ValueError: 3 member(s) numbered from 4 reach position 6, and dimension 'k' span
 
 ## The three coordinates
 
-A coordinate resolves where a label sits along one dimension. Which of the
-three is used follows from what the dimension is.
+A coordinate resolves the position of a label along one dimension. The
+dimension determines which of the three is used.
 
 | Coordinate | Is | Used for |
 | --- | --- | --- |
-| `StoredCoord(labels)` | labels held as an array | a dimension whose members are named |
+| `StoredCoord(labels)` | labels stored as an array | a dimension whose members have labels |
 | `ProductCoord(sizes, start=0)` | positions of a full product, numbered from `start` | a dimension whose positions are computed, such as a variable's columns |
 | `SubsetCoord(codes, sizes, start=0)` | positions of a subset of a product, numbered from `start` in code order | a variable over a subset, where a position is a rank among the codes |
 
@@ -3261,10 +3256,10 @@ Output:
 [0 1]
 ```
 
-`StoredCoord` looks a label up among the ones it holds, so `"c"` resolves
-to position 2. `ProductCoord` ravels a multi-index against the sizes, so
-`(0, 2)` is position 2 and `(1, 0)` is position 3. `SubsetCoord` holds the
-codes `0` and `4`, which are those same two members, and returns their
+`StoredCoord` looks a label up among the labels it stores, and `"c"`
+resolves to position 2. `ProductCoord` ravels a multi-index against the
+sizes, and `(0, 2)` is position 2 and `(1, 0)` is position 3. `SubsetCoord`
+stores the codes `0` and `4`, the same two members, and returns their
 ranks.
 
 `to_position` takes an index matrix of one row per dimension, and each
@@ -3272,13 +3267,13 @@ column is one entry.
 
 ## `EntryBuffer`
 
-A fixed index and value buffer handing out successive slices.
+A fixed index and value buffer that returns successive slices.
 
-A block computed into a reserved slice never exists as a separate object,
-so assembling several of them holds one copy of the result rather than one
-copy per block plus the result. It is the destination a model's assembly
-writes into: each constraint writes its rows into its own slice of one
-buffer.
+A block computed into a reserved slice never exists as a separate object.
+Assembling several blocks therefore stores one copy of the result, and not
+one copy per block plus the result. The buffer is the destination the
+assembly of a model writes into: each constraint writes its rows into its own
+slice of one buffer.
 
 | Member | Returns |
 | --- | --- |
@@ -3324,20 +3319,20 @@ into them is writing into the array that comes out.
 # nimblend
 
 `nimblend` is a labeled sparse N-dimensional array library. Its vocabulary is
-dimensions, labels, entries and alignment, and it knows nothing about
-optimization. It depends on NumPy and nothing else.
+dimensions, labels, entries and alignment, and it contains no optimization
+term. It depends on NumPy and nothing else.
 
-`nimopt` imports it, never the reverse. A model reaches `nimblend` in two
-places: a solution is returned as a `nimblend` array, and a constraint's rows
-are a `nimblend` domain. A reader who wants labeled sparse data and no model
-at all can use it on its own.
+`nimopt` imports it, never the reverse. A model uses `nimblend` in two places:
+a solution is returned as a `nimblend` array, and the rows of a constraint are
+a `nimblend` domain. `nimblend` is also usable on its own, for labeled sparse
+data outside a model.
 
 ## Design
 
 **Absence is distinct from zero.** An entry is either stored or absent, and
 every array declares the meaning of absence: `"empty"` for a coordinate
-that contributes nothing, `"unknown"` for one that was never modelled.
-Division by an absent value raises instead of producing infinity.
+that contributes nothing, `"unknown"` for one that was never modeled.
+Division by an absent value raises an error and returns no infinity.
 
 **One contract, two implementations.** `Array` defines what an array does.
 `SparseArray` stores only the entries it has; `DenseArray` stores a grid and
@@ -3345,12 +3340,12 @@ the presence its declaration implies. Both are tested against the same
 conformance suite.
 
 **A coordinate is computed, not stored.** A dimension spanning millions of
-positions costs nothing to hold: `ProductCoord` computes a position by
-stride arithmetic and `SubsetCoord` by rank among the members of a domain.
+positions costs no storage: `ProductCoord` computes a position by stride
+arithmetic and `SubsetCoord` by rank among the members of a domain.
 
-**A domain is a set of coordinates.** It reports which members it has and
-where each sits, and through `array` and `identity` it returns an array
-over them, so a caller never assembles an index matrix.
+**A domain is a set of coordinates.** It reports which members it has and the
+position of each. Through `array` and `identity` it returns an array over
+those members, and a caller assembles no index matrix.
 
 ## Pages
 
@@ -3423,8 +3418,8 @@ Member `(0, 2)` is column 2 and `(1, 0)` is column 3: stride arithmetic and
 nothing else.
 
 For a variable over a subset, the column is the member's rank among the
-subset's codes. `SubsetCoord` holds the codes in order, so a block already
-in canonical order needs no lookup at all.
+subset's codes. `SubsetCoord` stores the codes in order, and a block already
+in canonical order needs no lookup.
 
 ```python
 import numpy as np
@@ -3444,18 +3439,18 @@ Codes `0` and `4` are members `(0, 0)` and `(1, 1)`, with ranks `0` and `1`.
 
 ## Consequences
 
-Nothing stores a column index. A variable over a million members holds its
+Nothing stores a column index. A variable over a million members stores its
 set sizes, the start of its block and, for a subset, the codes of its
-members. It does not hold a million integers recording which column each
-member is, because that number is recoverable from the member itself.
+members. It stores no integer per member: the column is computed from the
+member itself.
 
 The cost of declaring a variable is therefore the cost of its members, not
 of its columns. A variable over a full product costs nothing per column:
 two set sizes and a start.
 
-A subset variable is not a special case. Both kinds answer the same
-question, which position a member occupies, and differ only in whether the
-answer is arithmetic or a rank.
+A subset variable is not a special case. Both kinds report the position a
+member occupies. They differ in whether that position is computed by
+arithmetic or by a rank.
 
 ---
 
@@ -3463,9 +3458,9 @@ answer is arithmetic or a rank.
 
 # Expressions are symbolic
 
-A `Term` is a recipe, not a block of numbers. It holds a reference to a
-variable, an optional coefficient, the dimensions summed over, a scale
-factor, and any lags, conditions or fixed members. An `Expression` is a list
+A `Term` describes a block of numbers and stores none. It contains a
+reference to a variable, an optional coefficient, the dimensions summed over,
+a scale factor, and any lags, conditions or fixed members. An `Expression` is a list
 of such terms and the frame they share.
 
 Nothing in that list is an array. `cost[P, W] * x[P, W]` records which
@@ -3499,20 +3494,20 @@ columns is still one term and costs the same to write.
 
 ## Materialisation
 
-An expression becomes matrix entries when it is materialised, which is the
+An expression becomes matrix entries when it is materialised. That is the
 only point at which values are read. Materialisation walks the terms and
-issues `nimblend` operations in order: the coefficient is aligned with the
-variable's block, the summed dimensions are reduced, the scale is applied,
-and the terms are combined over the shared frame.
+issues `nimblend` operations in order. The coefficient is aligned with the
+block of the variable, and the summed dimensions are reduced. The scale is
+applied, and the terms are combined over the shared frame.
 
 The result is a `nimblend` array over the frame crossed with the column space:
 the block of coefficients the constraint contributes to the matrix.
 
 ## A hundred constraints cost a hundred shapes
 
-A constraint holds the recipe rather than the block, so adding one costs
-computing its shape. `n_rows` and `nnz` are known at declaration, and no
-coefficients exist yet.
+A constraint stores the term list and no block. Adding a constraint
+therefore costs the computation of its shape. `n_rows` and `nnz` are known at
+declaration, and no coefficient exists yet.
 
 ```python
 import numpy as np
@@ -3536,15 +3531,15 @@ Output:
 ```
 
 Four thousand rows and four hundred thousand coefficients are declared, and
-the model holds twenty term lists.
+the model stores twenty term lists.
 
 ## The cost
 
 An expression is materialised twice: once to compute its shape when the
 constraint is added, and once to write its entries when the matrix is
-assembled. Building twice costs build time. In exchange, one expression is
-live at a time rather than all of them, so peak memory is set by the largest
-constraint rather than by their sum.
+assembled. Building twice costs build time. One expression is live at a
+time, and peak memory is set by the largest constraint, not by the sum of
+all of them.
 
 A model that is cheap to declare and more expensive to assemble suits a
 builder, because declaration is what a caller iterates on.
@@ -3557,8 +3552,8 @@ builder, because declaration is what a caller iterates on.
 
 A constraint is a `nimblend` array indexed over its free sets and the column
 space, or over `(ROW, COLUMN)` once its frame has been grouped into rows.
-The values of that array are the coefficients. No step converts a model
-into a matrix, because the array already is one.
+The values of that array are the coefficients. No step converts a model into
+a matrix: the array is the matrix.
 
 ```python
 import numpy as np
@@ -3585,42 +3580,40 @@ Output:
 
 The variable's coefficients are indexed over `('P', 'W', '__column__')`.
 Grouping the frame into rows puts the same entries over `('__row__',
-'__column__')`, which is a matrix in every sense that matters: a row index,
-a column index and a value.
+'__column__')`. That is a matrix: a row index, a column index and a value.
 
 ## One buffer
 
 A model allocates one `nimblend.EntryBuffer` for its whole matrix. Each
 constraint reserves the slice its coefficients need and groups its block
-directly into that slice, so the block never exists as a second object.
+directly into that slice. The block never exists as a second object.
 
-The frame precedes the column dimension in canonical order, so the grouping
-reads a leading prefix and the result is canonical as written: no sort
-afterwards, no copy into place.
+The frame precedes the column dimension in canonical order. The grouping
+reads a leading prefix, and the result is canonical as written, with no sort
+afterwards and no copy into place.
 
-Handing the matrix to a solver is then a matter of returning views.
-`indices` and `values` are the buffer; only `indptr` is built. A model of
-four million nonzeros hands over its matrix without copying it.
+Passing the matrix to a solver returns views. `indices` and `values` are the
+buffer, and only `indptr` is built. A model of four million nonzeros passes
+its matrix without copying it.
 
 ## Why the shape is computed first
 
-Reserving a slice requires its size, so a constraint computes its shape when
-it is added and writes its entries when the model is assembled. The two must
-agree, and the model checks that they do.
+Reserving a slice requires its size. A constraint computes its shape when it
+is added and writes its entries when the model is assembled. The model checks
+that the two agree.
 
-If a parameter's data changes between the two, the constraint computed one
-number of coefficients and built another. The model raises rather than
-writing a matrix that does not match the shape it reported.
+Where the data of a parameter changes between the two, the constraint
+computes one number of coefficients and writes another. The model raises, and
+it writes no matrix that differs from the shape it reported.
 
-## What the design gives up
+## What the design costs
 
-Materialising the expression twice costs build time. That is the price of
-holding one expression at a time rather than every constraint's block at
-once, and it is a deliberate trade: peak memory is set by the largest
-constraint, not by the sum of all of them.
+Materialising the expression twice costs build time. One expression exists at
+a time, and the blocks of the constraints never exist together. Peak memory
+is set by the largest constraint, not by the sum of all of them.
 
-It also means a model's declared shape is exact before anything is built.
-`n_rows`, `n_columns` and `nnz` are facts, not estimates.
+The declared shape of a model is also exact before anything is built.
+`n_rows`, `n_columns` and `nnz` are exact counts, not estimates.
 
 ---
 
@@ -3632,76 +3625,75 @@ Two packages, with the dependency in one direction. `nimopt` imports
 `nimblend`; `nimblend` never imports `nimopt`.
 
 **`nimblend`** is a labeled sparse N-dimensional array. Its vocabulary is
-dimensions, labels, entries and alignment. It knows nothing about
-optimization, and a function in it referring to a row, a column or a
-constraint would be a boundary violation.
+dimensions, labels, entries and alignment. It contains no optimization term.
+A function in it referring to a row, a column or a constraint is a boundary
+violation.
 
 **`nimopt`** is an LP/MILP builder in which a variable is a dimension. Its
-types are `nimblend` arrays with names attached, and the buffer its matrix
-lives in is a `nimblend.EntryBuffer`.
+types are `nimblend` arrays with names attached, and its matrix is stored in
+a `nimblend.EntryBuffer`.
 
 The boundary is not a convention. It is enforced by tests that fail when it
 moves.
 
 ## What the tests enforce
 
-**`nimblend` never refers to `nimopt`.** A scan of `nimblend`'s source fails on any
-mention. A second test imports `nimblend` alone and fails if `nimopt` is
-imported with it. `nimblend` carries the other half of the rule in its own
-suite: no class, function or parameter it declares is named for a
-constraint, an objective, a solver or a variable, and no source file of it
-mentions one even in prose. A package developed on its own needs its own
-suite to fail, rather than waiting for a consumer's.
+**`nimblend` never refers to `nimopt`.** A scan of the `nimblend` source
+fails on any mention. A second test imports `nimblend` alone and fails where
+`nimopt` is imported with it. `nimblend` enforces the other half of the rule
+in its own suite: no class, function or parameter it declares is named for a
+constraint, an objective, a solver or a variable, and no source file mentions
+one in prose. A package developed on its own fails in its own suite, and not
+in the suite of a consumer.
 
 **Every `nimblend` import is a public name of the top-level module.** A model
 imports `SparseArray` from `nimblend`, never from `nimblend.sparse`. Importing a
 public name by its submodule path is how a dependency on an internal
-starts. The modules `nimopt` ships are held tighter still: the set of `nimblend`
-names they import is pinned, so widening it is a deliberate act rather than
-drift.
+starts. The modules `nimopt` ships are constrained further: the set of
+`nimblend` names they import is pinned, and widening it requires an explicit
+change to the test.
 
 **No array's `.index` or `.data` is read.** Those are the raw index matrix
 and value buffer of the layer below the array layer. The rule is checked by
-walking the syntax tree rather than by grepping, so it catches a read that
-is not a subscript, and it allows `dims.index(name)`, which is a tuple
-being asked for a position.
+walking the syntax tree, not by a text search. It detects a read that is not
+a subscript, and it permits `dims.index(name)`, a position lookup on a
+tuple.
 
-**And none is assembled.** Reading a buffer is one half of the bypass and
+**And none is assembled.** Reading a buffer is one half of the bypass, and
 building one is the other. An index matrix assembled in `nimopt` is array
-work done a layer too high, and it is exactly the seam that has to move
-when the kernel below `nimblend` is replaced. A domain returns the array over
+work performed one layer too high. That work is part of the interface that
+moves when the kernel below `nimblend` is replaced. A domain returns the array over
 its own members instead: `array(values)` assigns a value to each member,
 and `identity(into, coord, start)` pairs each with its position along a new
 dimension. No module of `nimopt` calls `SparseArray(index, ...)` or
 `from_canonical`.
 
-## Where the bytes land
+## Where the bytes are allocated
 
-The sharpest boundary test concerns allocation, and it does not ask which
-package holds more.
+The strongest boundary test measures allocation. It does not compare the
+totals of the two packages.
 
-A build's cost per nonzero lands in `nimblend`: the matrix is an int32 column
-and a float64 value per entry, and it lives in a `nimblend` buffer. Increase
-the nonzeros ninefold and `nimblend`'s share grows by at least twelve bytes
-for each one added.
+The cost per nonzero of a build is allocated in `nimblend`: the matrix is an
+int32 column and a float64 value per entry, stored in a `nimblend` buffer. A
+ninefold increase in the nonzeros grows the `nimblend` share by at least
+twelve bytes per added entry.
 
-`nimopt` stays flat across the same change. What it allocates is what a
-solver takes beside the matrix: a lower bound, an upper bound and an
-integrality flag per column, and a pair of bounds per row. Those are fixed
-by the sets, not by the density.
+`nimopt` allocates a near-constant amount across the same change. What it
+allocates is what a solver takes beside the matrix: a lower bound, an upper
+bound and an integrality flag per column, and a pair of bounds per row. The
+sets fix those counts, and the density does not.
 
-That is why the test is written as a gradient rather than a comparison.
-Asserting that `nimblend` simply holds more bytes would measure the workload
-instead of the boundary: `nimopt` holds a vector per column whatever the
-density, so a sparse enough model puts `nimopt` above `nimblend` with nothing
-having drifted.
+The test therefore measures the gradient and not the totals. An assertion
+that `nimblend` allocates more bytes would measure the workload instead of
+the boundary. `nimopt` allocates a vector per column at every density, and a
+sparse enough model puts `nimopt` above `nimblend` with no boundary
+violation.
 
 ## Why the site lives in `nimopt`
 
-`nimopt` imports `nimblend`, so a site inside `nimopt` documenting both runs
-with the dependency. A site inside `nimblend` documenting `nimopt` would invert
-it, and the inversion would be real: `nimblend`'s own tests would need a model
-to describe.
+`nimopt` imports `nimblend`. A site inside `nimopt` documenting both packages
+follows that dependency. A site inside `nimblend` documenting `nimopt` would
+invert it, and the `nimblend` tests would then require a model to describe.
 
 ---
 
@@ -3709,36 +3701,39 @@ to describe.
 
 # What the numbers measure
 
-Every figure here is given against a stated baseline. A number without its
-denominator says nothing, and a ratio can be made to sound like anything by the choice of denominator.
+Every figure here is given against a declared baseline. A number without its
+denominator is not interpretable, and the choice of denominator changes the
+size of a ratio.
 
-## Who owns the bytes
+## Which package allocates the bytes
 
-Every surviving allocation of a 200x100 transport build, attributed to the package that allocated it. Both rows are the same model over the same sets, so
-rows and columns are fixed at 200 and 20 000, and the coefficient's density
-alone decides the nonzeros.
+Every surviving allocation of a 200x100 transport build, attributed to the
+package that allocated it. Both rows are the same model over the same sets.
+Rows and columns are fixed at 200 and 20 000, and the density of the
+coefficient determines the nonzeros.
 
 | nonzeros | nimblend | nimopt |
 |---|---|---|
 | 20 000 | 0.490 MB | 0.406 MB |
 | 2 209 | 0.204 MB | 0.406 MB |
 
-`nimblend` absorbs 16.0 bytes per added nonzero — an int32 column and a float64
-value — because the buffer a model's matrix lives in is a `nimblend.EntryBuffer`
-and the CSR handoff returns views of it. `nimopt` moves by 48 bytes across a
-ninefold change in the matrix: what it allocates is the per-column vectors,
-bounds and integrality, and the row bounds, which the sets fix.
+`nimblend` allocates 16.0 bytes per added nonzero, an int32 column and a
+float64 value. The matrix of a model is stored in a `nimblend.EntryBuffer`,
+and the CSR conversion returns views of that buffer. `nimopt` moves by
+48 bytes across a ninefold change in the matrix. It allocates the per-column
+vectors, the bounds and the integrality, and the row bounds. The sets fix
+those counts.
 
-**What it does not claim.** Not that `nimblend` holds more bytes than `nimopt`.
-That is a property of a model's nonzeros per column, and a model carrying one
-entry per column puts `nimopt` above `nimblend` with nothing having drifted. The
-measure is the gradient, not the totals.
+**What it does not claim.** It does not claim that `nimblend` allocates more
+bytes than `nimopt`. The totals follow from the nonzeros per column of the
+model, and a model with one entry per column puts `nimopt` above `nimblend`.
+The measure is the gradient, not the totals.
 
 ## Two models
 
 `benchmarks/bench_transport.py` ships from plants to warehouses over a
-network in which each plant serves a band of nearby warehouses, so the flow
-variable spans the arcs rather than the full product.
+network. Each plant serves a band of nearby warehouses, and the flow variable
+spans the arcs, not the full product.
 
 | plants | warehouses | arcs/plant | rows | columns | nonzeros | matrix | peak | ratio | build |
 |---|---|---|---|---|---|---|---|---|---|
@@ -3747,9 +3742,9 @@ variable spans the arcs rather than the full product.
 | 10 000 | 2 000 | 40 | 12 000 | 400 000 | 800 000 | 9.60 MB | 69.71 MB | 7.26x | 314 ms |
 
 `benchmarks/bench_storage.py` dispatches a thermal fleet, a solar fleet and a
-set of batteries against an hourly demand. The batteries couple neighbouring
-hours through a cyclic state of charge, and the generators through an upward
-ramp limit.
+set of batteries against an hourly demand. The batteries couple adjacent
+hours through a cyclic `state_of_charge` row, and the generators through an
+upward ramp limit.
 
 | generators | batteries | hours | rows | columns | nonzeros | matrix | peak | ratio | build |
 |---|---|---|---|---|---|---|---|---|---|
@@ -3757,27 +3752,31 @@ ramp limit.
 | 40 | 8 | 720 | 81 320 | 46 080 | 166 960 | 2.00 MB | 14.76 MB | 7.37x | 69 ms |
 | 80 | 20 | 8 760 | 2 111 080 | 1 226 400 | 4 379 840 | 52.56 MB | 370.45 MB | 7.05x | 1 552 ms |
 
-Both solve through HiGHS. The two lag rules are visible in the row counts: over 168 hours the ramp block has 10 x 167 rows, because the first hour has no predecessor and its row is not produced, while the cyclic state of charge wraps to the last hour and keeps all 2 x 168 of its rows.
+Both models solve through HiGHS. The two lag rules are visible in the row
+counts. Over 168 hours the ramp block has 10 x 167 rows: the first hour has
+no predecessor, and its row is not produced. The cyclic `state_of_charge` row
+wraps to the last hour and keeps all 2 x 168 of its rows.
 
 ## Peak against the matrix
 
-The peak is reached while the model is built, not while it is assembled. On
-the 400 000-column transport model, building peaks at 69.72 MB and the
-assembly that follows peaks at 68.23 MB, because every constraint's
-expression is built once to measure its shape and the model that produces the
-matrix stays live while the matrix is written.
+The peak occurs while the model is built, not while it is assembled. On the
+400 000-column transport model, the build peaks at 69.72 MB and the assembly
+that follows peaks at 68.23 MB. The expression of every constraint is built
+once to measure its shape, and the model that produces the matrix remains
+live while the matrix is written.
 
-The denominator decides how large the ratio sounds. The CSR matrix is
+The denominator determines the size of the ratio. The CSR matrix is
 9.60 MB; the data a solver takes — matrix, row pointer, row and column
 bounds, cost, integrality — is 21.04 MB, and the model that produced it is
 21.74 MB more. Peak is 7.26x the matrix and 3.31x the full LP data, and
 45.99 MB of the 69.72 MB is still live when the build returns.
 
-The ratio is close to flat across the rungs, 8.09x at 4 000 nonzeros and
-7.26x at 800 000, and the smallest rung's figure is stable rather than a
-first-call artefact: three consecutive measurements of it in one process give
-0.39, 0.38 and 0.38 MB. What the small rung has above the large is the
-model's own fixed structures, which do not shrink with the matrix.
+The ratio is close to constant across the rungs, 8.09x at 4 000 nonzeros and
+7.26x at 800 000. The figure of the smallest rung is stable and is not a
+first-call artifact: three consecutive measurements in one process give 0.39,
+0.38 and 0.38 MB. The excess of the small rung over the large one is the
+fixed structures of the model. Those structures do not shrink with the
+matrix.
 
 Where the transient bytes go, attributed by the frame that allocated them at
 the moment the 400 000-column build peaks:
@@ -3793,36 +3792,36 @@ the moment the 400 000-column build peaks:
 | 3.20 MB | a ravelled key set |
 
 An `int64` ravel key costs 8 bytes per entry and an argsort permutation
-another 8, against the 12 bytes a matrix entry finally occupies, so an
-operation that aligns costs more than the result it produces. That is the
-floor the ratio rests on, and it is per-operation and transient rather than
+another 8, against the 12 bytes a matrix entry occupies. An alignment
+therefore costs more than the result it produces. That cost sets the lower
+bound of the ratio. It is per operation and transient, and it is not
 retained.
 
 A second constraint costs its own rows and little else. Over a 500 000-cell
-model, one constraint peaks at 65.71 MB against an 8.00 MB buffer and two
-peak at 75.85 MB against a 16.00 MB buffer: 2.14 MB beyond the rows the
-second adds, because a constraint holds its term list rather than a block, so
-an expression exists while its shape is measured and again while it is
-written, and never between.
+model, one constraint peaks at 65.71 MB against an 8.00 MB buffer, and two
+constraints peak at 75.85 MB against a 16.00 MB buffer. That is 2.14 MB
+beyond the rows the second constraint adds. A constraint stores its term list
+and no block. An expression exists while its shape is measured and again
+while it is written, and never between.
 
-**What it does not claim.** Not that peak memory is 7x the matrix in any
-absolute sense. It is 7.26x *the CSR matrix* and 3.31x *the full LP data* on
-this model, and which of those a reader cares about depends on what they were
-going to compare it with.
+**What it does not claim.** It does not claim that peak memory is 7x the
+matrix in an absolute sense. It is 7.26x *the CSR matrix* and 3.31x *the full
+LP data* on this model. Which of the two applies depends on the comparison
+being made.
 
 ## Against linopy
 
 `benchmarks/bench_vs_linopy.py` builds the same three models both ways.
 Inputs — the arc list, the hourly profiles, the costs — are prepared outside
-the measured region and handed to both. The measured build runs from an empty
-model to the matrix a solver would be given: `assemble()` for nimopt,
-`m.matrices` for linopy. Each side runs in a process of its own, because
-resident memory carries the import cost of whichever library is loaded, and a
-row is printed only once the two agree on rows, columns, nonzeros and the
-solved objective.
+the measured region and passed to both. The measured build runs from an empty
+model to the matrix a solver is given: `assemble()` for nimopt, `m.matrices`
+for linopy. Each side runs in a process of its own: resident memory includes
+the import cost of the library that is loaded. A row is printed once the two
+agree on rows, columns, nonzeros and the solved objective.
 
-Resident memory is sampled rather than traced. `tracemalloc` sees only what
-passes through Python's allocator, and two libraries that allocate memory by different routes would be compared on the route rather than on the memory.
+Resident memory is sampled, not traced. `tracemalloc` records only what
+passes through the Python allocator. Two libraries that allocate by different
+routes would then be compared on the route and not on the memory.
 
 **A variable over a sparse subset.** The flow spans the arcs in nimopt and the
 full plant-by-warehouse product under a mask in linopy.
@@ -3834,11 +3833,11 @@ full plant-by-warehouse product under a mask in linopy.
 | 400 000 | 9.60 MB | 72.9 MB | 1 682.9 MB | 292.9 ms | 844.5 ms |
 
 At 400 000 arcs the mask spans a 20 000 000-cell product: nimopt builds the
-same matrix in a twenty-third of the memory and a third of the time. This is
-the axis the design is for.
+same matrix in a twenty-third of the memory and a third of the time. The
+design targets this case.
 
-**Temporal coupling on a dense model.** Ramp limits and a cyclic state of
-charge over a full generator-by-hour grid.
+**Temporal coupling on a dense model.** Ramp limits and a cyclic
+`state_of_charge` row over a full generator-by-hour grid.
 
 | rows | matrix | nimopt RSS | linopy RSS | nimopt build | linopy build |
 |---|---|---|---|---|---|
@@ -3846,32 +3845,33 @@ charge over a full generator-by-hour grid.
 | 81 320 | 2.00 MB | 18.9 MB | 41.4 MB | 58.6 ms | 280.4 ms |
 | 2 111 080 | 52.56 MB | 383.4 MB | 409.3 MB | 1 511.0 ms | 507.9 ms |
 
-Here the advantage narrows and then reverses on time: at 2 111 080 rows
+Here the advantage narrows and then reverses on build time. At 2 111 080 rows
 linopy builds the same matrix **3.0x faster** for 7% more resident memory.
-Nothing is sparse in this model, so what remains is what the design costs where it gains nothing — every operation aligns by key, while xarray
-broadcasts over dense grids and aligns by position — and the model is built
-twice, once to measure each constraint's shape and once to write it. Resident
-memory stays close because both end up holding the same dense coefficient
-grids.
+Nothing is sparse in this model, and the design costs time with no
+corresponding saving. Every operation aligns by key, while xarray broadcasts
+over dense grids and aligns by position. The model is also built twice, once
+to measure the shape of each constraint and once to write it. Resident memory
+is close on both sides: both store the same dense coefficient grids.
 
-**Integrality.** Making the flow an integer column moves neither side's
-build: nimopt 8.6 MB and 27.3 ms against its own 10.7 MB and 27.9 ms as an LP,
+**Integrality.** Making the flow an integer column changes neither build: nimopt 8.6 MB and 27.3 ms against its own 10.7 MB and 27.9 ms as an LP,
 linopy 108.4 MB and 204.4 ms against 107.5 MB and 206.5 ms. Integrality is a
 column vector, not a matrix.
 
-**Reading the answer back.** Primals onto their sets and duals onto their
-rows: nimopt 0.7–6.9 ms across every rung, linopy 1.4–64.5 ms, the 64.5 ms
-being the 400 000-arc transport model, where the answer is unpacked onto the same masked product the build used.
+**Reading the solution back.** Primals onto their sets and duals onto their
+rows: nimopt 0.7–6.9 ms across every rung, linopy 1.4–64.5 ms. The 64.5 ms is
+the 400 000-arc transport model, where the solution is unpacked onto the
+masked product the build used.
 
-The matrices differ in width: linopy hands over a scipy matrix with `int64`
-column indices, so the same 800 000 nonzeros occupy 12.80 MB against nimopt's
-9.60 MB.
+The matrices differ in width. linopy returns a scipy matrix with `int64`
+column indices, and the same 800 000 nonzeros occupy 12.80 MB against
+9.60 MB for nimopt.
 
-**What it does not claim.** Not that nimopt is faster than linopy. On a dense
-temporally-coupled model at two million rows it is three times slower, and
-that row is in the table for the same reason the others are. The claim the
-numbers support is narrower: where a model is sparse in its variables, not
-materialising the grid is worth a great deal, and where it is not, the alignment work is a cost with no corresponding saving.
+**What it does not claim.** It does not claim that nimopt is faster than
+linopy. On a dense temporally coupled model at two million rows it is three
+times slower, and the table reports that row with the others. The numbers
+support a narrower claim. Where a model is sparse in its variables, not
+materialising the grid saves memory and time. Where it is not, the alignment
+work costs time and saves nothing.
 
 ---
 
@@ -3962,8 +3962,8 @@ Output:
 array, and `to_dense()` renders it as a NumPy array with axes in the
 declared set order.
 
-A shape mismatch raises `ValueError`; the message gives the expected and the
-actual shape.
+A shape mismatch raises `ValueError`, and the message gives the expected
+shape and the actual shape.
 
 ```python raises=ValueError
 import numpy as np
@@ -3986,7 +3986,7 @@ ValueError: parameter 'cost' is over sets of shape (2, 3); got values of shape (
 In a sparse network, a plant serves a subset of the warehouses, and the cost
 parameter has entries only on existing routes. `Param.from_long` takes the
 entries in long form: one label column per set and one value column, read in
-parallel, so the k-th entry of each column belongs to the same route.
+parallel. The k-th entry of each column belongs to the same route.
 
 ```python
 import numpy as np
@@ -4035,7 +4035,7 @@ over plants and warehouses.
 
 ## Declaring a variable
 
-A `Model` holds variables, constraints and the objective. `m.var(name,
+A `Model` contains variables, constraints and the objective. `m.var(name,
 sets)` declares a variable indexed over a tuple of sets and returns a handle
 for use in expressions.
 
@@ -4115,10 +4115,10 @@ Next: [Expressions](/tutorial/expressions).
 
 # Expressions
 
-Constraints and the objective are stated over sums of variables: the total
+Constraints and the objective are written over sums of variables: the total
 shipped from a plant, the total received by a warehouse, the total cost. An
 expression is such a sum. It is symbolic: writing one records the variables,
-coefficients and sets involved, and computes nothing.
+the coefficients and the sets involved, and computes nothing.
 
 ## Referencing a variable
 
@@ -4214,8 +4214,8 @@ Output:
 ```
 
 `total_cost` is a single term. The same expression over a million routes is
-still one term, because it holds references to `cost` and `x` rather than
-their values. Values are read when the matrix is assembled.
+still one term: it contains references to `cost` and `x`, not their values.
+Values are read when the matrix is assembled.
 
 ## Addition and subtraction
 
@@ -4338,13 +4338,13 @@ route into its warehouse: twelve nonzeros in total.
 ## The right-hand side
 
 The right-hand side is a scalar, applied to every row, or a parameter read
-at exactly the constraint's frame, giving each row its own value. The
+at exactly the frame of the constraint, giving each row its own value. The
 parameter is read at its sets here as it is anywhere else: `supply[P]`, not
-`supply`. A bare name raises `TypeError` and names the reading it wants,
-because a row bounded by a bare name reads as one bounded by a scalar.
+`supply`. A parameter without a bracket raises `TypeError` and reports the
+reading it requires.
 
 Supply is indexed over `P`, as are the supply rows. A parameter read over any
-other index set raises `ValueError`; the message gives both index sets.
+other index set raises `ValueError`, and the message gives both index sets.
 
 ```python raises=TypeError
 import numpy as np
@@ -4389,9 +4389,9 @@ ValueError: constraint 'supply' has free dimensions ('P',); its right-hand side 
 ## One bound per constraint
 
 Python evaluates the chained comparison `0 <= expr <= 10` as
-`(0 <= expr) and (expr <= 10)`, which discards the first relation. `nimopt`
-raises `TypeError` on the chained form rather than dropping a bound. Each
-bound is written as its own constraint.
+`(0 <= expr) and (expr <= 10)` and discards the first relation. `nimopt`
+raises `TypeError` on the chained form and drops no bound. Each bound is
+written as its own constraint.
 
 ```python raises=TypeError
 import numpy as np
@@ -4509,9 +4509,9 @@ solver proved about the optimum, an upper bound under sense `max` and a
 lower bound under sense `min`. `gap` returns the relative distance from the
 objective to that bound.
 
-A search stopped after one node returns whichever point the solver found
-there. The solver's thread count determines that point. The example below
-reports what holds of every such point.
+A search stopped after one node returns the point the solver found there.
+The thread count of the solver determines that point. The example below
+reports the properties every such point has.
 
 ```python
 import numpy as np
@@ -4545,8 +4545,8 @@ the bound is above the objective: True
 the gap is positive: True
 ```
 
-The status names the limit the solver stopped at. HiGHS reports a stop at
-`node_limit` as `solution_limit`. `gap` is `None` where the solver proved
+The status identifies the limit the solver stopped at. HiGHS reports a stop
+at `node_limit` as `solution_limit`. `gap` is `None` where the solver proved
 no bound, and `feasible` is False where it found no point.
 
 ## The matrix
@@ -4592,13 +4592,13 @@ and 1 are the supply rows, each with a 1 under its plant's three routes.
 Rows 2 to 4 are the demand rows, each with a 1 under the two routes into its
 warehouse. `row_of("demand")` returns that range.
 
-Next: [Reading the answer](/tutorial/reading-the-answer).
+Next: [Reading the solution](/tutorial/reading-the-answer).
 
 ---
 
 # /tutorial/reading-the-answer
 
-# Reading the answer
+# Reading the solution
 
 A solver returns primal and dual values as flat vectors. `nimopt` returns
 them as arrays over the sets each variable and constraint was declared on.
@@ -4702,9 +4702,9 @@ subset a `SparseArray` with an entry per member and nothing elsewhere.
 ## Absence is not zero
 
 The model contains no decision for the route Porto to Rome. Every array a
-solution returns declares `absence="unknown"`, and `to_dense()` raises
-`ValueError` rather than filling the missing coordinate with a value the
-model never produced.
+solution returns declares `absence="unknown"`. `to_dense()` raises
+`ValueError` and fills the missing coordinate with no value the model did not
+produce.
 
 ```python raises=ValueError
 import numpy as np
@@ -4780,25 +4780,25 @@ unknown 5
 ```
 
 Lisbon serves Rome alone, and the Porto to Rome cell reads `nan`. A stored
-`0.0` would denote a route that exists and carries nothing.
+`0.0` would denote a route that exists and ships nothing.
 
 ## Summary
 
 The tutorial declared index sets and parameters, a decision variable,
-expressions, two constraint families and an objective, solved the model,
-and read the solution back over its sets. The [guides](/guides/subsets)
-cover variables over sparse networks, conditions on rows, lags, bounds from
-data, and models with millions of rows. The [worked models](/models) show
-eight complete formulations.
+expressions, two constraint families and an objective. It solved the model
+and read the solution back over its sets. The [guides](/guides/subsets) cover
+variables over sparse networks, conditions on rows, lags, bounds from data,
+and models with millions of rows. The [worked models](/models) present ten
+complete formulations.
 
 ---
 
 # /guides/at-scale
 
-# Stating a model at scale
+# Declaring a model at scale
 
 Models with millions of columns are declared the same way as small ones.
-Declaring costs shapes, not blocks: a constraint computes its row and
+A declaration computes shapes, not blocks. A constraint computes its row and
 nonzero counts when it is added, and no matrix exists until `assemble()` or
 `solve()` is called.
 
@@ -4830,16 +4830,16 @@ Output:
 ```
 
 Twenty thousand columns, three hundred rows and forty thousand nonzeros are
-declared, and the model holds no matrix. The parameter is the caller's own
-data; the model has added two constraints and an objective, each a symbolic
-expression recording which variable, which coefficient and which sets are
+declared, and the model contains no matrix. The parameter is the data of the
+caller. The model has added two constraints and an objective, each a symbolic
+expression recording the variable, the coefficient and the sets that are
 summed.
 
 ## Building the matrix once
 
 `assemble()` builds the matrix into one buffer and returns it in CSR form.
-Each constraint writes its rows into its own slice, so the matrix exists
-once and one expression at a time is materialised.
+Each constraint writes its rows into its own slice. The matrix therefore
+exists once, and one expression at a time is materialised.
 
 ```python
 import numpy as np
@@ -4874,23 +4874,23 @@ row block is located in a matrix too large to print.
 ## Reading a large solution
 
 `to_dense()` is for a model small enough to print. At scale, read the CSR
-arrays, or read the solution through `primal()` and `dual()`, which return
-labeled arrays over the sets rather than offsets into a vector.
+arrays, or read the solution through `primal()` and `dual()`. Both return
+labeled arrays over the sets, not offsets into a vector.
 
-A variable over a subset keeps its values sparse, so reading a solution over
-a sparse network does not build the grid the model avoided.
+A variable over a subset keeps its values sparse. Reading a solution over a
+sparse network therefore builds no grid.
 
 ## What a variable costs
 
-A member's column is computed from its multi-index rather than stored, so a
+A member's column is computed from its multi-index and is not stored. A
 variable over millions of columns costs its members, not its columns.
-`n_columns` above is twenty thousand while the variable holds a few
-numbers: the start of its block and the sizes of its sets.
+`n_columns` above is twenty thousand, and the variable stores a few numbers:
+the start of its block and the sizes of its sets.
 
 ## Progress
 
-A model of size takes seconds to build. `progress=True` reports the build
-in a terminal.
+A large model takes seconds to build. `progress=True` reports the build in a
+terminal.
 
 ```python skip="the report draws to a terminal, and a page is not one"
 from nimopt.models import storage
@@ -4961,13 +4961,13 @@ Output:
 [5. 5. 5. 7. 7. 7.]
 ```
 
-Six columns; each unit's three periods take that unit's capacity.
+Six columns. The three periods of each unit take the capacity of that unit.
 
 ## A bound covers every column
 
-A bound with no value for some member of the variable raises `ValueError`;
-the message gives the member. A dense parameter covers its product by
-construction; a long-form parameter can omit a member.
+A bound with no value at some member of the variable raises `ValueError`,
+and the message gives the member. A dense parameter covers its product by
+construction. A long-form parameter can omit a member.
 
 ```python raises=ValueError
 import numpy as np
@@ -5025,8 +5025,8 @@ A coefficient is often derived from several parameters: fuel price divided
 by efficiency, a cost scaled by a factor. In `nimopt` a coefficient is a
 parameter read at its sets or an arithmetic combination of such readings.
 `+`, `-`, `*`, `/` and a power by a number combine them. The combination is
-symbolic: it holds references, derives its dimensions from its operands, and
-is evaluated once, when the term it multiplies is materialised. A derived
+symbolic: it contains references, derives its dimensions from its operands,
+and is evaluated once, when the term it multiplies is materialised. A derived
 coefficient can therefore appear in a definition before any data exists.
 
 ```python
@@ -5090,9 +5090,9 @@ the parameter at its sets first and combine the references.
 Two operands with the same dimensions align entry by entry. Operands whose
 dimensions nest or overlap align on the shared dimensions and broadcast over
 the rest, with the left operand's order first. Operands sharing no dimension
-raise `ValueError`: their product would be an outer product, which a linear
-model does not require. The same rule applies when a coefficient multiplies
-a variable. A number has no dimensions and scales.
+raise `ValueError`. Their product would be an outer product, and a linear
+model does not require one. The same rule applies when a coefficient
+multiplies a variable. A number has no dimensions and scales.
 
 ```python raises=ValueError
 import numpy as np
@@ -5119,11 +5119,11 @@ defines rows over those dimensions: this is how a term maps rows to columns.
 
 ## Division by zero
 
-A divisor that is zero raises `ZeroDivisionError`; the message gives the
-coordinate. Substituting infinity would hand the solver a model nobody
-wrote. The check covers a Python number, a NumPy scalar and a coefficient
-with a zero at any coordinate, because a NumPy scalar divides to infinity
-where a Python number raises.
+A divisor that is zero raises `ZeroDivisionError`, and the message gives the
+coordinate. A quotient of infinity is not passed to a solver. The check
+covers a Python number, a NumPy scalar and a coefficient with a zero at any
+coordinate. A NumPy scalar divides to infinity where a Python number
+raises.
 
 ```python raises=ZeroDivisionError
 import numpy as np
@@ -5174,18 +5174,18 @@ Output:
 11.0
 ```
 
-## Refused forms
+## Forms that raise
 
-A line of modelling arithmetic produces a linear term, or raises with a
+A line of modeling arithmetic produces a linear term, or raises with a
 message that gives the form to write instead. There is no third outcome.
 
-| Written | The message says to write |
+| Written | Form to write instead |
 | --- | --- |
 | `x[P] * y[P]` | a linear term has one variable; a coefficient multiplies it |
 | `x[P] ** 2` | a coefficient takes the power, and a variable multiplies it |
 | `x[P] / y[P]` | a variable in a denominator is not linear |
 | `2.0 / x[P]` | the same: write the reciprocal as a coefficient |
-| `x[P] / 0.0` | a divisor of zero is handled before it reaches an expression |
+| `x[P] / 0.0` | a divisor of zero is handled before it is passed to an expression |
 | `x[P] < 1.0` | `<=` and `>=`; an LP has no row for a strict inequality |
 | `x[P] > 1.0` | the same |
 | `x[P] != 1.0` | one bound per equation |
@@ -5198,8 +5198,8 @@ message that gives the form to write instead. There is no third outcome.
 | `Sum(P - 1, x[P])` | `Sum(P, x[P - 1])`: the lag belongs on the reference |
 | `T - 1.7` | a lag is a whole number of members |
 
-Each raises a `nimopt` message rather than a bare Python error, and the test
-suite executes both the table and the rewrites the messages name.
+Each raises with a `nimopt` message, not with a bare Python error. The test
+suite executes the table and the replacement forms the messages give.
 
 ```python raises=TypeError
 import numpy as np
@@ -5218,9 +5218,9 @@ Raises TypeError:
 TypeError: a coefficient is a parameter; build one with `Param.from_dense` or `Param.from_long` and read it at its sets. A product of two expressions is not linear.
 ```
 
-A NumPy array multiplying a term would let NumPy handle the operator and
-return an array of expressions. The expression types refuse the ufunc, and
-the message says how a coefficient is built.
+A NumPy array multiplying a term would let NumPy apply the operator and
+return an array of expressions. The expression types reject the ufunc, and
+the message describes how a coefficient is built.
 
 ---
 
@@ -5228,11 +5228,11 @@ the message says how a coefficient is built.
 
 # Conditions on a sum and on a constraint
 
-Two situations call for a condition. A constraint may sum over part of a
-variable's members, such as the arcs of a network when the variable is
-indexed over the full product. And a constraint may apply to some members
-of its frame only, such as a capacity limit on one plant. `where=` handles
-both. `over=` states a constraint's rows explicitly.
+Two cases require a condition. A constraint may sum over part of the members
+of a variable, such as the arcs of a network where the variable is indexed
+over the full product. A constraint may also apply to some members of its
+frame only, such as a capacity limit on one plant. `where=` covers both
+cases. `over=` declares the rows of a constraint explicitly.
 
 ## Restricting a sum
 
@@ -5269,11 +5269,11 @@ Output:
  [0. 0. 0. 0. 0. 1.]]
 ```
 
-The variable is over the full product and has six columns; the condition
-leaves three of them with a coefficient. A subset variable would have three
-columns in the first place. Use a condition when the variable is over the
-product and one constraint reads part of it; declare a subset when the
-model never uses the other members.
+The variable is over the full product and has six columns. The condition
+gives three of them a coefficient. A variable over a subset would have three
+columns from the start. Use a condition where the variable is over the
+product and one constraint reads part of it. Declare a subset where the model
+never uses the other members.
 
 ## Restricting the rows
 
@@ -5305,8 +5305,8 @@ Output:
 
 One row, for `p0`. `p1` has no capacity row.
 
-A condition over dimensions other than the constraint's frame raises
-`ValueError`; the message gives both index sets.
+A condition over dimensions other than the frame of the constraint raises
+`ValueError`, and the message gives both index sets.
 
 ```python raises=ValueError
 import numpy as np
@@ -5328,14 +5328,14 @@ Raises ValueError:
 ValueError: constraint 'capacity' has free dimensions ('P',); its condition is over ('W',)
 ```
 
-## Stating the rows explicitly
+## Declaring the rows explicitly
 
-By default the rows of a constraint are derived from its terms: a row
-exists where every term has a value and the right-hand side has a value. A
-term with no value along a frame dimension removes the row, because a row
-missing one of its terms would express a constraint that was not written.
+By default the rows of a constraint are derived from its terms: a row exists
+where every term has a value and the right-hand side has a value. A term with
+no value along a frame dimension removes the row. A row missing one of its
+terms would express a constraint that was not written.
 
-`over=domain` states the rows instead of deriving them. A term with values
+`over=domain` declares the rows instead of deriving them. A term with values
 at some of the rows contributes where it has them, and every row in the
 domain is produced.
 
@@ -5361,7 +5361,7 @@ Output:
 
 ## `over` or `where`, not both
 
-`over=` states the rows and `where=` restricts them, so passing both raises
+`over=` declares the rows and `where=` restricts them. Passing both raises
 `ValueError`.
 
 ```python raises=ValueError
@@ -5388,8 +5388,8 @@ Raises ValueError:
 ValueError: constraint 'capacity' is given over= and where= together; pass one of them
 ```
 
-A condition on a sum and a condition on the constraint compose: the first
-restricts what is summed, the second which rows exist.
+A condition on a sum and a condition on the constraint compose. The first
+restricts what is summed, and the second restricts which rows exist.
 
 ---
 
@@ -5398,9 +5398,9 @@ restricts what is summed, the second which rows exist.
 # A member fixed at a label
 
 Initial conditions, terminal conditions and boundary rows reference one
-member of a set: the state at the first period, the level at the last. A
-label in place of a set in a reference fixes that dimension at one member
-and removes it from the frame.
+member of a set, such as the stored energy at the first period or the level
+at the last. A label in place of a set in a reference fixes that dimension at
+one member and removes it from the frame.
 
 ```python
 import numpy as np
@@ -5514,12 +5514,11 @@ ValueError: variable 'x' is read at member 't9' of dimension 'T'; read it at a m
 
 # Interior point and first-order methods
 
-`method=` names the algorithm HiGHS runs on the assembled matrix. Four
-values name one each, and three further options shape the interior point
-and first-order methods. Every setting on this page runs in the test
-suite against the bundled models, and a solve carrying it reports the
-optimum the model has; which method is fastest or smallest on a given
-model is the model's to show.
+`method=` selects the algorithm HiGHS runs on the assembled matrix. Four
+values select one algorithm each, and three further options configure the
+interior point and first-order methods. Every setting on this page runs in
+the test suite against the bundled models, and each solve returns the optimum
+of the model. Which method is fastest or smallest depends on the model.
 
 | Option | Choices | Applies to |
 | --- | --- | --- |
@@ -5528,17 +5527,17 @@ model is the model's to show.
 | `crossover` | `choose`, `off`, `on` | `barrier` and `hipo` |
 | `pdlp_tol` | a relative tolerance | `pdlp` |
 
-`barrier` runs IPX, HiGHS's interior point method with a preconditioned
-conjugate gradient at its core. `hipo` runs HiPO, an interior point method
-built on a direct factorisation of the Newton system, parallel across the
-elimination tree; `newton_system` chooses between the augmented system and
-the normal equations, and `choose` leaves that to the solver. HiPO holds
-that factorisation in memory, so it needs more of it than IPX on the same
-model, and `threads` reaches its iterations but not the crossover that may
-follow them. `pdlp` runs cuPDLP-C, a primal-dual hybrid gradient method that
-touches the matrix only through matrix-vector products. `crossover` decides
-whether an interior point method hands its solution to the simplex method
-to reach a vertex.
+`barrier` runs IPX, the HiGHS interior point method built on a
+preconditioned conjugate gradient. `hipo` runs HiPO, an interior point method
+built on a direct factorization of the Newton system, parallel across the
+elimination tree. `newton_system` selects the augmented system or the normal
+equations, and `choose` leaves the selection to the solver. HiPO stores that
+factorization in memory and requires more memory than IPX on the same model.
+`threads` applies to its iterations and not to the crossover that may follow
+them. `pdlp` runs cuPDLP-C, a primal-dual hybrid gradient method that reads
+the matrix only through matrix-vector products. `crossover` controls whether
+an interior point method passes its solution to the simplex method to obtain
+a vertex.
 
 ```python skip="needs a HiGHS built with HiPO"
 solution = model.solve(
@@ -5551,93 +5550,90 @@ solution = model.solve(
 )
 ```
 
-Gurobi and Mosek carry `crossover` and `method` up to `barrier`.
-`newton_system`, `pdlp_tol`, `hipo` and `pdlp` are HiGHS's, and asking either
-of the others for one of them is refused by name, as the
-[solvers reference](/reference/solvers) states.
+Gurobi and Mosek support `crossover` and `method` up to `barrier`.
+`newton_system`, `pdlp_tol`, `hipo` and `pdlp` are specific to HiGHS. Passing
+one of them to another solver raises and reports the option, as the
+[solvers reference](/reference/solvers) records.
 
 ## Crossover
 
 An interior point method stops at a point inside the feasible region,
 within tolerance of the optimum on every constraint. Crossover moves that
-point to a vertex with the simplex method, which is what a basis, an exact
-active set and duals at a vertex require. It runs serially, and on a large
+point to a vertex with the simplex method. A basis, an exact active set and
+duals at a vertex require that move. Crossover runs serially, and on a large
 model it can cost more than the interior point iterations before it.
 
 `crossover="off"` returns the interior point as the solution. Primals and
-duals are read back the same way; what changes is that a constraint holding
-with equality at the optimum may sit a tolerance away from it, and a
-variable at a bound may sit a tolerance inside it. A model whose answer is
-read as quantities and prices, rather than as a basis, is served by the
-interior point.
+duals are read the same way. A constraint that is tight at the optimum may be
+a tolerance away from equality, and a variable at a bound may be a tolerance
+inside it. The interior point is sufficient where the solution is read as
+quantities and prices and not as a basis.
 
 ## PDLP on a GPU
 
-A first-order method holds no factorisation. Its memory is the matrix in
-two orientations, one for each product, and a set of working vectors of the
-row and column dimensions, so it grows linearly with the problem and a
-problem too large for a factorisation still fits.
+A first-order method computes no factorization. Its memory is the matrix in
+two orientations, one for each product, plus working vectors of the row and
+column dimensions. That memory grows linearly with the problem, and a problem
+too large for a factorization still fits.
 
 **Where the memory goes.** HiGHS presolves on the CPU, in host memory,
-before any method runs: the original LP and its reduced form are both held
-there while presolve works, which is the host's peak. The reduced problem is
-what moves to the GPU, and it is smaller than the problem stated, because
-presolve removes the rows that only bound a single column and the columns
-presolve can fix. The GPU therefore needs memory for the reduced matrix
-twice, the working vectors, and the sparse kernels' buffers, and nothing
-else. The host keeps the original and the reduced LP throughout, and
-postsolve maps the answer back through them.
+before any method runs: the original LP and its reduced form are both stored
+there while presolve runs, and that is the peak on the host. The reduced
+problem is transferred to the GPU. It is smaller than the problem as
+declared: presolve removes the rows that bound a single column and the
+columns it can fix. The GPU therefore needs memory for the reduced matrix
+twice, the working vectors, and the buffers of the sparse kernels, and
+nothing else. The host keeps the original and the reduced LP throughout, and
+postsolve maps the solution back through them.
 
-A HiGHS built without CUDA runs the same method on the CPU. The solver's
-log, asked for with `log=True`, names the device it runs on.
+A HiGHS built without CUDA runs the same method on the CPU. The solver log,
+requested with `log=True`, reports the device the method runs on.
 
 **The tolerance.** `pdlp_tol` is the relative tolerance at which PDLP
 stops: the duality gap and the primal and dual residuals, each relative to
 the scale of the problem, must all fall below it. A looser tolerance stops
-sooner and returns a point farther from the optimum and farther from
-feasibility; a tighter one costs more iterations, and each iteration is a
-pass over the matrix. The method's iterations are cheap and numerous, so
-the tolerance is the lever on both the time and the quality of the answer.
+sooner and returns a point farther from the optimum and from feasibility. A
+tighter tolerance costs more iterations, and each iteration is a pass over
+the matrix. The iterations are cheap and numerous, and the tolerance controls
+both the solve time and the accuracy of the solution.
 
 HiGHS checks the point PDLP returns against its own `feasibility_tol` and
-`optimality_tol` after postsolve, and that check is stricter than PDLP's
-own criterion: PDLP measures its residuals relative to the scaled problem
-it iterates on, and postsolve maps the point back onto the original rows,
-where a residual that passed can exceed the tolerance. A point that meets
-`pdlp_tol` and misses HiGHS's check reports the status HiGHS calls unknown,
-and `nimopt` refuses that status rather than reading values from it: the
-solve raises, naming the status. On a model of any size, the default
-`pdlp_tol` is therefore usually not enough for HiGHS to accept the point,
-and a tolerance one to two orders tighter is where the two agree.
-Tightening `pdlp_tol` until the point passes, or loosening the feasibility
-and optimality tolerances to what the model needs, are the two ways
-through.
+`optimality_tol` after postsolve. That check is stricter than the criterion
+of PDLP. PDLP measures its residuals relative to the scaled problem it
+iterates on. Postsolve maps the point back onto the original rows, where a
+residual that passed can exceed the tolerance. A point that meets `pdlp_tol`
+and fails the HiGHS check reports the status HiGHS calls unknown. `nimopt`
+raises on that status and reports it, and it reads no values from that point.
+On a model of any size the default `pdlp_tol` is usually too loose for HiGHS
+to accept the point. The two agree at a tolerance one to two orders
+tighter. Tighten `pdlp_tol` until the point passes, or loosen the feasibility
+and optimality tolerances to the accuracy the model requires.
 
 PDLP reports two iterates in its log, the running average marked `[A]` and
 the last marked `[L]`, and stops on whichever meets the tolerance first.
 Progress is not monotone: the gap can close and open again as the method
-restarts, so the last row of the log, not the best one, is what it returns.
+restarts. The method returns the last row of the log, not the best row.
 
 ```python skip="needs a HiGHS built with CUDA to run on a GPU"
 solution = model.solve(options={"method": "pdlp", "pdlp_tol": 1e-8, "log": True})
 ```
 
-## Installing a HiGHS that carries HiPO and a GPU
+## Installing a HiGHS with HiPO and GPU support
 
-HiGHS 1.15.1 keeps HiPO's orderings and its BLAS in a library of its own,
-`libhighs_extras`, which `libhighs` loads at run time by name. The `highspy`
-wheel on PyPI and the conda-forge package ship without that library and
-without CUDA. Asked for `hipo`, such a HiGHS logs an error and runs simplex;
-`nimopt` refuses the request instead, naming the missing library. Asked for
-`pdlp`, it runs the method on the CPU.
+HiGHS 1.15.1 stores the HiPO orderings and its BLAS in a separate library,
+`libhighs_extras`. `libhighs` loads that library at run time by name. The
+`highspy` wheel on PyPI and the conda-forge package ship without that library
+and without CUDA. Given `hipo`, such a HiGHS logs an error and runs simplex.
+`nimopt` raises instead and reports the missing library. Given `pdlp`, it
+runs the method on the CPU.
 
 Both come from a source build of the same version, with three pieces
 installed separately:
 
 1. **The extras library**, from the `extern` directory of the HiGHS
-   repository, which is a CMake project of its own. It builds METIS, AMD
-   and RCM from the tree and links a BLAS; OpenBLAS from a conda
-   environment serves.
+   repository. That directory is a CMake project of its own. It builds
+   METIS, AMD and RCM from the tree and links a BLAS. OpenBLAS from a conda
+   environment is sufficient.
 
    ```bash
    cmake -S extern -B build-extras -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -5645,11 +5641,11 @@ installed separately:
    cmake --build build-extras
    ```
 
-2. **The wheel**, from the repository root, where HiGHS's own build
-   configuration turns HiPO on. The conda environment's prefix is given
+2. **The wheel**, from the repository root, where the HiGHS build
+   configuration enables HiPO. Pass the prefix of the conda environment
    through the `CMAKE_PREFIX_PATH` environment variable, not through
-   `CMAKE_ARGS`, because the latter replaces the path the Python build adds
-   for pybind11.
+   `CMAKE_ARGS`. `CMAKE_ARGS` replaces the path the Python build adds for
+   pybind11.
 
    ```bash
    CMAKE_PREFIX_PATH=$CONDA_PREFIX CMAKE_ARGS="-DBLA_VENDOR=OpenBLAS" \
@@ -5665,24 +5661,24 @@ installed separately:
      uv build --wheel --python <venv>/bin/python -o dist .
    ```
 
-3. **The placement.** The wheel's `libhighs` searches its own directory
-   for the extras library, so the built `libhighs_extras.so` goes into the
-   `highspy` package directory of the environment the wheel is installed
-   in. The extras library links the BLAS it was built against, and the GPU
-   wheel links the CUDA runtime, cuBLAS and cuSPARSE, so the conda
-   environment that provided them stays. The GPU wheel's `libhighs` and
-   `libcudalin` must name that environment's `lib` in their own run path,
-   which `patchelf --set-rpath` sets on the unpacked wheel before it is
-   packed again; the extension module's run path does not reach the CUDA
-   libraries through them.
+3. **The placement.** The `libhighs` of the wheel searches its own
+   directory for the extras library. Copy the built `libhighs_extras.so`
+   into the `highspy` package directory of the environment the wheel is
+   installed in. The extras library links the BLAS it was built against, and
+   the GPU wheel links the CUDA runtime, cuBLAS and cuSPARSE. The conda
+   environment that provides them must remain installed. The `libhighs` and
+   `libcudalin` of the GPU wheel require the `lib` directory of that
+   environment in their own run path. `patchelf --set-rpath` sets it on the
+   unpacked wheel before the wheel is packed again. The run path of the
+   extension module alone does not resolve the CUDA libraries.
 
    ```bash
    uv pip install --python <venv>/bin/python dist/highspy-1.15.1-*.whl
    cp build-extras/libhighs_extras.so <venv>/lib/python3.13/site-packages/highspy/
    ```
 
-The check that HiPO is in place is a solve asking for it: a HiGHS without
-the extras library is refused before anything is solved, and one with it
+A solve with `method="hipo"` verifies the installation. A HiGHS without the
+extras library raises before anything is solved. A HiGHS with the library
 returns the optimum.
 
 ---
@@ -5692,9 +5688,9 @@ returns the optimum.
 # Lags
 
 Time-coupled constraints reference the previous period. A storage balance
-relates the state of charge at `t` to that at `t-1`; a ramp limit bounds
-the change in output between consecutive periods. `T - 1` is the set `T`
-lagged by one member, and `x[T - 1]` references the variable at the
+relates the stored energy at `t` to the stored energy at `t-1`. A ramp limit
+bounds the change in output between consecutive periods. `T - 1` is the set
+`T` lagged by one member, and `x[T - 1]` references the variable at the
 previous member.
 
 ## A lag that drops the boundary row
@@ -5756,8 +5752,8 @@ Output:
 
 Three rows, and the first references the last column: the `-1` in row 0 is
 in the final position. A storage balance over a repeating horizon is written
-this way, so that the level at the end of the horizon carries into the
-beginning.
+this way, and the level at the end of the horizon enters the row of the first
+period.
 
 ## A lag applies to a reference, not to a sum
 
@@ -5829,10 +5825,10 @@ ValueError: a lag is a whole number of members; got 1.7
 
 # Saving and loading a model
 
-A definition writes itself to a YAML file whose expressions are spelled as
-they are typed in Python. The file is the model's final form: every derived
-coefficient spelled out, every term with its own sum and sign, the constant
-last.
+A definition writes a YAML file whose expressions are written as they are
+typed in Python. The file is the canonical form of the model: every derived
+coefficient written out, every term with its own sum and sign, and the
+constant last.
 
 ```python
 from nimopt import Definition, Sum
@@ -5870,8 +5866,9 @@ constraints:
 objective: Sum(G, T, ((price[G, T] / eta[G, T]) * 2) * gen[G, T])
 ```
 
-The structure section is the data's schema: every set, and every parameter
-with its dimensions. `build` refuses a mapping that misses any of them by name.
+The structure section is the schema of the data: every set, and every
+parameter with its dimensions. `build` raises `ValueError` for a mapping that
+omits one of them.
 
 ## Reading a file back
 
@@ -5920,10 +5917,10 @@ Output:
 
 ## Editing by hand
 
-The text is read through the same operators a Python model is built from,
-so an edit is accepted where Python accepts it and normalised the same way.
-Adding a scalar, reordering terms, or writing a comparison the other way
-round all read, and the file written back is the canonical form.
+The text is read through the same operators a Python model is built from. An
+edit is accepted where Python accepts it, and is normalized the same way.
+Adding a scalar, reordering terms and reversing a comparison all parse. The
+file written back is the canonical form.
 
 ```python
 from nimopt import loads
@@ -5953,8 +5950,8 @@ Output:
 relation: 2 * Sum(G, gen[G, T]) == load[T]
 ```
 
-An edit Python refuses is refused here with the same message, and a
-construct outside the spelling is refused naming it.
+An edit that raises in Python raises here with the same message. A construct
+outside the expression syntax raises and reports it.
 
 ```python raises=ValueError
 from nimopt import loads
@@ -5984,9 +5981,9 @@ ValueError: 'max(gen[G, T]) <= 10': the syntax supports one call; write Sum
 ## Data inline, for a model small enough to read
 
 A built model writes its data into the file with `inline=True`. A set is a
-list, a dense parameter is nested lists, and a parameter carrying some
-coordinates of its product is a table of the dimensions then `value`. A
-file carrying data loads to a built `Model`.
+list, and a dense parameter is nested lists. A parameter with values at some
+coordinates of its product is a table of the dimensions then `value`. A file
+containing data loads to a built `Model`.
 
 ```python
 from nimopt import loads
@@ -6025,11 +6022,11 @@ data:
 100.99601811246072
 ```
 
-## Data beside the file, for a model of size
+## Data beside the file, for a large model
 
 `save` writes a model's file and its data as an `.npz` beside it, under the
-file's stem, and the file names that sidecar. `load` reads both. The pair
-moves together; the file names no path and no machine.
+file's stem. The file records the sidecar name. `load` reads both. The file
+records no path and no machine name.
 
 ```python
 import tempfile
@@ -6055,22 +6052,20 @@ optimal
 ```
 
 A definition's file takes data from the caller instead: `load(path, data=...)`
-with the mapping `build` takes or the path of an `.npz`. A file that carries
-data and a `data=` together is refused, because two sources for one model is
-a choice the library does not make.
+with the mapping `build` takes or the path of an `.npz`. A file that contains
+data and a `data=` together raises `ValueError`: one model takes one data
+source.
 
 ## A file that describes its own format
 
 `instructions=True` on `save`, `Definition.to_yaml` and `Model.to_yaml` writes
 a comment block at the top of the file. The block is the same in every file.
 It describes the format, not the model: the keys and their order, the
-defaults, the rules that decide which rows a constraint has, and the
-expression syntax. A reader given one file can interpret it without this
-package.
+defaults, the rules that determine which rows a constraint has, and the
+expression syntax. A reader with one file interprets it without this package.
 
-The block is a YAML comment, so a file that carries it loads to the same
-model as one that does not, and writing the loaded model with the flag gives
-the same text.
+The block is a YAML comment. A file with it loads to the same model as one
+without it, and writing the loaded model with the flag gives the same text.
 
 ```python
 from nimopt import Definition, loads
@@ -6143,10 +6138,9 @@ Output:
 []
 ```
 
-The product has six members and the subset three, so `x` has three columns.
-The assembled matrix is empty because no constraint has been added. A model
-over a sparse network pays for its arcs, not for the grid that contains
-them.
+The product has six members and the subset three, and `x` has three columns.
+The assembled matrix is empty: no constraint has been added. A model over a
+sparse network costs its arcs, not the grid that contains them.
 
 ## By label or by position
 
@@ -6183,8 +6177,8 @@ avoids resolving labels when positions are already at hand.
 
 ## Constraints over a subset variable
 
-A sum over a subset variable runs over the members the variable has, so a
-row contains the arcs at that member and nothing else.
+A sum over a subset variable runs over the members the variable has. A row
+therefore contains the arcs at that member and nothing else.
 
 ```python
 import numpy as np
@@ -6219,8 +6213,8 @@ Two rows over three columns: `p0` has two arcs and `p1` one.
 ## Bounds over a subset
 
 A bound applies to every column of the variable. A parameter indexed over
-fewer dimensions than the variable is broadcast over the rest, so a bound
-per plant applies to each of that plant's arcs.
+fewer dimensions than the variable is broadcast over the rest. A bound per
+plant therefore applies to each arc of that plant.
 
 ```python
 import numpy as np
@@ -6256,9 +6250,9 @@ The two `p0` arcs take 4.0 and the `p1` arc 9.0.
 # Commitment
 
 `nimopt.models.commitment` is unit commitment. A committed unit runs between
-its minimum and its maximum output and pays a no-load cost for being on; an
-uncommitted unit produces nothing. The `capacity` and `minimum` rows are
-written against the binary column. This is the corpus's only MILP.
+its minimum and its maximum output and incurs a no-load cost. An uncommitted
+unit produces nothing. The `capacity` and `minimum` rows are written against
+the binary column. This is the only MILP in the corpus.
 
 ```text
 minimise    Σ_{t,g} cost[g] · gen[t,g] + Σ_{t,g} no_load[g] · on[t,g]
@@ -6340,8 +6334,8 @@ subject to  Σ_g p[t,g] == load[t]        for each snapshot t
             0 ≤ p[t,g] ≤ p_max[g]
 ```
 
-The balance row has no coefficient: a sum over a dimension needs none, and
-the corpus writes no coefficient a model does not need.
+The balance row has no coefficient. A sum over a dimension requires none,
+and the corpus writes no coefficient a model does not require.
 
 ```python
 from nimopt.models import dispatch
@@ -6402,11 +6396,11 @@ balance  6 of 6 rows  stated by terms
 # Expansion
 
 `nimopt.models.expansion` is a two-stage stochastic program. The first stage
-builds capacity; the second stage dispatches it against a demand and a fuel
-price that the scenario reveals. What the first stage cannot see is stated by
-the shape of its variable: `cap` is indexed by technology alone, so one
-capacity serves every scenario, while `p` and `shed` carry the scenario and
-may differ across it.
+builds capacity. The second stage dispatches it against a demand and a fuel
+price given by the scenario. The shape of the first-stage variable expresses
+the information available to it: `cap` is indexed by technology alone, and one
+capacity applies to every scenario. `p` and `shed` are indexed by scenario as
+well and may differ across it.
 
 ```text
 minimise    Σ_g capital[g] · cap[g]
@@ -6417,10 +6411,11 @@ subject to  p[s,g,t] ≤ cap[g]                              for each s, g, t
             cap, p, shed ≥ 0
 ```
 
-`weight` is the probability of a scenario, so the second and third sums are
-an expectation and the objective is the capital committed plus the expected
-cost of the recourse. There is no row tying one scenario's capacity to
-another's: non-anticipativity is the missing dimension.
+`weight` is the probability of a scenario. The second and third sums are
+therefore an expectation, and the objective is the committed capital plus the
+expected cost of the recourse. No row relates the capacity of one scenario to
+the capacity of another: the missing dimension expresses
+non-anticipativity.
 
 ```python
 from nimopt.models import expansion
@@ -6440,10 +6435,10 @@ expansion  min  not built
   objective   min  Sum(G, capital[G] * cap[G]) + Sum(S, G, T, (weight[S] * cost[S, G]) * p[S, G, T]) + Sum(S, T, (weight[S] * voll[S]) * shed[S, T])
 ```
 
-`cap` has one column per technology and `p` has one per scenario, technology
-and hour. The capacity row is stated over all three dimensions even though
-the variable it bounds carries one, so a single column is read by every
-scenario's rows — which is what makes the capacity a shared decision.
+`cap` has one column per technology, and `p` has one per scenario,
+technology and hour. The capacity row is declared over all three dimensions,
+and the variable it bounds has one. The rows of every scenario read the same
+column, and the capacity is therefore a shared decision.
 
 ```python
 from nimopt.models import expansion
@@ -6464,15 +6459,15 @@ expansion  min  75 columns · 72 rows · 180 nonzeros
   objective   min  Sum(G, capital[G] * cap[G]) + Sum(S, G, T, (weight[S] * cost[S, G]) * p[S, G, T]) + Sum(S, T, (weight[S] * voll[S]) * shed[S, T])
 ```
 
-A technology is available in full wherever it is built and nothing couples
-one hour to the next, so the recourse in each scenario-hour is the merit
-order of the built capacity against that demand, with the remainder unserved
-at `voll`. Write the capacity as bands — the cheapest technology's band, then
-the next, and last the band between the dearest technology and lost load —
-and the total separates into one term per band, each convex in that band's
-level and turning only at a demand. `reference` minimises them one at a time
-and adds them up, so the answer is arithmetic over the inputs rather than a
-second solve.
+A technology is available in full wherever it is built, and no row couples
+one hour to the next. The recourse in each scenario-hour is therefore the
+merit order of the built capacity against that demand, with the remainder
+unserved at `voll`. The capacity is written as bands: the band of the
+cheapest technology, then the next, and last the band between the most
+expensive technology and lost load. The total separates into one term per
+band. Each term is convex in the level of its band and changes slope only at
+a demand. `reference` minimizes the terms one at a time and adds them, and
+the result is arithmetic over the inputs, not a second solve.
 
 ```python
 from nimopt.models import expansion
@@ -6488,11 +6483,11 @@ Output:
 29703.899999999994 29703.899999999994
 ```
 
-The data states a cost frontier: capital falls as marginal cost rises, and
-lost load is dearer than the dearest technology. All three are built, and the
-capacity that stacks to 180 leaves the cold scenario's peak hour of 225
-short — shedding 45 is cheaper than a fourth band that earns its capital in
-one hour of one scenario.
+The data describes a cost frontier: capital falls as marginal cost rises,
+and lost load is more expensive than the most expensive technology. All three
+technologies are built. The capacity stacks to 180 and leaves the peak hour
+of 225 in the cold scenario short. Shedding 45 costs less than a fourth band
+used in one hour of one scenario.
 
 ```python
 import numpy as np
@@ -6514,8 +6509,8 @@ Output:
  [ 0.  0.  0. 45.  0.  0.]]
 ```
 
-The separation holds only for data whose technologies are a frontier and
-whose bands stack. `reference` refuses anything else rather than returning a
+The separation applies only to data whose technologies form a frontier and
+whose bands stack. `reference` raises on any other data, and it returns no
 number that is not the optimum.
 
 ```python raises=ValueError
@@ -6538,10 +6533,10 @@ ValueError: capital does not fall from base to what follows it; pass a capital c
 
 # Fleet
 
-`nimopt.models.fleet` is the same problem as `dispatch`, declared as one
-variable per unit over the snapshots alone, with the units' terms added into
-one balance row. The answer is the same merit order; what differs is the
-cost of declaring it.
+`nimopt.models.fleet` is the same problem as `dispatch`. It is declared as
+one variable per unit over the snapshots alone, and the terms of the units
+are added into one balance row. The optimum is the same merit order, and the
+cost of the declaration differs.
 
 ```text
 minimise    Σ_t Σ_u cost_u[t] · u[t]
@@ -6549,8 +6544,8 @@ subject to  Σ_u u[t] == load[t]          for each snapshot t
             0 ≤ u[t] ≤ p_max_u[t]        for each unit u
 ```
 
-`definition` takes a scale here, because the number of variables is a
-property of the declaration rather than of the data.
+`definition` takes a scale here: the number of variables is a property of
+the declaration, not of the data.
 
 ```python
 from nimopt.models import fleet
@@ -6615,17 +6610,17 @@ balance  4 of 4 rows  stated by terms
 | `data(scale=1)` | the inputs, at a given size |
 | `reference(data)` | the optimal objective, computed by direct arithmetic |
 
-The three serve different readers. This documentation calls `explain()`, a
-benchmark calls `build(data(100))`, and a test compares a solve against
-`reference(data(1))`. A reference is arithmetic over the inputs that uses
-nothing from `nimopt`, so a formulation error is not checked against a copy
-of itself.
+The three functions have different callers. This documentation calls
+`explain()`, a benchmark calls `build(data(100))`, and a test compares a
+solve against `reference(data(1))`. A reference is arithmetic over the inputs
+and calls nothing from `nimopt`. A formulation error is therefore not checked
+against a copy of itself.
 
 | Model | Exercises |
 | --- | --- |
 | [`dispatch`](/models/dispatch) | the baseline formulation |
 | [`transport`](/models/transport) | a sparse network over a subset of a product |
-| [`storage`](/models/storage) | temporal coupling and a cyclic state |
+| [`storage`](/models/storage) | temporal coupling and a cyclic lag |
 | [`nodal`](/models/nodal) | grouping through a lookup parameter |
 | [`commitment`](/models/commitment) | binary columns |
 | [`fleet`](/models/fleet) | many small declarations rather than one large one |
@@ -6655,10 +6650,10 @@ optimal 1920.0 1920.0
 # Nodal
 
 `nimopt.models.nodal` groups generators into buses through a lookup
-parameter. `at[G, B]` has an entry where generator `g` sits at bus `b`, and
-multiplying the generation by it maps a row over generators to a row over
-buses. The coefficient introduces `B`, a dimension no variable has, so the
-balance is indexed over the dimensions the lookup defines.
+parameter. `at[G, B]` has an entry where generator `g` is located at bus
+`b`. Multiplying the generation by it maps a row over generators to a row
+over buses. The coefficient introduces `B`, a dimension no variable has, and
+the balance is indexed over the dimensions the lookup defines.
 
 ```text
 minimise    Σ_{t,g} cost[g] · gen[t,g]
@@ -6735,9 +6730,9 @@ balance  6 of 6 rows  stated by terms
 # Profiled
 
 `nimopt.models.profiled` is a dispatch whose capacity varies by hour.
-`dispatch` bounds a generator by a single number; here `p_max` is a
-parameter over generators and snapshots, so a solar unit is bounded by its
-hourly availability and a thermal unit by its rating.
+`dispatch` bounds a generator by a single number. Here `p_max` is a
+parameter over generators and snapshots. A solar unit is bounded by its
+hourly availability, and a thermal unit by its rating.
 
 ```text
 minimise    Σ_{t,g} cost[g] · gen[t,g]
@@ -6805,11 +6800,11 @@ balance  8 of 8 rows  stated by terms
 
 # Recourse
 
-`nimopt.models.recourse` is `commitment` under uncertainty. The demand and the
-fuel price are a scenario, and the on-off decision is taken before either is
-revealed: `on` is indexed by hour and unit alone, while `p` and `shed` carry
-the scenario. One commitment has to serve every scenario, which is what makes
-the binary a hedge rather than a schedule.
+`nimopt.models.recourse` is `commitment` under uncertainty. The demand and
+the fuel price are a scenario, and the on-off decision is taken before either
+is given. `on` is indexed by hour and unit alone, and `p` and `shed` are
+indexed by the scenario as well. One commitment applies to every scenario,
+and the binary column is therefore taken under uncertainty.
 
 ```text
 minimise    Σ_{t,g}   no_load[g] · on[t,g]
@@ -6821,8 +6816,8 @@ subject to  p[s,g,t] ≤ p_max[g] · on[t,g]                  for each s, g, t
             on ∈ {0,1},  p, shed ≥ 0
 ```
 
-The first stage costs what it costs whatever happens; the second and third
-sums are weighted by the probability of a scenario, so the objective is a
+The first stage costs the same in every scenario. The second and third sums
+are weighted by the probability of a scenario, and the objective is a
 commitment charge plus the expected cost of the recourse.
 
 ```python
@@ -6863,13 +6858,14 @@ Output:
 16744.8125 16744.8125
 ```
 
-A committed unit runs at least its minimum and there is nowhere to put
-unwanted energy, so a unit whose minimum exceeds the mildest scenario's
-demand cannot be committed at all — the row it would break is that scenario's
-balance. The first hour asks 38.25 in the mildest scenario, and `base`, whose
-minimum is 40.0 and whose fuel is the cheapest of the three, is left off it.
-The third hour goes the other way: the fleet carries 260.0 against a coldest
-demand of 268.75, so everything is committed and the remainder is shed.
+A committed unit runs at least its minimum, and the model has no sink for
+unwanted energy. A unit whose minimum exceeds the demand of the mildest
+scenario is therefore not committed: its output would violate the balance row
+of that scenario. The first hour demands 38.25 in the mildest scenario. The
+minimum of `base` is 40.0 and its fuel is the cheapest of the three, and it
+is not committed in that hour. The third hour is the opposite case: the fleet
+supplies 260.0 against a coldest demand of 268.75, every unit is committed,
+and the remainder is shed.
 
 ```python
 import numpy as np
@@ -6898,11 +6894,12 @@ Output:
  [0.   0.   8.75 0.  ]]
 ```
 
-The mean demand in the first hour is 43.875, which `base` can serve and is
-cheapest at. A model given that one number commits it, and that commitment
-breaks the balance of the mildest scenario, whose probability is 0.5. The
-scenario dimension on `demand` is what rules the commitment out; the missing
-scenario dimension on `on` is what makes the ruling out bind.
+The mean demand in the first hour is 43.875. `base` serves that demand at
+the lowest cost. A model given that one number commits `base`, and that
+commitment violates the balance row of the mildest scenario, whose
+probability is 0.5. The scenario dimension on `demand` excludes the
+commitment, and the missing scenario dimension on `on` applies that exclusion
+to every scenario.
 
 ---
 
@@ -6911,10 +6908,10 @@ scenario dimension on `on` is what makes the ruling out bind.
 # Sector
 
 `nimopt.models.sector` has mixed density. The region-technology map is
-sparse, since a technology exists in some regions and not others, while
-every sited pair runs in every hour. The generation variable takes its
-members from a parameter over the sited pairs crossed with the whole
-horizon, so it is sparse in one axis and dense in the other.
+sparse: a technology exists in some regions and not in others. Every sited
+pair runs in every hour. The generation variable takes its members from a
+parameter over the sited pairs crossed with the whole horizon. It is
+therefore sparse in one axis and dense in the other.
 
 ```text
 minimise    Σ_{(r,k) sited, t} cost[r,k] · gen[r,k,t]
@@ -6986,10 +6983,10 @@ balance  8 of 8 rows  stated by terms
 # Storage
 
 `nimopt.models.storage` dispatches a generator fleet and a set of batteries
-against an hourly load. The state-of-charge row references the previous
-hour through `T.cyclic - 1`, so the row at the first hour references the
-last hour and every hour has a row. The ramp row references `T - 1`; the
-first hour has no predecessor, so that row is not produced. The model
+against an hourly load. The `state_of_charge` row references the previous
+hour through `T.cyclic - 1`. The row at the first hour therefore references
+the last hour, and every hour has a row. The ramp row references `T - 1`. The
+first hour has no predecessor, and that row is not produced. The model
 exercises both lag rules.
 
 ```text
@@ -7004,7 +7001,7 @@ subject to  Σ_g gen[g,t] + Σ_s discharge[s,t] − Σ_s charge[s,t] == load[t]
             soc[s,t] ≤ energy[s,t]
 ```
 
-Every limit is a constraint rather than a bound, so that each has a dual
+Every limit is a constraint and not a bound, and each therefore has a dual
 value.
 
 ```python
@@ -7031,10 +7028,10 @@ storage  min  not built
 ```
 
 The batteries are lossy, with a round-trip efficiency of `0.95 · 0.93`, and
-the fleet's costs span 50.0 to 55.0. Shifting energy through the store never
-pays, so the store stays idle and the optimum is the hourly merit order. A
-store that cycles requires data with a wider cost spread; the benchmarks
-supply it.
+the costs of the fleet span 50.0 to 55.0. Shifting energy through the store
+costs more than it saves. The store is therefore idle, and the optimum is the
+hourly merit order. A store that cycles requires data with a wider cost
+spread, and the benchmarks supply it.
 
 ```python
 from nimopt.models import storage
@@ -7052,8 +7049,8 @@ Output:
 store moved: 0.0
 ```
 
-Every hour has a state-of-charge row, because that lag wraps. The ramp row
-at the first hour is not produced, because that lag does not.
+Every hour has a `state_of_charge` row: that lag wraps. The ramp row at the
+first hour is not produced: that lag does not wrap.
 
 ```python
 from nimopt.models import storage
@@ -7082,10 +7079,10 @@ ramp  69 of 72 rows  stated by terms
 # Transport
 
 `nimopt.models.transport` ships from plants to warehouses over an incomplete
-network: a plant serves a band of nearby warehouses rather than all of
-them. The cost parameter has one entry per arc, and the flow variable takes
-its members from that parameter, so the model has one column per arc rather
-than one per cell of the plant-warehouse product.
+network: a plant serves a band of nearby warehouses and not all of them. The
+cost parameter has one entry per arc, and the flow variable takes its members
+from that parameter. The model therefore has one column per arc, not one per
+cell of the plant-warehouse product.
 
 ```text
 minimise    Σ_{(p,w) ∈ arcs} cost[p,w] · flow[p,w]
@@ -7112,9 +7109,9 @@ transport  min  not built
   objective   min  Sum(P, W, cost[P, W] * flow[P, W])
 ```
 
-Supply is twice the total demand of a plant's band, so no supply row binds
-and each warehouse buys from the cheapest plant that reaches it. `reference`
-computes that sum.
+Supply is twice the total demand of the band of a plant. No supply row binds
+therefore, and each warehouse buys from the cheapest plant connected to it.
+`reference` computes that sum.
 
 ```python
 from nimopt.models import transport

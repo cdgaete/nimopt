@@ -8,10 +8,10 @@ description: What each solver adapter can do, the options a caller can set, and 
 ## `available` and `capabilities`
 
 `available()` lists every adapter whose backend can be imported in the
-current environment, with what each declares. `capabilities(name)` reports
-for an adapter whether or not its backend is installed. A descriptor
-describes what the adapter does as shipped. A caller reads one to choose
-what to install.
+current environment, with the capabilities each declares. `capabilities(name)`
+reports for an adapter whether or not its backend is installed. A descriptor
+describes the adapter as shipped. A caller reads one to choose what to
+install.
 
 A descriptor describes the adapter, not the library behind it: a solver
 feature the adapter does not call is `absent`.
@@ -86,10 +86,9 @@ ValueError: model 'm' has integer columns and 'highs' reports no duals for it; r
 
 ## `Session`
 
-Returned by `Model.session(solver="highs", options=None)`. One solver's
-model, opened on one assembled model and kept: a solve hands the matrix
-across, and a question asked afterwards is asked of the same solved
-instance.
+Returned by `Model.session(solver="highs", options=None)`. The model of one
+solver, opened on one assembled model and kept open. A solve passes the
+matrix to the solver, and a later query reads the same solved instance.
 
 | Member | Returns |
 | --- | --- |
@@ -201,14 +200,12 @@ computes no conflict. A session on it raises, and the message refers to
 
 ## `options` and `Option`
 
-`options()` lists every option a caller can set, under `nimopt`'s own
-names. An option outside the list raises. It is not passed to a solver that
-would ignore it, and a misspelled name stops a solve instead of running a
-different one.
+`options()` lists every option a caller can set, under the names of
+`nimopt`. An option outside the list raises `ValueError`. No option is passed
+to a solver that ignores it, and an unrecognized name stops the solve.
 
-`options(solver)` lists the same options with that solver's own name and
-values, which is how a caller follows one into the solver's own
-documentation.
+`options(solver)` lists the same options with the name and the values of that
+solver. A caller follows those names into the documentation of the solver.
 
 ```python
 from nimopt import options
@@ -267,29 +264,28 @@ An `Option` has a `name`, the `kind` it takes, what it `does`, and its
 <!-- /options -->
 
 A choice each solver writes differently is given once and translated. The
-value a caller writes means one thing whichever solver reads it. No solver
+value a caller writes has one meaning for every solver. No solver
 supports every option or every choice: `newton_system` and `pdlp_tol` are
 HiGHS's, as are `hipo` and `pdlp` under `method`. Asking Gurobi or Mosek
 for one of them raises, and the message identifies it. No solver runs a
 different algorithm in its place. Mosek runs only its mixed-integer
 optimizer on a model with integer columns. `method` is `choose` there, and
-any other choice raises with that cause. What each method stores in
-memory, and how to install a HiGHS with HiPO and a GPU, is in the guide on
-[interior point and first-order methods](/guides/highs-methods).
+any other choice raises. The guide on [interior point and first-order
+methods](/guides/highs-methods) gives the memory each method requires and the
+installation of a HiGHS with HiPO and a GPU.
 
 ## Progress reporting
 
 `build()`, `assemble()`, `session()` and `solve()` take `progress=`.
 `progress=True` draws a report in a terminal and nothing where output is
-redirected. A reporter of your own is used as given, so a notebook or an
-interface writes there: it implements `start(total, what)`, `step(done,
-what)` and `done()`, and that is the whole contract.
+redirected. A reporter given by the caller is used as passed, and a notebook
+or another interface writes through it. A reporter implements
+`start(total, what)`, `step(done, what)` and `done()`. That is the whole
+contract.
 
-The report covers building. Its resolution is the model's own structure:
-the measuring pass counts constraints and the writing pass counts nonzeros,
-so a model with one constraint of one term reports one step and no
-fraction.
+The report covers building. Its resolution is the structure of the model. The
+measuring pass counts constraints and the writing pass counts nonzeros. A
+model with one constraint of one term reports one step and no fraction.
 
-A solver's own account of a solve is the solver's to give, and `log=True`
-asks for it. Building finishes before a solver starts, so the report and
-the log never interleave.
+`log=True` requests the log of the solver. Building finishes before a solver
+starts, and the report and the log do not interleave.

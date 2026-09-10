@@ -9,10 +9,10 @@ description: The coordinates an array has, the three ways a position is computed
 
 A sorted, unique set of multi-indices over named dimensions.
 
-A coordinate resolves labels for one dimension; a domain does so for a
-tuple of them: which multi-indices it has, what position each occupies, and
-which multi-index sits at a position. It records which coordinates are
-present and nothing about where they are numbered from.
+A coordinate resolves labels for one dimension, and a domain resolves them
+for a tuple of dimensions. It reports the multi-indices it has, the position
+of each, and the multi-index at a given position. It records which
+coordinates are present, and it records no numbering origin.
 
 | Constructor | Returns |
 | --- | --- |
@@ -40,10 +40,10 @@ present and nothing about where they are numbered from.
 That table is the whole surface. **A domain's `codes` are the raw ravelled
 members of the layer below it, as an array's `.index` and `.data` are its
 raw buffers; never read them.** `coordinates()` and `labels()` report which
-members are present, `positions_of_coordinates` reports where one sits,
-`as_coord` numbers them, and `array` and `identity` return an array over
-them, so nothing above needs to build an index matrix either. A test in
-this repository fails on a read of any of the three.
+members are present, and `positions_of_coordinates` reports the position of
+one. `as_coord` numbers them, and `array` and `identity` return an array over
+them. No layer above builds an index matrix. A test in this repository fails
+on a read of any of the three.
 
 The label columns of `from_labels` are read in parallel: the k-th entry of
 each column belongs to the same member. A domain is a list of members, not
@@ -86,19 +86,19 @@ print(full.intersect(pairs).size, full.difference(pairs).size)
 </details>
 <!-- /output -->
 
-The product spans six members; `pairs` has two, `lisbon` with `berlin` and
-`porto` with `paris`, because the columns are read in parallel.
+The product spans six members. `pairs` has two, `lisbon` with `berlin` and
+`porto` with `paris`: the columns are read in parallel.
 
-`is_full` reports whether a domain has every coordinate its dimensions
-span, which is what a caller checks before reading values ordered by member
-as a grid: `full.is_full` is `True` and `pairs.is_full` is `False`.
+`is_full` reports whether a domain has every coordinate its dimensions span.
+A caller checks it before reading values ordered by member as a grid.
+`full.is_full` is `True` and `pairs.is_full` is `False`.
 
 ## Querying a domain
 
-`positions_of` takes an array; `positions_of_coordinates` takes the index
-matrix behind one, so a caller holding positions queries without building
-an array. A member the domain does not have returns `-1`, so a membership
-test reads as `>= 0`.
+`positions_of` takes an array. `positions_of_coordinates` takes the index
+matrix behind one, and a caller with positions queries without building an
+array. A member the domain does not have returns `-1`, and a membership test
+is `>= 0`.
 
 `as_coord` reads the domain as a coordinate: a member's position is its
 rank among the members present, numbered from `start`. This is how a
@@ -145,13 +145,13 @@ from 100.
 
 ## Crossing a domain with further dimensions
 
-`expand` replicates every member across the full extent of the named
-dimensions, which is how the coordinates a term *could* have are enumerated
-before asking which of them it does. The new dimensions are appended;
-`transpose` reads the result in another order. A member's code is its own
-scaled by the appended extent, plus each position within it, so the cross
-product is arithmetic on the members and no index matrix is built to hold
-it.
+`expand` replicates every member across the full extent of the given
+dimensions. That enumerates the coordinates a term can have, before the test
+of which ones it does have. The new dimensions are appended, and `transpose`
+reads the result in another order. The code of a member is its own code
+scaled by the appended extent, plus each position within it. The cross
+product is therefore arithmetic on the members, and it builds no index
+matrix.
 
 ```python
 import numpy as np
@@ -187,20 +187,19 @@ print(hourly.transpose("H", "P", "W").dims)
 </details>
 <!-- /output -->
 
-Two members crossed with two hours are four, and `transpose` presents them
-over the dimensions in another order without changing which members are
-present.
+Two members crossed with two hours are four members, and `transpose`
+presents them over the dimensions in another order. The members present do
+not change.
 
 ## A domain returns an array
 
-A caller holding one value per member, or wanting each member paired with
-its own position along a new dimension, asks the domain rather than
-building an index matrix. Both are readers standing above the raw members,
-as `coordinates()` and `as_coord()` are.
+A caller with one value per member calls the domain, and so does a caller
+that pairs each member with its own position along a new dimension. Neither
+builds an index matrix. Both calls read above the raw members, as
+`coordinates()` and `as_coord()` do.
 
-`array(values)` assigns one value to each member, in the order they are
-held. The members ascend, so the entries are canonical as written and no
-sort runs.
+`array(values)` assigns one value to each member, in their stored order. The
+members ascend, the entries are canonical as written, and no sort runs.
 
 ```python
 import numpy as np
@@ -222,8 +221,8 @@ print(members.array(np.array([1.0, 2.0, 3.0])).values())
 </details>
 <!-- /output -->
 
-A full domain's members ascend with the ravel key, which is the order
-`values.ravel()` reads a grid in, so a whole array is built in one call.
+The members of a full domain ascend with the ravel key. That is the order
+`values.ravel()` reads a grid in, and a whole array is built in one call.
 
 ```python
 import numpy as np
@@ -272,12 +271,12 @@ ValueError: a domain of 3 member(s) takes one value each, as a column of that le
 </details>
 <!-- /output -->
 
-`identity(into, coord, start)` pairs each member with its own position
-along a new dimension, valued 1.0. A member's position is its rank plus
-`start`, which is the numbering `as_coord(start)` uses, so an array built
-one way and a coordinate built the other place a member alike. `coord` is
-the coordinate of the new dimension and spans the whole extent the
-positions are numbered into, wider than these members where several
+`identity(into, coord, start)` pairs each member with its own position along
+a new dimension, valued 1.0. The position of a member is its rank plus
+`start`, the numbering `as_coord(start)` uses. An array built one way and a
+coordinate built the other place a member at the same position. `coord` is
+the coordinate of the new dimension. It spans the whole extent the positions
+are numbered into. That extent is wider than these members where several
 domains share one numbering.
 
 ```python
@@ -304,8 +303,8 @@ print(paired.coordinates())
 </details>
 <!-- /output -->
 
-A destination too short for the members it is asked to number raises
-`ValueError` rather than writing a position outside it.
+A destination too short for the members to be numbered raises `ValueError`,
+and it writes no position outside itself.
 
 ```python raises=ValueError
 import numpy as np
@@ -329,12 +328,12 @@ ValueError: 3 member(s) numbered from 4 reach position 6, and dimension 'k' span
 
 ## The three coordinates
 
-A coordinate resolves where a label sits along one dimension. Which of the
-three is used follows from what the dimension is.
+A coordinate resolves the position of a label along one dimension. The
+dimension determines which of the three is used.
 
 | Coordinate | Is | Used for |
 | --- | --- | --- |
-| `StoredCoord(labels)` | labels held as an array | a dimension whose members are named |
+| `StoredCoord(labels)` | labels stored as an array | a dimension whose members have labels |
 | `ProductCoord(sizes, start=0)` | positions of a full product, numbered from `start` | a dimension whose positions are computed, such as a variable's columns |
 | `SubsetCoord(codes, sizes, start=0)` | positions of a subset of a product, numbered from `start` in code order | a variable over a subset, where a position is a rank among the codes |
 
@@ -368,10 +367,10 @@ print(subset.to_position(np.array([[0, 1], [0, 1]])))
 </details>
 <!-- /output -->
 
-`StoredCoord` looks a label up among the ones it holds, so `"c"` resolves
-to position 2. `ProductCoord` ravels a multi-index against the sizes, so
-`(0, 2)` is position 2 and `(1, 0)` is position 3. `SubsetCoord` holds the
-codes `0` and `4`, which are those same two members, and returns their
+`StoredCoord` looks a label up among the labels it stores, and `"c"`
+resolves to position 2. `ProductCoord` ravels a multi-index against the
+sizes, and `(0, 2)` is position 2 and `(1, 0)` is position 3. `SubsetCoord`
+stores the codes `0` and `4`, the same two members, and returns their
 ranks.
 
 `to_position` takes an index matrix of one row per dimension, and each
@@ -379,13 +378,13 @@ column is one entry.
 
 ## `EntryBuffer`
 
-A fixed index and value buffer handing out successive slices.
+A fixed index and value buffer that returns successive slices.
 
-A block computed into a reserved slice never exists as a separate object,
-so assembling several of them holds one copy of the result rather than one
-copy per block plus the result. It is the destination a model's assembly
-writes into: each constraint writes its rows into its own slice of one
-buffer.
+A block computed into a reserved slice never exists as a separate object.
+Assembling several blocks therefore stores one copy of the result, and not
+one copy per block plus the result. The buffer is the destination the
+assembly of a model writes into: each constraint writes its rows into its own
+slice of one buffer.
 
 | Member | Returns |
 | --- | --- |

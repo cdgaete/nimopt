@@ -1,6 +1,6 @@
 ---
 title: Model
-description: The model that holds the columns, the rows and the objective, and the matrix it assembles.
+description: The model that contains the columns, the rows and the objective, and the matrix it assembles.
 ---
 
 # Model
@@ -11,9 +11,9 @@ description: The model that holds the columns, the rows and the objective, and t
 Model(name="model", sense="min")
 ```
 
-A model holds one column space, the constraints declared against it, and an
-objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
-`"max"`, set once here; any other value raises.
+A model contains one column space, the constraints declared against it, and
+an objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
+`"max"`, set once here. Any other value raises `ValueError`.
 
 | Member | Returns |
 | --- | --- |
@@ -117,13 +117,13 @@ slice(0, 2, None)
 ## What a model built
 
 `explain()` reports every declaration with the count it built, and has
-`built=True`. It returns the same record type a `Definition` returns with
-every count absent, so one reader serves both.
+`built=True`. It returns the record type a `Definition` returns with every
+count absent, and one reader covers both.
 
-A model holds variables and constraints; its sets and parameters are
-collected from them, in order of first appearance. A dimension a
-coefficient introduces belongs to no variable and is found through the
-parameter that has it.
+A model contains variables and constraints. Its sets and parameters are
+collected from them, in order of first appearance. A dimension introduced by
+a coefficient belongs to no variable and is found through the parameter that
+has it.
 
 ```python
 import numpy as np

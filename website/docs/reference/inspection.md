@@ -8,10 +8,10 @@ description: What one row of a built model contains, and which coordinates were 
 ## `Row`
 
 Returned by `Model.row(name, **coords)`. One row as the assembled matrix
-holds it, not a second walk of the expression, so what is shown is what
-the solver receives.
+stores it. The row is read from the matrix, not from a second walk of the
+expression, and it shows what is passed to the solver.
 
-| Field | Holds |
+| Field | Contains |
 | --- | --- |
 | `constraint` | the equation this row belongs to |
 | `coordinate` | the row's own coordinate, per free dimension |
@@ -19,16 +19,16 @@ the solver receives.
 | `terms` | one `RowTerm` per coefficient |
 | `sense`, `lower`, `upper` | read from the row's bounds |
 
-| `RowTerm` field | Holds |
+| `RowTerm` field | Contains |
 | --- | --- |
 | `column` | the solver's own column number |
 | `variable` | the variable that column belongs to |
 | `coordinate` | that column's coordinate, per dimension |
 | `coefficient` | the value in the matrix |
 
-A variable occupies a contiguous range of the column space from its
-`start`, so a column resolves to its variable by that range and to a
-coordinate through the variable's own numbering rule.
+A variable occupies a contiguous range of the column space from its `start`.
+A column resolves to its variable through that range, and to a coordinate
+through the numbering rule of that variable.
 
 `sense` is read from the bounds: equal bounds are `==`, an infinite lower
 bound is `<=`, an infinite upper bound is `>=`.
@@ -94,11 +94,11 @@ ValueError: constraint 'cap' has no row at {'P': 'p3'}; read `absent('cap')` for
 Returned by `Model.absent(name)`. What a constraint set out to produce,
 what it produced, and which coordinates were dropped.
 
-| Field | Holds |
+| Field | Contains |
 | --- | --- |
 | `constraint` | the equation this is about |
 | `stated_by` | `"terms"` where the rows are derived, `"over"` where given explicitly |
-| `expected`, `standing` | rows set out, rows kept |
+| `expected`, `standing` | rows expected, rows kept |
 | `dropped_rows` | one `DroppedRow(coordinate, rule, detail)` per row lost |
 | `dropped_terms` | one `DroppedTerm(coordinate, variable, rule, detail)` per term lost |
 
@@ -106,17 +106,17 @@ what it produced, and which coordinates were dropped.
 
 | `dropped_rows` rule | Meaning |
 | --- | --- |
-| `term-does-not-reach` | a term has no value at that coordinate, so the row would express something unwritten |
+| `term-does-not-reach` | a term has no value at that coordinate; the row would express a constraint that was not written |
 | `where` | the condition excludes it |
 | `absent-rhs` | the right-hand side has no value there |
 
 | `dropped_terms` rule | Meaning |
 | --- | --- |
-| `absent-coefficient` | a coefficient absent inside a sum, so the row stands with one term fewer |
+| `absent-coefficient` | a coefficient absent inside a sum; the row is kept with one term fewer |
 
-The row and term split is the distinction to hold onto: a coefficient
-absent inside a sum removes a **term** and leaves the row standing; a term
-absent along a **free** dimension removes the **row**.
+The two rules differ in what they remove. A coefficient absent inside a sum
+removes a **term** and keeps the row. A term absent along a **free**
+dimension removes the **row**.
 
 Under `over=` the rows are given explicitly, so nothing is dropped and a
 right-hand side that misses one raises instead. An empty `dropped_rows`

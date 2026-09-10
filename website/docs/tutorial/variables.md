@@ -11,7 +11,7 @@ over plants and warehouses.
 
 ## Declaring a variable
 
-A `Model` holds variables, constraints and the objective. `m.var(name,
+A `Model` contains variables, constraints and the objective. `m.var(name,
 sets)` declares a variable indexed over a tuple of sets and returns a handle
 for use in expressions.
 

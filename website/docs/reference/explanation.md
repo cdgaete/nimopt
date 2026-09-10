@@ -9,22 +9,22 @@ description: The shape of what is declared and, where it is built, of what was b
 
 Returned by `Definition.explain` and `Model.explain`. A frozen record of
 every declaration and what it built. The shapes it is made of are frozen
-too, so a reader takes a field rather than parsing a rendering.
+too. A reader takes a field and parses no rendered text.
 
-| Field | Holds |
+| Field | Contains |
 | --- | --- |
-| `name`, `sense` | the declaration's name and the direction it optimises |
+| `name`, `sense` | the name of the declaration and the direction it optimizes |
 | `built` | whether counts are facts about data or absent |
 | `sets` | one `SetShape` per dimension |
 | `parameters` | one `ParamShape` per parameter |
 | `variables` | one `VariableShape` per variable |
 | `constraints` | one `ConstraintShape` per equation |
-| `objective` | the objective's spelling, or `None` |
+| `objective` | the objective expression, or `None` |
 | `columns`, `rows`, `nonzeros` | the model's shape, or `None` |
 
-A count is `None` where nothing is bound. It is never zero: a count of zero
-is a fact a caller acts on, and reporting one for a declaration would be
-false.
+A count is `None` where nothing is bound. It is never zero. A count of zero
+is a value a caller acts on, and a declaration with no data reports no
+count.
 
 | Shape | Fields |
 | --- | --- |

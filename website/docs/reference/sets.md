@@ -20,8 +20,8 @@ reference to the dimension uses.
 | `len(set)` | the number of members |
 | `position_of(labels)` | the position of each label given |
 | `coord` | the coordinate the labels resolve through |
-| `cyclic` | the same set, with a lag that wraps rather than drops |
-| `set - 1` | the set lagged, dropping the members a lag runs off |
+| `cyclic` | the same set, with a lag that wraps instead of dropping |
+| `set - 1` | the set lagged, dropping the members outside the set |
 
 ```python
 import numpy as np
@@ -53,11 +53,10 @@ T 3
 Alias(name, set)
 ```
 
-A second name for a set, sharing its labels and its coordinate. A
-parameter over a set and its alias is an ordinary two-dimensional array,
-so a model relating a set to itself does so without declaring a second
-set. No labels are copied: the alias uses the coordinate the set already
-built.
+A second name for a set, sharing its labels and its coordinate. A parameter
+over a set and its alias is an ordinary two-dimensional array. A model
+relates a set to itself without declaring a second set. No labels are
+copied: the alias uses the coordinate the set already built.
 
 ```python
 import numpy as np
@@ -90,9 +89,9 @@ print(flow.materialise().to_dense())
 product(sets)
 ```
 
-Every member of a set product, as a domain. Passed to `over=`, it states
-the rows of a constraint explicitly, for a constraint whose terms each
-cover some of its rows.
+Every member of a set product, as a domain. Passed to `over=`, it declares
+the rows of a constraint explicitly, for a constraint whose terms each cover
+some of its rows.
 
 ## `subset`
 
@@ -100,10 +99,10 @@ cover some of its rows.
 subset(sets, columns)
 ```
 
-The members of a set product a model uses, given by label. `columns` holds
-one label column per set, keyed by the set's name, read in parallel: the
-k-th entry of each column belongs to the same member. It is a list of
-members, not a cross product.
+The members of a set product a model uses, given by label. `columns`
+contains one label column per set, keyed by the name of the set. The columns
+are read in parallel: the k-th entry of each column belongs to the same
+member. The result is a list of members, not a cross product.
 
 ## `subset_of`
 
@@ -111,9 +110,8 @@ members, not a cross product.
 subset_of(sets, index)
 ```
 
-The same, given by position. Each column of `index` is one member. A
-caller holding positions passes them directly rather than building labels
-to resolve back.
+The same, given by position. Each column of `index` is one member. A caller
+with positions passes them directly and builds no labels to resolve back.
 
 ```python
 import numpy as np

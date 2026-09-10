@@ -8,9 +8,9 @@ description: Terms, the frame they share, the sums that reduce them and the rela
 ## `Term`
 
 One variable, an optional coefficient, the dimensions summed over, and a
-scale factor. A term is the recipe for a block of coefficients and holds
-references rather than arrays, so writing it costs nothing: an expression
-over a million columns costs the same as one over ten.
+scale factor. A term describes a block of coefficients and contains
+references, not arrays. Writing it allocates nothing: an expression over a
+million columns costs the same as one over ten.
 
 | Member | Returns |
 | --- | --- |
@@ -34,7 +34,7 @@ materialised.
 
 | Member | Returns |
 | --- | --- |
-| `terms` | the terms it holds |
+| `terms` | the terms it contains |
 | `frame` | the dimensions it is indexed over |
 | `coords` | the coordinates of that frame |
 | `materialise()` | its coefficients as a `nimblend` array |
@@ -77,8 +77,8 @@ Sum(I, J, ..., expression, where=None)
 ```
 
 The expression reduced over the named sets. Each set named leaves the
-frame. `where=` takes a domain and restricts each term's entries before the
-reduction, so the sum runs over the coordinates given rather than every
+frame. `where=` takes a domain and restricts the entries of each term before
+the reduction. The sum then runs over the coordinates given, not over every
 coordinate of the product.
 
 ```python
@@ -109,8 +109,8 @@ print(Sum(P, W, x[P, W]).frame)
 </details>
 <!-- /output -->
 
-A sum runs over the members of a set, so it takes the set and not a lag of
-it. The lag belongs on the variable reference.
+A sum is over the members of a set and takes the set, not a lag of it. Write
+the lag at the variable reference.
 
 ```python raises=ValueError
 import numpy as np
@@ -167,8 +167,8 @@ Relation <=
 <!-- /output -->
 
 A relation has no truth value. Python evaluates `0 <= expr <= 10` as two
-comparisons joined by `and`, which keeps only the second, so the chained
-form raises rather than letting the first bound be dropped.
+comparisons joined by `and` and keeps only the second. The chained form
+raises, and the first bound is not dropped.
 
 ```python raises=TypeError
 import numpy as np
@@ -295,9 +295,8 @@ TypeError: an LP has no row for a strict inequality; write `<=` or `>=`, and red
 </details>
 <!-- /output -->
 
-The built-in `sum` of expressions with no set to reduce over reaches
-`Expression.sum`, which would otherwise return the expression unchanged
-having reduced nothing.
+The built-in `sum` of expressions with no set to reduce over calls
+`Expression.sum`. That call raises, and it returns no unreduced expression.
 
 ```python raises=TypeError
 import numpy as np
@@ -320,8 +319,8 @@ TypeError: an expression is reduced over the sets it is summed across; specify t
 </details>
 <!-- /output -->
 
-A relation expresses one bound. Comparing it a second time raises rather
-than dropping the first.
+A relation expresses one bound. Comparing it a second time raises, and the
+first bound is not dropped.
 
 ```python raises=TypeError
 import numpy as np
@@ -344,8 +343,8 @@ TypeError: a relation is already an equation with one bound; compare the express
 </details>
 <!-- /output -->
 
-A dimension is reduced once; a second reduction has nothing left to
-reduce.
+A dimension is reduced once. A second reduction over the same dimension
+raises.
 
 ```python raises=ValueError
 import numpy as np

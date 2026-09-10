@@ -6,11 +6,11 @@ description: "A two-stage stochastic program: capacity chosen before the scenari
 # Expansion
 
 `nimopt.models.expansion` is a two-stage stochastic program. The first stage
-builds capacity; the second stage dispatches it against a demand and a fuel
-price that the scenario reveals. What the first stage cannot see is stated by
-the shape of its variable: `cap` is indexed by technology alone, so one
-capacity serves every scenario, while `p` and `shed` carry the scenario and
-may differ across it.
+builds capacity. The second stage dispatches it against a demand and a fuel
+price given by the scenario. The shape of the first-stage variable expresses
+the information available to it: `cap` is indexed by technology alone, and one
+capacity applies to every scenario. `p` and `shed` are indexed by scenario as
+well and may differ across it.
 
 ```text
 minimise    Σ_g capital[g] · cap[g]
@@ -21,10 +21,11 @@ subject to  p[s,g,t] ≤ cap[g]                              for each s, g, t
             cap, p, shed ≥ 0
 ```
 
-`weight` is the probability of a scenario, so the second and third sums are
-an expectation and the objective is the capital committed plus the expected
-cost of the recourse. There is no row tying one scenario's capacity to
-another's: non-anticipativity is the missing dimension.
+`weight` is the probability of a scenario. The second and third sums are
+therefore an expectation, and the objective is the committed capital plus the
+expected cost of the recourse. No row relates the capacity of one scenario to
+the capacity of another: the missing dimension expresses
+non-anticipativity.
 
 ```python
 from nimopt.models import expansion
@@ -49,10 +50,10 @@ expansion  min  not built
 </details>
 <!-- /output -->
 
-`cap` has one column per technology and `p` has one per scenario, technology
-and hour. The capacity row is stated over all three dimensions even though
-the variable it bounds carries one, so a single column is read by every
-scenario's rows — which is what makes the capacity a shared decision.
+`cap` has one column per technology, and `p` has one per scenario,
+technology and hour. The capacity row is declared over all three dimensions,
+and the variable it bounds has one. The rows of every scenario read the same
+column, and the capacity is therefore a shared decision.
 
 ```python
 from nimopt.models import expansion
@@ -78,15 +79,15 @@ expansion  min  75 columns · 72 rows · 180 nonzeros
 </details>
 <!-- /output -->
 
-A technology is available in full wherever it is built and nothing couples
-one hour to the next, so the recourse in each scenario-hour is the merit
-order of the built capacity against that demand, with the remainder unserved
-at `voll`. Write the capacity as bands — the cheapest technology's band, then
-the next, and last the band between the dearest technology and lost load —
-and the total separates into one term per band, each convex in that band's
-level and turning only at a demand. `reference` minimises them one at a time
-and adds them up, so the answer is arithmetic over the inputs rather than a
-second solve.
+A technology is available in full wherever it is built, and no row couples
+one hour to the next. The recourse in each scenario-hour is therefore the
+merit order of the built capacity against that demand, with the remainder
+unserved at `voll`. The capacity is written as bands: the band of the
+cheapest technology, then the next, and last the band between the most
+expensive technology and lost load. The total separates into one term per
+band. Each term is convex in the level of its band and changes slope only at
+a demand. `reference` minimizes the terms one at a time and adds them, and
+the result is arithmetic over the inputs, not a second solve.
 
 ```python
 from nimopt.models import expansion
@@ -107,11 +108,11 @@ print(solution.objective, expansion.reference(inputs))
 </details>
 <!-- /output -->
 
-The data states a cost frontier: capital falls as marginal cost rises, and
-lost load is dearer than the dearest technology. All three are built, and the
-capacity that stacks to 180 leaves the cold scenario's peak hour of 225
-short — shedding 45 is cheaper than a fourth band that earns its capital in
-one hour of one scenario.
+The data describes a cost frontier: capital falls as marginal cost rises,
+and lost load is more expensive than the most expensive technology. All three
+technologies are built. The capacity stacks to 180 and leaves the peak hour
+of 225 in the cold scenario short. Shedding 45 costs less than a fourth band
+used in one hour of one scenario.
 
 ```python
 import numpy as np
@@ -138,8 +139,8 @@ print(np.asarray(solution.primal("shed").values()).reshape(3, 6))
 </details>
 <!-- /output -->
 
-The separation holds only for data whose technologies are a frontier and
-whose bands stack. `reference` refuses anything else rather than returning a
+The separation applies only to data whose technologies form a frontier and
+whose bands stack. `reference` raises on any other data, and it returns no
 number that is not the optimum.
 
 ```python raises=ValueError

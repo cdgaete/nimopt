@@ -1,13 +1,13 @@
 ---
 title: Expressions are symbolic
-description: Why writing an expression costs nothing, and what materialising it does.
+description: What an expression stores before it is materialised, and what materialising it does.
 ---
 
 # Expressions are symbolic
 
-A `Term` is a recipe, not a block of numbers. It holds a reference to a
-variable, an optional coefficient, the dimensions summed over, a scale
-factor, and any lags, conditions or fixed members. An `Expression` is a list
+A `Term` describes a block of numbers and stores none. It contains a
+reference to a variable, an optional coefficient, the dimensions summed over,
+a scale factor, and any lags, conditions or fixed members. An `Expression` is a list
 of such terms and the frame they share.
 
 Nothing in that list is an array. `cost[P, W] * x[P, W]` records which
@@ -46,20 +46,20 @@ columns is still one term and costs the same to write.
 
 ## Materialisation
 
-An expression becomes matrix entries when it is materialised, which is the
+An expression becomes matrix entries when it is materialised. That is the
 only point at which values are read. Materialisation walks the terms and
-issues `nimblend` operations in order: the coefficient is aligned with the
-variable's block, the summed dimensions are reduced, the scale is applied,
-and the terms are combined over the shared frame.
+issues `nimblend` operations in order. The coefficient is aligned with the
+block of the variable, and the summed dimensions are reduced. The scale is
+applied, and the terms are combined over the shared frame.
 
 The result is a `nimblend` array over the frame crossed with the column space:
 the block of coefficients the constraint contributes to the matrix.
 
 ## A hundred constraints cost a hundred shapes
 
-A constraint holds the recipe rather than the block, so adding one costs
-computing its shape. `n_rows` and `nnz` are known at declaration, and no
-coefficients exist yet.
+A constraint stores the term list and no block. Adding a constraint
+therefore costs the computation of its shape. `n_rows` and `nnz` are known at
+declaration, and no coefficient exists yet.
 
 ```python
 import numpy as np
@@ -88,15 +88,15 @@ print(m.n_rows, m.nnz)
 <!-- /output -->
 
 Four thousand rows and four hundred thousand coefficients are declared, and
-the model holds twenty term lists.
+the model stores twenty term lists.
 
 ## The cost
 
 An expression is materialised twice: once to compute its shape when the
 constraint is added, and once to write its entries when the matrix is
-assembled. Building twice costs build time. In exchange, one expression is
-live at a time rather than all of them, so peak memory is set by the largest
-constraint rather than by their sum.
+assembled. Building twice costs build time. One expression is live at a
+time, and peak memory is set by the largest constraint, not by the sum of
+all of them.
 
 A model that is cheap to declare and more expensive to assemble suits a
 builder, because declaration is what a caller iterates on.

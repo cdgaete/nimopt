@@ -1,15 +1,15 @@
 ---
 title: Expressions
-description: Write the sums the constraints and the objective are stated over, without computing anything.
+description: Write the sums the constraints and the objective are written over, without computing anything.
 sidebar_position: 3
 ---
 
 # Expressions
 
-Constraints and the objective are stated over sums of variables: the total
+Constraints and the objective are written over sums of variables: the total
 shipped from a plant, the total received by a warehouse, the total cost. An
 expression is such a sum. It is symbolic: writing one records the variables,
-coefficients and sets involved, and computes nothing.
+the coefficients and the sets involved, and computes nothing.
 
 ## Referencing a variable
 
@@ -120,8 +120,8 @@ print(len(total_cost.terms))
 <!-- /output -->
 
 `total_cost` is a single term. The same expression over a million routes is
-still one term, because it holds references to `cost` and `x` rather than
-their values. Values are read when the matrix is assembled.
+still one term: it contains references to `cost` and `x`, not their values.
+Values are read when the matrix is assembled.
 
 ## Addition and subtraction
 

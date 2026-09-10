@@ -5,35 +5,35 @@ description: The array contract, the two implementations behind it, and what an 
 
 # nimblend arrays
 
-`nimblend` is the layer below `nimopt`. It knows dimensions, labels, entries
-and alignment, and nothing about optimization. A `nimopt` caller meets these
-names when reading a solution or inspecting what a model built.
+`nimblend` is the layer below `nimopt`. Its vocabulary is dimensions, labels,
+entries and alignment, and it contains no optimization term. A `nimopt` caller
+uses these names when reading a solution or inspecting what a model built.
 
-**Import from `nimblend` itself, never from a submodule, and never read an
+**Import from `nimblend` itself, never from a submodule. Never read an
 array's `.index` or `.data` or a domain's `.codes`.** Those are the raw
-index matrix, value buffer and ravelled members of the layer below the
-array layer; reading them bypasses the contract. A test in this repository
-fails on any of them.
+index matrix, the value buffer and the ravelled members of the layer below
+the array layer. Reading them bypasses the contract, and a test in this
+repository fails on any of them.
 
-Nor assemble one. `SparseArray.from_canonical` below takes an index matrix
-the caller built, which is the array layer's own work: `nimopt`'s modules
-call it nowhere, and a test holds them to that. A `Domain` returns the
-array over its own members instead.
+Do not assemble one either. `SparseArray.from_canonical` below takes an index
+matrix built by the caller, and that is the work of the array layer. No module
+of `nimopt` calls it, and a test enforces that. A `Domain` returns the array
+over its own members instead.
 
 ## `Array`
 
-A labeled N-dimensional array. `Array` is the contract both
-implementations satisfy, and what a caller writes against.
+A labeled N-dimensional array. `Array` is the contract both implementations
+satisfy, and the interface a caller writes against.
 
-`absence` declares what a coordinate the array does not have means:
-`"empty"` that it contributes nothing, `"unknown"` that it was not
-modelled. Operators and reductions follow from that declaration, so it is
-part of the array's meaning and not a hint.
+`absence` declares the meaning of a coordinate the array does not have:
+`"empty"` that it contributes nothing, `"unknown"` that it was not modeled.
+Operators and reductions follow from that declaration. The declaration is
+part of the definition of the array, not a hint.
 
 | Member | Returns |
 | --- | --- |
 | `dims`, `shape`, `nnz` | the dimensions, their sizes, and the number of entries |
-| `coords` | each dimension's coordinate, which resolves its labels |
+| `coords` | the coordinate of each dimension, resolving its labels |
 | `absence` | the meaning of a coordinate the array does not have |
 | `as_empty()`, `as_unknown()` | the array under the other absence declaration |
 | `values()`, `coordinates()` | the entries and their multi-indices |
@@ -52,12 +52,11 @@ implementations behave alike, including over frames that differ. One frame
 nested inside the other broadcasts over the wider; frames sharing some
 dimensions align on those and multiply out the rest. Frames sharing no
 dimension raise. A product mixing the two implementations returns a
-`SparseArray`, because a product intersects presence and so has at most
-what the sparse operand has.
+`SparseArray`: a product intersects presence and has at most the entries of
+the sparse operand.
 
-Absence and zero stay distinct. A stored `0.0` is a coordinate that is
-present with value zero, which is not the same as one the array does not
-have.
+Absence and zero remain distinct. A stored `0.0` is a coordinate present with
+the value zero. A coordinate the array does not have is a different case.
 
 ```python
 import numpy as np
@@ -135,16 +134,16 @@ unknown
 
 An ndarray over labeled dimensions, distinguishing absence from zero.
 
-How presence is stored follows the absence declaration, because the two
-declarations need opposite things from an operator. An `"unknown"` array
-tags absence with NaN, which propagates through arithmetic at no cost and
-needs no storage beside the values. An `"empty"` array carries a boolean
-mask, because absence is the additive identity there and substituting it is
-cheaper than tagging.
+The storage of presence follows the absence declaration: the two
+declarations require opposite behavior from an operator. An `"unknown"` array
+marks absence with NaN. NaN propagates through arithmetic at no cost and
+requires no storage beside the values. An `"empty"` array stores a boolean
+mask: absence is the additive identity there, and substituting it costs less
+than marking it.
 
-`Solution.primal` returns one of these for a variable over a full product:
-the solver returns a value at every cell of the frame in column order, so
-they reshape with no index built at all.
+`Solution.primal` returns one of these for a variable over a full product.
+The solver returns a value at every cell of the frame in column order, and
+the values reshape with no index built.
 
 ```python
 import numpy as np
@@ -187,10 +186,9 @@ not already an ndarray.
 | `is_canonical(index, shape)` | whether buffers are in the order `from_canonical` takes |
 
 `from_long` resolves each label through the coordinate that dimension
-already has, so a caller holding coordinates, which is any caller with sets
-of its own, gives its entries as labels rather than resolving them to
-positions first. The columns are read in parallel, so they must have equal
-length.
+already has. A caller with coordinates of its own therefore gives its entries
+as labels and resolves no position itself. The columns are read in parallel
+and must have equal length.
 
 ```python
 import numpy as np
@@ -246,10 +244,10 @@ ValueError: label column 't' has length 2 and the value column has length 1; the
 </details>
 <!-- /output -->
 
-`is_canonical` answers the question `SparseArray.from_canonical` asks a
-caller to answer about buffers the caller built: entries sorted by ravel
-key with no repeat. Verifying it inside `from_canonical` would cost the
-ravel that path exists to avoid.
+`is_canonical` reports whether buffers meet the precondition of
+`SparseArray.from_canonical`: entries sorted by ravel key, with no repeat.
+Verifying it inside `from_canonical` would cost the ravel that this path
+avoids.
 
 ```python
 import numpy as np
@@ -275,9 +273,9 @@ False
 ## The frame of a binary result
 
 `combined_dims(left, right)` returns the dimensions a binary operator's
-result has, from the two operands' dimensions alone. A caller reads it
-before materialising either operand, which is what lets a combination
-report its frame while its data is still unbound.
+result has, from the dimensions of the two operands alone. A caller reads it
+before materialising either operand. A combination therefore reports its
+frame while its data is unbound.
 
 | Operands | Result |
 | --- | --- |
