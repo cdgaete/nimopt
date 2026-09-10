@@ -20,6 +20,10 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   it without the package. The block is a YAML comment, so a file carrying it
   reads to the same definition as one without it.
 
+### Changed
+
+- The package supports Python 3.12, 3.13 and 3.14, and numpy from 2.3.
+
 ## 0.1.2 - 2026-09-09
 
 ### Fixed

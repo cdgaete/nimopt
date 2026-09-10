@@ -1,11 +1,12 @@
 const RUNTIME = "https://cdn.jsdelivr.net/pyodide/v314.0.6/full/";
 
-// Pyodide ships numpy 2.4.6 and highspy 1.13.1, below the floors nimblend and
-// nimopt declare. Both packages run on them, so the wheels install with
-// deps=False and the distribution packages are loaded by name instead --
-// the lock states highspy depends on numpy with no version, so loadPackage
-// cannot pull a combination the floors would reject. pyyaml is loaded the
-// same way: nimopt imports it to read and write a model file.
+// Pyodide ships highspy 1.13.1, below the floor nimopt declares, and numpy
+// 2.4.6, which satisfies the floor nimblend and nimopt declare. Both
+// packages run on this highspy, so the wheels install with deps=False and
+// the distribution packages are loaded by name instead -- the lock states
+// highspy depends on numpy with no version, so loadPackage cannot pull a
+// combination the floors would reject. pyyaml is loaded the same way:
+// nimopt imports it to read and write a model file.
 const INSTALL = `
 import micropip
 await micropip.install(WHEELS, deps=False)
