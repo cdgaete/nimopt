@@ -1,10 +1,12 @@
 import importlib
+import re
 import textwrap
 
 import numpy as np
 import pytest
 
 from nimopt import Definition, Model, Param, Set, Sum, load, loads, save, subset
+from nimopt.files import CONSTRAINT_KEYS, INSTRUCTIONS, KEYS, VARIABLE_KEYS, dumps
 from nimopt.models import MODELS
 from nimopt.models import transport as worked_transport
 from reference import dense_matrix
@@ -410,3 +412,72 @@ def test_an_objective_over_no_dimension_survives_the_file():
     text = d.to_yaml()
     assert "objective: theta\n" in text
     assert loads(text).to_yaml() == text
+
+
+def test_dumps_prefixes_the_block_where_instructions_is_asked():
+    assert dumps({"version": 2}, instructions=True) == INSTRUCTIONS + "version: 2\n"
+    assert dumps({"version": 2}) == "version: 2\n"
+
+
+def test_a_definition_writes_the_block_only_where_instructions_is_asked():
+    d = dispatch()
+    assert d.to_yaml(instructions=True) == INSTRUCTIONS + d.to_yaml()
+    assert "#" not in d.to_yaml()
+
+
+def test_a_model_writes_the_block_above_its_inline_data():
+    m = worked_transport.definition().build(worked_transport.data())
+    text = m.to_yaml(inline=True, instructions=True)
+    assert text == INSTRUCTIONS + m.to_yaml(inline=True)
+    block, head, data = (
+        text.index(s) for s in ("Reading this file", "version: 2", "data:")
+    )
+    assert block < head < data
+
+
+def test_save_writes_a_definition_with_the_block(tmp_path):
+    d = dispatch()
+    save(d, tmp_path / "d.yaml", instructions=True)
+    assert (tmp_path / "d.yaml").read_text() == INSTRUCTIONS + d.to_yaml()
+
+
+def test_save_writes_a_model_with_the_block_above_the_sidecar_line(tmp_path):
+    m = worked_transport.definition().build(worked_transport.data())
+    save(m, tmp_path / "m.yaml", instructions=True)
+    text = (tmp_path / "m.yaml").read_text()
+    assert text == INSTRUCTIONS + m.to_yaml() + "data: m.npz\n"
+
+
+def test_a_file_carrying_the_block_reads_to_the_definition_the_rest_states():
+    d = dispatch()
+    assert loads(d.to_yaml(instructions=True)).to_yaml() == d.to_yaml()
+
+
+def test_a_definition_with_the_block_round_trips_to_the_same_text():
+    text = dispatch().to_yaml(instructions=True)
+    assert loads(text).to_yaml(instructions=True) == text
+
+
+def test_a_saved_model_with_the_block_loads_and_saves_to_the_same_file(tmp_path):
+    m = worked_transport.definition().build(worked_transport.data())
+    for name in ("a", "b"):
+        (tmp_path / name).mkdir()
+    save(m, tmp_path / "a" / "m.yaml", instructions=True)
+    save(load(tmp_path / "a" / "m.yaml"), tmp_path / "b" / "m.yaml", instructions=True)
+    again = (tmp_path / "b" / "m.yaml").read_text()
+    assert again == (tmp_path / "a" / "m.yaml").read_text()
+
+
+def test_the_block_names_every_key_of_the_format():
+    # a key added to the format without a line in the block fails here
+    for key in (*KEYS, *VARIABLE_KEYS, *CONSTRAINT_KEYS):
+        assert re.search(rf"\b{key}\b", INSTRUCTIONS), key
+
+
+def test_the_block_is_ascii_comment_lines():
+    # every line is a YAML comment, so the loader never sees it, and the
+    # text stays ASCII so the file is written the same under any locale
+    lines = INSTRUCTIONS.splitlines()
+    assert lines and all(line.startswith("#") for line in lines)
+    assert INSTRUCTIONS.endswith("\n")
+    assert INSTRUCTIONS.isascii()

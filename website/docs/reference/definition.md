@@ -29,7 +29,7 @@ beside it. `sense` is `"min"` or `"max"`, set once here.
 | `eq(name, relation, where=None, over=None)` | nothing; registers the equation |
 | `build(data)` | a `Model` over the declarations, bound to `data` |
 | `explain()` | an `Explanation` of what is declared |
-| `to_yaml()` | the text of this definition's file, structure and no data |
+| `to_yaml(instructions=False)` | the text of this definition's file, structure and no data; `instructions=True` adds the comment block that describes the format |
 | `set_objective(expression)` | nothing; sets the objective |
 | `sense` | `"min"` or `"max"`, as declared |
 | `sets`, `aliases`, `parameters`, `variables`, `constraints` | the registries, keyed by name |

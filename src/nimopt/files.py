@@ -29,6 +29,83 @@ KEYS = (
 )
 VARIABLE_KEYS = ("sets", "subset", "lower", "upper", "integer")
 CONSTRAINT_KEYS = ("relation", "where", "over")
+INSTRUCTIONS = """\
+# --- Reading this file --------------------------------------------------
+# A nimopt model file, format version 2. The keys are written in this
+# order, and no other key is accepted: version, name, sense, sets,
+# aliases, parameters, variables, constraints, objective, data. Only
+# version, name and sense are required.
+#
+# sense       'min' or 'max', applied to the objective.
+# sets        The names of the index sets. Their members are listed
+#             under data.
+# aliases     name: set. A second name for a set, with the same
+#             members, so that a parameter or a variable can be
+#             indexed by one set twice.
+# parameters  name: [set, ...]. The index sets of a data array. Its
+#             values are listed under data.
+# objective   An expression over the variables, with no comparison
+#             operator. A constant term in the objective is a fixed
+#             cost: it is reported with the solver's objective value
+#             and is not passed to the solver.
+# data        The file name of an .npz archive in the same directory
+#             as this file, or an inline mapping. It holds one entry
+#             per set (its members) and one entry per parameter (its
+#             values), in one of two forms: a dense array over the
+#             full product of the parameter's index sets, or a table
+#             with one column per index set followed by 'value'. A
+#             table holds only the entries it lists. A coordinate
+#             that is not listed is not a zero; it is a coefficient
+#             that does not exist. The constraint row rules below
+#             depend on that difference.
+#
+# variables   name: {sets, subset, lower, upper, integer}
+#   sets      The index sets of the variable. Required.
+#   subset    A parameter name, or a list of set names. The variable
+#             exists only at those coordinates. Default: the full
+#             product of its index sets.
+#   lower     A number or a parameter name. Default: 0.
+#   upper     A number or a parameter name. Default: .inf.
+#   integer   true for an integer variable. Default: continuous.
+#
+# constraints name: {relation, where, over}
+#   relation  Required. The whole constraint: an expression, one of
+#             <= >= ==, and a right-hand side. The right-hand side is
+#             a number or a parameter indexed by the constraint's free
+#             index sets. Any term that contains a variable has been
+#             moved to the left-hand side.
+#   over      The rows, stated explicitly: a parameter name or a list
+#             of set names. Every one of those rows exists. A term
+#             that has entries at only some of those rows contributes
+#             to the rows where it has entries. The right-hand side
+#             must have a value at every row; otherwise building the
+#             model raises an error.
+#   where     The derived rows, restricted to this domain: a parameter
+#             name or a list of set names.
+#   Stating both over and where is an error. With neither, the rows
+#   are derived: the coordinates at which every term has an entry,
+#   restricted to the coordinates at which the right-hand side has a
+#   value. A term whose parameter has no entry at a coordinate removes
+#   that row, because a row missing one of its terms would state a
+#   constraint that was not written.
+#
+# Expression syntax, in relation and objective:
+#   Name[s, ...]           a parameter or a variable indexed by its
+#                          sets; a bare Name where it has no sets
+#   Name['label']          that index fixed at one member
+#   s - k      s + k       that index shifted by k positions; the term
+#                          has no entry where the shift leaves the set
+#   s.cyclic - k           shifted, wrapping around at the ends
+#   Sum(s, ..., body)      body summed over the named sets; the sets
+#                          that remain are the constraint's free sets
+#   Sum(s, body, where=D)  the same, restricted to the coordinates
+#                          that D holds: a parameter, or a tuple of
+#                          sets such as (s, t)
+#   + - * / **, unary minus, and parentheses.
+#   One comparison operator per relation: state each side of a range
+#   as a separate constraint.
+# ------------------------------------------------------------------------
+"""
 
 
 class _Dumper(yaml.SafeDumper):
@@ -43,15 +120,21 @@ def _sequence(dumper: Any, data: Any) -> Any:
 _Dumper.add_representer(list, _sequence)
 
 
-def dumps(mapping: Mapping[str, Any]) -> str:
-    """`mapping` as the YAML text a file carries, keys in the order given."""
-    return yaml.dump(
+def dumps(mapping: Mapping[str, Any], instructions: bool = False) -> str:
+    """`mapping` as the YAML text a file carries, keys in the order given.
+
+    `instructions=True` prefixes the comment block that explains the format,
+    so that a reader given one file alone can interpret it without the
+    package. The block is a YAML comment, so the loader never sees it.
+    """
+    text = yaml.dump(
         mapping,
         Dumper=_Dumper,
         sort_keys=False,
         width=float("inf"),
         default_flow_style=False,
     )
+    return INSTRUCTIONS + text if instructions else text
 
 
 def _addressable(name: str, what: str) -> None:
@@ -443,17 +526,20 @@ def load(path: Any, data: Any = None) -> Any:
     return _loads(path.read_text(), data, path.parent)
 
 
-def save(what: Any, path: Any, inline: bool = False) -> None:
+def save(
+    what: Any, path: Any, inline: bool = False, instructions: bool = False
+) -> None:
     """Write `what` to `path`: a definition's file, or a model's with its data.
 
     A model's data goes to an `.npz` beside the file under the file's stem, or
-    into the file itself with `inline=True`.
+    into the file itself with `inline=True`. `instructions=True` writes the
+    comment block that explains the format at the top of the file.
     """
     path = Path(path)
     if isinstance(what, Definition):
         if inline:
             raise ValueError("a definition carries no data to inline")
-        path.write_text(dumps(structure(what)))
+        path.write_text(dumps(structure(what), instructions))
         return
     if not isinstance(what, Model):
         raise TypeError(
@@ -467,4 +553,4 @@ def save(what: Any, path: Any, inline: bool = False) -> None:
         sidecar = path.with_suffix(".npz")
         mapping["data"] = sidecar.name
         write_npz(arrays, sidecar)
-    path.write_text(dumps(mapping))
+    path.write_text(dumps(mapping, instructions))

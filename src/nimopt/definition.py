@@ -177,11 +177,15 @@ class Definition:
             nonzeros=None,
         )
 
-    def to_yaml(self) -> str:
-        """This definition as the text of its file: its structure and no data."""
+    def to_yaml(self, instructions: bool = False) -> str:
+        """This definition as the text of its file: its structure and no data.
+
+        `instructions=True` prefixes the comment block that explains the
+        format.
+        """
         from nimopt.files import dumps, structure
 
-        return dumps(structure(self))
+        return dumps(structure(self), instructions)
 
     def build(self, data: Mapping[str, Any], progress: Any = False) -> "Model":
         """A model over this definition's declarations, bound to `data`.

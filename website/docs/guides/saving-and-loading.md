@@ -264,3 +264,46 @@ A definition's file takes data from the caller instead: `load(path, data=...)`
 with the mapping `build` takes or the path of an `.npz`. A file that carries
 data and a `data=` together is refused, because two sources for one model is
 a choice the library does not make.
+
+## A file that describes its own format
+
+`instructions=True` on `save`, `Definition.to_yaml` and `Model.to_yaml` writes
+a comment block at the top of the file. The block is the same in every file.
+It describes the format, not the model: the keys and their order, the
+defaults, the rules that decide which rows a constraint has, and the
+expression syntax. A reader given one file can interpret it without this
+package.
+
+The block is a YAML comment, so a file that carries it loads to the same
+model as one that does not, and writing the loaded model with the flag gives
+the same text.
+
+```python
+from nimopt import Definition, loads
+
+d = Definition("dispatch", sense="min")
+T = d.set("T")
+load, gen = d.param("load", (T,)), d.var("gen", (T,))
+d.eq("balance", gen[T] == load[T])
+text = d.to_yaml(instructions=True)
+print("\n".join(text.splitlines()[:5]))
+print(loads(text).to_yaml() == d.to_yaml())
+print(loads(text).to_yaml(instructions=True) == text)
+```
+
+<!-- output -->
+<details open>
+<summary>Output</summary>
+
+```text
+# --- Reading this file --------------------------------------------------
+# A nimopt model file, format version 2. The keys are written in this
+# order, and no other key is accepted: version, name, sense, sets,
+# aliases, parameters, variables, constraints, objective, data. Only
+# version, name and sense are required.
+True
+True
+```
+
+</details>
+<!-- /output -->

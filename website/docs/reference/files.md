@@ -11,14 +11,22 @@ description: The file a definition or a model writes, what each key carries, the
 | --- | --- |
 | `load(path, data=None)` | reads a file; a `Definition`, or a `Model` where the file carries data or `data=` gives it |
 | `loads(text, data=None)` | the same over text; a sidecar name in text is refused, because text has no directory |
-| `save(what, path, inline=False)` | writes a definition's file, or a model's with an `.npz` beside it, or one file with an inline block when `inline=True` |
+| `save(what, path, inline=False, instructions=False)` | writes a definition's file, or a model's with an `.npz` beside it, or one file with an inline block when `inline=True`; `instructions=True` writes the comment block that describes the format at the top of the file |
 
 `data=` is the mapping `build` takes or the path of an `.npz`. A file that
 carries data and a `data=` together is refused.
 
-`Definition.to_yaml()` and `Model.to_yaml(inline=False)` return the text
-`save` writes, without a sidecar line: only `save` writes a sidecar and the
-line that names it.
+`Definition.to_yaml(instructions=False)` and `Model.to_yaml(inline=False,
+instructions=False)` return the text `save` writes, without a sidecar line:
+only `save` writes a sidecar and the line that names it.
+
+With `instructions=True`, every writer puts a fixed comment block at the top
+of the text. The block describes the format: the keys and their order, the
+defaults, the rules that decide which rows a constraint has, and the
+expression syntax. It is the same text in every file and describes the
+format rather than the model, so a reader given one file can interpret it
+without this package. The block is a YAML comment: a file with it and a
+file without it load to the same model.
 
 ## The file
 

@@ -268,19 +268,20 @@ class Model:
             nonzeros=self.nnz,
         )
 
-    def to_yaml(self, inline: bool = False) -> str:
+    def to_yaml(self, inline: bool = False, instructions: bool = False) -> str:
         """This model as the text of its file, with its data inline where asked.
 
         The text states the structure alone, or the structure and an inline
         block. Only `save` writes a sidecar and the line that names it, so
-        this never states a file.
+        this never states a file. `instructions=True` prefixes the comment
+        block that explains the format.
         """
         from nimopt.files import dumps, structure, to_inline
 
         mapping = structure(self)
         if inline:
             mapping["data"] = to_inline(self)
-        return dumps(mapping)
+        return dumps(mapping, instructions)
 
     def row(self, name: str, **coords: Any) -> "Row":
         """One row of this model's matrix, at the coordinate named.
