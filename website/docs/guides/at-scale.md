@@ -116,3 +116,7 @@ from nimopt.models import storage
 model = storage.definition().build(storage.data(60), progress=True)
 solution = model.solve(options={"time_limit": 300.0, "log": True}, progress=True)
 ```
+
+A solve stopped at `time_limit` reports `feasible` True where the solver
+found a point. `objective`, `primal`, `bound` and `gap` then read that
+point. See [Solving](/tutorial/solving).

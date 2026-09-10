@@ -74,11 +74,11 @@ def compare(stem="elec_s_10", root=DATA):
         "nnz": (int(assembled.values.size), reference["nnz"]),
     }
     if "objective" in reference:
-        status, value, *_ = highs.solve(assembled, model.sense)
-        if status != "optimal":
-            raise RuntimeError(f"the restatement solved {status!r}")
+        result = highs.solve(assembled, model.sense)
+        if result.status != "optimal":
+            raise RuntimeError(f"the restatement solved {result.status!r}")
         offset = constant(root / f"{stem}.npz")
-        got["objective"] = (value - offset, reference["objective"])
+        got["objective"] = (result.objective - offset, reference["objective"])
     return got
 
 

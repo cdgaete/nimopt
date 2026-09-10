@@ -78,7 +78,7 @@ m.solve().dual("cap")
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: this model carries integer columns and 'highs' refuses duals for a model with integrality, so there is no dual for constraint 'cap' to read: a mixed-integer model's duals are not its relaxation's
+ValueError: model 'm' has integer columns and 'highs' reports no duals for it; read primal values only
 ```
 
 </details>

@@ -102,9 +102,9 @@ def test_a_solver_the_seam_does_not_adapt_is_refused_where_it_is_named():
         dispatch().session(solver="glpk")
 
 
-def test_a_mixed_integer_model_carries_no_duals_to_read():
+def test_a_mixed_integer_model_has_no_duals_to_read():
     # a mixed-integer model's duals are not the relaxation's duals, and a
-    # vector of zeros handed over as duals is indistinguishable from an answer
+    # vector of zeros returned as duals is indistinguishable from an answer
     m = Model("m")
     T = Set("T", np.arange(2))
     one = Param.from_dense("one", (T,), np.ones(2))
@@ -114,7 +114,7 @@ def test_a_mixed_integer_model_carries_no_duals_to_read():
     solved = m.solve()
     assert solved.status == "optimal"
     assert solved.primal("x").to_dense().sum() == pytest.approx(0.0)
-    with pytest.raises(ValueError, match="refuses duals"):
+    with pytest.raises(ValueError, match="reports no duals for it"):
         solved.dual("cap")
 
 
@@ -174,7 +174,7 @@ def test_removing_the_conflict_makes_the_model_feasible():
     at = [row.index for row in found.conflict]
     assembled.row_lower[at] = -np.inf
     assembled.row_upper[at] = np.inf
-    assert highs.solve(assembled, m.sense)[0] == "optimal"
+    assert highs.solve(assembled, m.sense).status == "optimal"
 
 
 def test_a_model_that_solved_carries_no_conflict():

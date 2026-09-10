@@ -14,35 +14,30 @@ if TYPE_CHECKING:
 class Solution:
     """Primal and dual values, read back onto the sets they were declared over.
 
-    Every array declares `absence="unknown"`: a coordinate a model did not
-    carry has no value, and combining two instances' results must not invent
-    a zero for it.
+    Every array declares `absence="unknown"`. A coordinate the model does not
+    define has no value, and combining two instances' results does not add a
+    zero for it.
 
-    Which implementation carries them follows what the model declared. A
-    variable over a full product has a value at every cell of its frame, and
-    the solver returns them in the order the columns are numbered, so the
-    values reshape into a `DenseArray` with no index built at all. A variable
-    over a subset carries a value at its members alone, and a dense frame
-    would be the grid it was declared to avoid, so those stay a `SparseArray`.
-    A dual follows its constraint's row domain by the same rule.
+    A variable over a full product has a value at every cell of its frame. The
+    solver returns those values in the order the columns are numbered, and they
+    reshape into a `DenseArray` with no index built at all. A variable over a
+    subset has a value at its members alone and stays a `SparseArray`. A dual
+    follows its constraint's row domain by the same rule.
 
-    A model the solver did not bring to an optimum carries no answer, and
-    the objective, the primals and the duals refuse to be read: a vector the
-    solver left behind is not a solution, and returning it would be
-    indistinguishable from one. `status` is readable either way, and is what
-    a caller reads first.
-
-    A model carrying integer columns holds no duals at all. A mixed-integer
-    model's duals are not the relaxation's, and a solver reporting the
-    relaxation's reports a number that means nothing, so the seam hands none
-    over and `dual` refuses the read.
+    `status` and `feasible` are readable after any solve. `objective` and
+    `primal` raise ValueError where `feasible` is False. `dual` raises
+    ValueError where `status` is not `optimal`, and raises for a model with
+    integer columns. A mixed-integer model has no duals of its own, and the
+    adapters report none for one.
     """
 
     def __init__(
         self,
         model: "Model",
         status: str,
+        feasible: bool,
         objective: float,
+        bound: float | None,
         col_value: npt.NDArray[np.float64],
         row_dual: npt.NDArray[np.float64] | None,
         rows_of: Mapping[str, Any],
@@ -51,33 +46,70 @@ class Solution:
         self.model = model
         self.status = status
         self.solver = solver
+        self.feasible = feasible
         self._objective = objective
+        self._bound = bound
         self._col_value = col_value
         self._row_dual = row_dual
         self._rows_of = rows_of
 
     def __repr__(self) -> str:
-        if self.status != "optimal":
+        if not self.feasible:
             return f"Solution({self.status!r}, no values)"
-        return f"Solution({self.status!r}, objective {self._objective:g})"
+        head = f"Solution({self.status!r}, objective {self._objective:g}"
+        gap = self.gap
+        if gap is None:
+            return f"{head}, no bound)"
+        if gap == 0.0:
+            return f"{head})"
+        return f"{head}, gap {gap:.2%})"
 
-    def _refuse_unsolved(self, what: str) -> None:
-        """Refuse a read of values a non-optimal solve did not produce."""
-        if self.status != "optimal":
+    def _require_feasible(self) -> None:
+        """Raise where the solver reports no feasible point."""
+        if not self.feasible:
             raise ValueError(
-                f"the model's status is {self.status!r}, so it carries no "
-                f"{what}; read `status` before reading values"
+                f"status is {self.status!r} and the solver reports no feasible "
+                f"point; read `status` before reading values"
             )
 
     @property
     def objective(self) -> float:
-        """The optimal objective value."""
-        self._refuse_unsolved("objective")
+        """Return the objective value of the point the solver reported.
+
+        Raises ValueError where `feasible` is False.
+        """
+        self._require_feasible()
         return self._objective
 
+    @property
+    def bound(self) -> float | None:
+        """Return the bound on the optimal objective the solver proved.
+
+        The bound is a lower bound under sense `min` and an upper bound under
+        sense `max`. It is None where the solver reports none.
+        """
+        return self._bound
+
+    @property
+    def gap(self) -> float | None:
+        """Return the relative distance from the objective to the bound.
+
+        It is None where `feasible` is False or `bound` is None. For an
+        objective of zero it is 0.0 under a bound of zero and infinity under
+        any other bound.
+        """
+        if not self.feasible or self._bound is None:
+            return None
+        if self._objective == 0.0:
+            return 0.0 if self._bound == 0.0 else float("inf")
+        return abs(self._objective - self._bound) / abs(self._objective)
+
     def primal(self, name: str) -> DenseArray | SparseArray:
-        """The named variable's values over its own sets."""
-        self._refuse_unsolved(f"value for variable {name!r}")
+        """Return the named variable's values over its own sets.
+
+        Raises ValueError where `feasible` is False.
+        """
+        self._require_feasible()
         variable = self.model.variables[name]
         at = slice(variable.start, variable.start + variable.n_columns)
         values = self._col_value[at]
@@ -89,14 +121,20 @@ class Solution:
         return variable.domain().array(values.copy(), absence="unknown")
 
     def dual(self, name: str) -> DenseArray | SparseArray:
-        """The named constraint's duals over its free sets."""
-        self._refuse_unsolved(f"dual for constraint {name!r}")
+        """Return the named constraint's duals over its free sets.
+
+        Raises ValueError where `status` is not `optimal`. Raises ValueError
+        for a model with integer columns.
+        """
+        if self.status != "optimal":
+            raise ValueError(
+                f"status is {self.status!r}; duals are defined at status 'optimal' only"
+            )
         if self._row_dual is None:
             raise ValueError(
-                f"this model carries integer columns and {self.solver!r} "
-                f"refuses duals for a model with integrality, so there is no "
-                f"dual for constraint {name!r} to read: a mixed-integer "
-                f"model's duals are not its relaxation's"
+                f"model {self.model.name!r} has integer columns and "
+                f"{self.solver!r} reports no duals for it; read primal values "
+                f"only"
             )
         constraint = self.model.constraints[name]
         rows = constraint.rows

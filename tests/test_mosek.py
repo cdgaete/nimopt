@@ -9,6 +9,7 @@ from nimopt.solvers import available, highs, mosek  # noqa: E402
 from nimopt.solvers.options import OPTIONS as VOCABULARY  # noqa: E402
 from test_session import dispatch as small  # noqa: E402
 from test_session import infeasible, odd, unbounded  # noqa: E402
+from test_solution_limit import knapsack  # noqa: E402
 
 # Mosek's licence carries no size limit, so each corpus model is taken at a
 # scale beyond the 2000 rows and columns Gurobi's size-limited licence allows
@@ -110,7 +111,7 @@ def test_mosek_refuses_a_mixed_integer_models_duals_too():
     model = commitment.definition().build(commitment.data(scale=2))
     solved = model.solve(solver="mosek")
     assert solved.status == "optimal"
-    with pytest.raises(ValueError, match="refuses duals"):
+    with pytest.raises(ValueError, match="reports no duals for it"):
         solved.dual("demand")
 
 
@@ -256,6 +257,77 @@ def test_the_highs_reference_agrees_with_mosek_on_the_matrix_it_was_given():
     # the two adapters read one `Assembled`; a bound key derived wrongly
     # would move the optimum, and the reference model would show it
     assembled = small().assemble()
-    _, from_highs, *_ = highs.solve(assembled, "min")
-    _, from_mosek, *_ = mosek.solve(assembled, "min")
-    assert from_mosek == pytest.approx(from_highs)
+    from_highs = highs.solve(assembled, "min")
+    from_mosek = mosek.solve(assembled, "min")
+    assert from_mosek.objective == pytest.approx(from_highs.objective)
+
+
+def covering(n=200, k=40, seed=5):
+    """A set covering model: the zero vector misses every row."""
+    rng = np.random.default_rng(seed)
+    ITEM = Set("I", np.array([f"i{t}" for t in range(n)]))
+    K = Set("K", np.array([f"k{t}" for t in range(k)]))
+    a = Param.from_dense("a", (K, ITEM), (rng.random((k, n)) < 0.15).astype(float))
+    c = Param.from_dense("c", (ITEM,), rng.uniform(1, 100, n))
+    need = Param.from_dense("need", (K,), np.full(k, 1.0))
+    m = Model("cover", sense="min")
+    x = m.var("x", (ITEM,), integer=True, upper=1.0)
+    m.eq("cover", Sum(ITEM, a[K, ITEM] * x[ITEM]) >= need[K])
+    m.set_objective(Sum(ITEM, c[ITEM] * x[ITEM]))
+    return m
+
+
+@licensed
+def test_mosek_bounds_a_continuous_optimum_by_its_own_objective():
+    solved = small().solve(solver="mosek")
+    assert solved.status == "optimal"
+    assert solved.feasible is True
+    assert solved.bound == pytest.approx(solved.objective)
+    assert solved.gap == 0.0
+
+
+@licensed
+def test_mosek_bounds_a_mixed_integer_optimum_by_its_dual_bound():
+    model = commitment.definition().build(commitment.data(scale=2))
+    solved = model.solve(solver="mosek")
+    assert solved.status == "optimal"
+    assert solved.feasible is True
+    assert np.isfinite(solved.bound)
+    assert solved.gap == pytest.approx(0.0, abs=1e-4)
+
+
+@licensed
+def test_mosek_reads_the_incumbent_it_holds_at_a_node_limit():
+    # Mosek branches once and reports the incumbent it found: objective
+    # 2949.13 under a bound of 2993.24
+    solved = knapsack(120, 10).solve(solver="mosek", options={"node_limit": 1})
+    assert solved.status == "node_limit"
+    assert solved.feasible is True
+    assert 0.0 < solved.objective < solved.bound
+    assert solved.gap > 0.0
+    assert solved.primal("x").to_dense().sum() >= 1.0
+
+
+@licensed
+def test_mosek_reports_no_bound_before_it_solves_a_relaxation():
+    # Mosek defines mio_obj_bound after it solves a relaxation and counts
+    # those in mio_num_relax, which is zero here; its mio_obj_bound of 0.0
+    # is not an upper bound on this maximisation
+    solved = knapsack(120, 10).solve(solver="mosek", options={"node_limit": 0})
+    assert solved.status == "node_limit"
+    assert solved.bound is None
+    assert solved.gap is None
+
+
+@licensed
+def test_mosek_reports_no_values_where_it_reaches_no_point():
+    # the zero vector misses every covering row, and Mosek reports the
+    # solution status it calls unknown
+    solved = covering().solve(solver="mosek", options={"node_limit": 0})
+    assert solved.status == "node_limit"
+    assert solved.feasible is False
+    assert solved.bound is None
+    assert solved.gap is None
+    assert repr(solved) == "Solution('node_limit', no values)"
+    with pytest.raises(ValueError, match="reports no feasible point"):
+        solved.primal("x")

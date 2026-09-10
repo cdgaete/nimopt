@@ -9,6 +9,7 @@ from nimopt.solvers import available, gurobi  # noqa: E402
 from nimopt.solvers.options import OPTIONS as VOCABULARY  # noqa: E402
 from test_session import dispatch as small  # noqa: E402
 from test_session import infeasible, odd, unbounded  # noqa: E402
+from test_solution_limit import knapsack  # noqa: E402
 
 # the size-limited licence builds and solves up to 2000 rows and 2000 columns,
 # so each corpus model is taken at the largest scale that fits under it
@@ -54,7 +55,7 @@ def test_gurobi_refuses_a_mixed_integer_models_duals_too():
     model = commitment.definition().build(commitment.data(scale=2))
     solved = model.solve(solver="gurobi")
     assert solved.status == "optimal"
-    with pytest.raises(ValueError, match="refuses duals"):
+    with pytest.raises(ValueError, match="reports no duals for it"):
         solved.dual("demand")
 
 
@@ -85,7 +86,7 @@ def test_each_adapter_returns_a_set_that_conflicts(solver):
     at = [row.index for row in found.conflict]
     assembled.row_lower[at] = -np.inf
     assembled.row_upper[at] = np.inf
-    assert highs.solve(assembled, m.sense)[0] == "optimal"
+    assert highs.solve(assembled, m.sense).status == "optimal"
 
 
 def test_gurobi_reaches_an_infeasibility_that_is_only_the_integrality():
@@ -180,3 +181,43 @@ def test_both_solvers_take_the_same_options_and_answer_the_same_model():
         answer = model.solve(solver=solver, options=PORTABLE)
         assert answer.status == "optimal", solver
         assert answer.objective == pytest.approx(expected, rel=1e-6), solver
+
+
+def test_gurobi_bounds_a_continuous_optimum_by_its_own_objective():
+    solved = small().solve(solver="gurobi")
+    assert solved.status == "optimal"
+    assert solved.feasible is True
+    assert solved.bound == pytest.approx(solved.objective)
+    assert solved.gap == 0.0
+
+
+def test_gurobi_bounds_a_mixed_integer_optimum_by_its_dual_bound():
+    model = commitment.definition().build(commitment.data(scale=2))
+    solved = model.solve(solver="gurobi")
+    assert solved.status == "optimal"
+    assert solved.feasible is True
+    assert np.isfinite(solved.bound)
+    assert solved.gap == pytest.approx(0.0, abs=1e-4)
+
+
+def test_gurobi_reads_the_incumbent_it_holds_at_a_node_limit():
+    # Gurobi explores no node and reports the incumbent its root heuristics
+    # found: objective 1707.88 under a bound of 2993.65
+    solved = knapsack(120, 10).solve(solver="gurobi", options={"node_limit": 0})
+    assert solved.status == "node_limit"
+    assert solved.feasible is True
+    assert 0.0 < solved.objective < solved.bound
+    assert solved.gap > 0.0
+    assert solved.primal("x").to_dense().sum() >= 1.0
+
+
+def test_gurobi_reports_no_values_where_it_reaches_no_point():
+    # a time limit of zero stops Gurobi with SolCount 0 and ObjBound infinite
+    solved = knapsack(120, 10).solve(solver="gurobi", options={"time_limit": 0.0})
+    assert solved.status == "time_limit"
+    assert solved.feasible is False
+    assert solved.bound is None
+    assert solved.gap is None
+    assert repr(solved) == "Solution('time_limit', no values)"
+    with pytest.raises(ValueError, match="reports no feasible point"):
+        solved.objective

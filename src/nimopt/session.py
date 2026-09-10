@@ -135,18 +135,19 @@ class Session:
 
     def solve(self) -> Solution:
         """Solve this session's matrix and read the answer back onto its sets."""
-        status, objective, col_value, row_dual, backend = self._adapter.solve(
-            self.assembled, self.model.sense, self.options
-        )
-        self._backend = backend
-        self._status = status
+        result = self._adapter.solve(self.assembled, self.model.sense, self.options)
+        self._backend = result.backend
+        self._status = result.status
         rows_of = {name: self.assembled.row_of(name) for name in self.model.constraints}
+        constant = self.model.objective_constant
         return Solution(
             self.model,
-            status,
-            objective + self.model.objective_constant,
-            col_value,
-            row_dual,
+            result.status,
+            result.feasible,
+            result.objective + constant,
+            None if result.bound is None else result.bound + constant,
+            result.col_value,
+            result.row_dual,
             rows_of,
             self.solver,
         )

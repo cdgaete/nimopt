@@ -29,7 +29,7 @@ import numpy.typing as npt
 if TYPE_CHECKING:
     from nimopt.model import Assembled
 
-from nimopt.solvers.base import Capabilities
+from nimopt.solvers.base import Capabilities, Result
 from nimopt.solvers.options import translated
 
 BACKEND = "mosek"
@@ -195,15 +195,35 @@ def _defined(mosek: Any, task: Any, integer: Any) -> Any:
     return None
 
 
+def _bound(
+    mosek: Any, task: Any, integer: bool, status: str, objective: float
+) -> float | None:
+    """Return the bound Mosek proved on the optimal objective, or None.
+
+    For a model with integer columns the bound is `mio_obj_bound`. Mosek
+    defines that item after it solves a relaxation, and `mio_num_relax` counts
+    the relaxations it solved. The bound is None at a count of zero and None
+    where Mosek reports an infinite value. For a model without integer columns
+    Mosek defines no dual bound. The bound is then the objective at status
+    `optimal` and None at any other status.
+    """
+    if not integer:
+        return objective if status == "optimal" else None
+    if task.getintinf(mosek.iinfitem.mio_num_relax) == 0:
+        return None
+    value = float(task.getdouinf(mosek.dinfitem.mio_obj_bound))
+    return value if np.isfinite(value) else None
+
+
 def solve(
     assembled: "Assembled", sense: str, options: Mapping[str, Any] | None = None
-) -> tuple[str, float, npt.NDArray[np.float64], npt.NDArray[np.float64] | None, Any]:
-    """Solve an assembled model, returning its status, its vectors and its model.
+) -> Result:
+    """Solve an assembled model and return its status, its values and its bound.
 
-    The task Mosek built is returned beside the answer, so a session holding
-    it can ask the same solved instance for a ray. A model carrying integer
-    columns is returned with no duals: Mosek defines none for an integer
-    solution, and this adapter refuses that pair.
+    The task Mosek built is returned in `Result.backend`. A session holding it
+    reads a ray from the same solved instance. A model with integer columns is
+    returned with no duals. Mosek defines none for an integer solution, and
+    this adapter does not report that pair.
     """
     import mosek
 
@@ -238,9 +258,11 @@ def solve(
     which = _defined(mosek, task, integer)
     if which is None:
         if reported in LIMITS:
-            return (
+            return Result(
                 LIMITS[reported],
+                False,
                 0.0,
+                _bound(mosek, task, integer, LIMITS[reported], 0.0),
                 np.zeros(assembled.n_cols, dtype=np.float64),
                 duals,
                 task,
@@ -265,12 +287,21 @@ def solve(
         )
     col_value = np.zeros(assembled.n_cols, dtype=np.float64)
     objective = 0.0
-    if solution in FEASIBLE:
+    feasible = solution in FEASIBLE
+    if feasible:
         objective = float(task.getprimalobj(which))
         task.getxx(which, col_value)
         if duals is not None:
             task.gety(which, duals)
-    return status, objective, col_value, duals, task
+    return Result(
+        status,
+        feasible,
+        objective,
+        _bound(mosek, task, integer, status, objective),
+        col_value,
+        duals,
+        task,
+    )
 
 
 def ray(backend: Any) -> npt.NDArray[np.float64] | None:

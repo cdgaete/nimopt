@@ -22,6 +22,19 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Changed
 
+- `Solution.objective` and `Solution.primal` return the point a solver reports
+  at a limit. They raise `ValueError` where the solver reports no feasible
+  point.
+- `Solution.feasible` reports whether the solver found a primal-feasible
+  point. `Solution.bound` is the bound on the optimal objective the solver
+  proved, or `None`. `Solution.gap` is the relative distance from the
+  objective to that bound, or `None`.
+- `Solution.dual` raises `ValueError` where `status` is not `optimal`.
+- `Solution.__repr__` reports the objective of a feasible point at any status,
+  and the gap beside it where the solver proved a bound.
+- Each solver adapter returns a `Result` from `solve`, with `status`,
+  `feasible`, `objective`, `bound`, `col_value`, `row_dual` and `backend`.
+  `Result` validates `feasible`, `objective` and `bound` against `status`.
 - The package supports Python 3.12, 3.13 and 3.14, and numpy from 2.3.
 
 ## 0.1.2 - 2026-09-09

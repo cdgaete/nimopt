@@ -51,9 +51,10 @@ The status is `optimal` and the objective value is 135.
 
 ## Status
 
-`status` reports the outcome of the solve and is always readable.
-`objective`, `primal` and `dual` are defined only for an optimal solve;
-reading one after any other status raises `ValueError`.
+`status` reports the outcome of the solve. `status` and `feasible` are
+readable after any solve. `objective` and `primal` raise `ValueError` where
+`feasible` is False. `dual` raises `ValueError` where `status` is not
+`optimal`.
 
 Raising Berlin's demand to 40 makes total demand 70 against total supply
 55, so the model is infeasible.
@@ -85,7 +86,7 @@ solution.objective
 
 ```text
 infeasible
-ValueError: the model's status is 'infeasible', so it carries no objective; read `status` before reading values
+ValueError: status is 'infeasible' and the solver reports no feasible point; read `status` before reading values
 ```
 
 </details>
@@ -94,6 +95,52 @@ ValueError: the model's status is 'infeasible', so it carries no objective; read
 For an infeasible model whose cause is not evident, `m.session()` keeps the
 solver instance open and `diagnose()` returns the conflicting rows. See
 [Solvers](/reference/solvers).
+
+## A solve stopped at a limit
+
+An option in `options()` stops the solver early. A solver stopped at a
+limit reports the best point it found, and `feasible` is True for it. Read
+`bound` for what the solver proved about the optimum and `gap` for the
+distance from the objective to that bound.
+
+```python
+import numpy as np
+from nimopt import Model, Param, Set, Sum
+
+rng = np.random.default_rng(1)
+ITEM = Set("item", np.array([f"i{t}" for t in range(40)]))
+BIN = Set("bin", np.array([f"b{t}" for t in range(5)]))
+weight = Param.from_dense("weight", (BIN, ITEM), rng.uniform(1, 50, (5, 40)))
+value = Param.from_dense("value", (ITEM,), rng.uniform(1, 100, 40))
+capacity = Param.from_dense("capacity", (BIN,), np.full(5, 306.0))
+
+m = Model("knapsack", sense="max")
+x = m.var("x", (ITEM,), integer=True, upper=1.0)
+m.eq("capacity", Sum(ITEM, weight[BIN, ITEM] * x[ITEM]) <= capacity[BIN])
+m.set_objective(Sum(ITEM, value[ITEM] * x[ITEM]))
+
+solution = m.solve(options={"node_limit": 1})
+print(solution.status, solution.feasible)
+print(f"objective {solution.objective:.1f}, bound {solution.bound:.1f}")
+print(f"gap {solution.gap:.2%}")
+```
+
+<!-- output -->
+<details open>
+<summary>Output</summary>
+
+```text
+solution_limit True
+objective 1035.5, bound 1045.1
+gap 0.92%
+```
+
+</details>
+<!-- /output -->
+
+The status names the limit the solver stopped at. HiGHS reports a stop at
+`node_limit` as `solution_limit`. `gap` is `None` where the solver proved
+no bound, and `feasible` is False where it found no point.
 
 ## The matrix
 

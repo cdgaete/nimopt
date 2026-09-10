@@ -27,11 +27,11 @@ def test_a_sense_the_adapter_does_not_know_is_refused():
 
 
 def test_each_sense_the_adapter_knows_solves_its_own_direction():
-    status, minimised, *_ = highs.solve(assembled_model(), "min")
-    assert status == "optimal"
-    status, maximised, *_ = highs.solve(assembled_model(), "max")
-    assert status == "optimal"
-    assert minimised < maximised
+    minimised = highs.solve(assembled_model(), "min")
+    assert minimised.status == "optimal"
+    maximised = highs.solve(assembled_model(), "max")
+    assert maximised.status == "optimal"
+    assert minimised.objective < maximised.objective
 
 
 def test_every_adapter_declares_a_backend_and_what_it_can_do():

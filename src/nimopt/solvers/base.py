@@ -1,32 +1,39 @@
-"""What crosses the boundary between a model and a solver.
+"""The interface between a model and a solver adapter.
 
-An adapter is a module, not a class: there is no base to inherit. The contract
-is what crosses the seam. Each adapter states
+An adapter is a module. There is no base class to inherit. Each adapter
+defines
 
     BACKEND       the import name of the library it drives
-    CAPABILITIES  a `Capabilities`, describing the adapter as shipped
+    CAPABILITIES  a `Capabilities` describing the adapter as shipped
 
-and answers
+and three functions
 
-    solve(assembled, sense, options=None)
-        -> (status, objective, col_value, row_dual, backend)
+    solve(assembled, sense, options=None) -> Result
     conflict(backend) -> (rows, columns)
     ray(backend) -> ndarray | None
 
-`status` is a member of `STATUS`. `row_dual` is `None` where the adapter
-refuses duals for the model it was given. `backend` is the adapter's own
-model, held by the session and handed back to the adapter that made it;
-nothing above the seam reads it. An adapter declaring neither a conflict nor a
-ray is never asked for one.
+An adapter that declares neither a conflict nor a ray is never called for one.
+
+`Result.status` is a member of `STATUS`. `Result.feasible` is True where the
+solver reports `col_value` as a primal-feasible point. Each adapter reads that
+flag from its solver. `Result.objective` is the objective value of `col_value`
+and is defined where `feasible` is True. `Result.bound` is the bound on the
+optimal objective the solver proved, a lower bound under sense `min` and an
+upper bound under sense `max`. `Result.bound` is None where the solver reports
+none. `Result.row_dual` is None for a model whose duals the adapter does not
+report. `Result.backend` is the adapter's own solver model. The session stores
+it and passes it back to the adapter that built it.
 
 A descriptor describes the adapter, not the library behind it. A solver
-feature the adapter does not call is `absent`, and claiming otherwise answers a
-different model's optimum. Support is three-valued in principle -- a
-reformulation is an answer rather than a missing implementation -- and is
-two-valued here because no adapter reformulates anything.
+feature the adapter does not call is `absent`. Support is two-valued here. No
+adapter reformulates a model.
 """
 
 from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
+import numpy.typing as npt
 
 STATUS = (
     "optimal",
@@ -48,6 +55,43 @@ STATUS = (
 CAPABILITIES = ("integrality", "duals", "conflict", "ray")
 
 SUPPORT = ("native", "absent")
+
+
+@dataclass(frozen=True)
+class Result:
+    """What one adapter returns from a solve.
+
+    `status` is a member of `STATUS`. `feasible` is True where the solver
+    reports `col_value` as a primal-feasible point. `objective` is the
+    objective value of `col_value`, and is finite where `feasible` is True.
+    `bound` is the bound on the optimal objective the solver proved, or None
+    where the solver reports none. `row_dual` is None for a model whose duals
+    the adapter does not report. `backend` is the solver's own model.
+    """
+
+    status: str
+    feasible: bool
+    objective: float
+    bound: float | None
+    col_value: npt.NDArray[np.float64]
+    row_dual: npt.NDArray[np.float64] | None
+    backend: Any
+
+    def __post_init__(self) -> None:
+        if self.status not in STATUS:
+            raise ValueError(f"the statuses are {STATUS}; got {self.status!r}")
+        if self.status == "optimal" and not self.feasible:
+            raise ValueError(
+                "status is 'optimal' and feasible is False; report a feasible "
+                "point at status 'optimal'"
+            )
+        if self.bound is not None and not np.isfinite(self.bound):
+            raise ValueError(f"bound is {self.bound}; pass a finite bound or pass None")
+        if self.feasible and not np.isfinite(self.objective):
+            raise ValueError(
+                f"feasible is True and objective is {self.objective}; pass the "
+                f"objective value of col_value"
+            )
 
 
 @dataclass(frozen=True)

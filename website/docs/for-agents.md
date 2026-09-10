@@ -88,8 +88,11 @@ expressions and `Sum` for a set's members.
 side is a parameter over exactly its free dimensions. The error message
 gives both.
 
-**Reading values from a model that did not solve.** `objective`, `primal`
-and `dual` raise unless `status` is `"optimal"`. Read `status` first.
+**Reading values from a model that did not solve.** `objective` and
+`primal` raise where `feasible` is False. `dual` raises where `status` is
+not `"optimal"`. A solve stopped at a limit reports `feasible` True where
+the solver found a point, with `bound` and `gap` beside it. Read `status`
+first.
 
 **A domain over a definition's sets.** `product((B, T))` needs each set's
 coordinate, and a declared set has none. In a definition, give `where=`,
@@ -174,8 +177,8 @@ message beside it.
 | `ValueError` | constraint 'cap' states no row at {'P': 'p3'}; `absent('cap')` names the rule that dropped it | [/reference/inspection](/reference/inspection) |
 | `ValueError` | parameter 'cost': label column 'P' has length 1 and the value column has length 2; they name the same entries | [/reference/param](/reference/param) |
 | `TypeError` | parameter 'price' carries ('G',) and states no coefficient until it is read; read it at its sets as price[G] | [/reference/param](/reference/param) |
-| `ValueError` | the model's status is 'infeasible', so it carries no objective; read `status` before reading values | [/reference/solution](/reference/solution) [/tutorial/solving](/tutorial/solving) |
-| `ValueError` | this model carries integer columns and 'highs' refuses duals for a model with integrality, so there is no dual for constraint 'cap' to read: a mixed-integer model's duals are not its relaxation's | [/reference/solvers](/reference/solvers) |
+| `ValueError` | status is 'infeasible' and the solver reports no feasible point; read `status` before reading values | [/reference/solution](/reference/solution) [/tutorial/solving](/tutorial/solving) |
+| `ValueError` | model 'm' has integer columns and 'highs' reports no duals for it; read primal values only | [/reference/solvers](/reference/solvers) |
 | `TypeError` | parameter 'supply' carries ('P',) and states no coefficient until it is read; read it at its sets as supply[P] | [/tutorial/constraints](/tutorial/constraints) |
 | `ValueError` | parameter 'cost' is over sets of shape (2, 3); got values of shape (2, 2) | [/tutorial/sets-and-parameters](/tutorial/sets-and-parameters) |
 <!-- /refusals -->

@@ -20,7 +20,7 @@ import numpy.typing as npt
 if TYPE_CHECKING:
     from nimopt.model import Assembled
 
-from nimopt.solvers.base import Capabilities
+from nimopt.solvers.base import Capabilities, Result
 from nimopt.solvers.options import translated
 
 BACKEND = "highspy"
@@ -127,15 +127,29 @@ def hipo_available() -> bool:
     return _PROBED["hipo"]
 
 
+def _bound(integer: bool, status: str, objective: float, info: Any) -> float | None:
+    """Return the bound HiGHS proved on the optimal objective, or None.
+
+    For a model with integer columns the bound is `mip_dual_bound`. It is None
+    where HiGHS reports an infinite value. For a model without integer columns
+    HiGHS defines no dual bound. The bound is then the objective at status
+    `optimal` and None at any other status.
+    """
+    if not integer:
+        return objective if status == "optimal" else None
+    value = float(info.mip_dual_bound)
+    return value if np.isfinite(value) else None
+
+
 def solve(
     assembled: "Assembled", sense: str, options: Mapping[str, Any] | None = None
-) -> tuple[str, float, npt.NDArray[np.float64], npt.NDArray[np.float64] | None, Any]:
-    """Solve an assembled model, returning its status, its vectors and its model.
+) -> Result:
+    """Solve an assembled model and return its status, its values and its bound.
 
-    The model HiGHS built is returned beside the answer, so a session holding
-    it can ask the same solved instance for a conflict or a ray. A model
-    carrying integer columns is returned with no duals: HiGHS reports the
-    relaxation's, and this adapter refuses that pair.
+    The model HiGHS built is returned in `Result.backend`. A session holding it
+    reads a conflict or a ray from the same solved instance. A model with
+    integer columns is returned with no duals. HiGHS reports the relaxation's
+    duals for one, and this adapter does not report that pair.
     """
     import highspy
 
@@ -214,14 +228,21 @@ def solve(
             f"does not read; nimopt names an outcome or refuses it"
         )
     solution = highs.getSolution()
+    integer = bool(assembled.integrality.any())
     duals = None
-    if not (
-        assembled.integrality.any() and CAPABILITIES.refuses("integrality", "duals")
-    ):
+    if not (integer and CAPABILITIES.refuses("integrality", "duals")):
         duals = np.asarray(solution.row_dual, dtype=np.float64)
-    return (
-        OUTCOME[reported],
-        float(highs.getInfo().objective_function_value),
+    info = highs.getInfo()
+    status = OUTCOME[reported]
+    objective = float(info.objective_function_value)
+    feasible = (
+        info.primal_solution_status == highspy.SolutionStatus.kSolutionStatusFeasible
+    )
+    return Result(
+        status,
+        feasible,
+        objective,
+        _bound(integer, status, objective, info),
         np.asarray(solution.col_value, dtype=np.float64),
         duals,
         highs,

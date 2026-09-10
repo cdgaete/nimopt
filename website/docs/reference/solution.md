@@ -13,14 +13,25 @@ they were declared over.
 | Member | Returns |
 | --- | --- |
 | `status` | the outcome the solver reported |
-| `objective` | the optimal objective value |
+| `feasible` | whether the solver reports a primal-feasible point |
+| `objective` | the objective value of that point |
+| `bound` | the bound on the optimal objective the solver proved, or `None` |
+| `gap` | the relative distance from the objective to the bound, or `None` |
 | `primal(name)` | the named variable's values over its own sets |
 | `dual(name)` | the named constraint's duals over its free sets |
 
-`status` is readable whatever the solver reported. `objective`, `primal`
-and `dual` are not: a model the solver did not bring to an optimum has no
-answer, and a vector it left behind would be indistinguishable from one.
-Read `status` first.
+`status` and `feasible` are readable whatever the solver reported.
+`objective` and `primal` raise `ValueError` where `feasible` is False. A
+solve stopped at a limit reports `feasible` True where the solver found a
+point, and those reads then return it. `dual` raises `ValueError` where
+`status` is not `optimal`. Read `status` first.
+
+`bound` is a lower bound on the optimal objective under sense `min` and an
+upper bound under sense `max`. It is `None` where the solver reports none.
+For a model without integer columns it is the objective at status `optimal`
+and `None` at any other status. `gap` is
+`abs(objective - bound) / abs(objective)`, and is `None` where `feasible`
+is False or `bound` is `None`.
 
 ```python
 import numpy as np
@@ -60,7 +71,7 @@ optimal
 </details>
 <!-- /output -->
 
-Reading a value from a model that did not reach an optimum raises
+Reading a value where the solver reports no feasible point raises
 `ValueError`; the message gives the status.
 
 ```python raises=ValueError
@@ -84,7 +95,7 @@ m.solve().objective
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: the model's status is 'infeasible', so it carries no objective; read `status` before reading values
+ValueError: status is 'infeasible' and the solver reports no feasible point; read `status` before reading values
 ```
 
 </details>

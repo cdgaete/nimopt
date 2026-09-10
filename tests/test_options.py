@@ -131,20 +131,20 @@ def test_a_choice_a_solver_lacks_is_refused_naming_what_it_takes():
 def test_the_interior_point_options_reach_highs():
     # HiGHS accepts the HiPO and PDLP settings whichever method runs, so a
     # solve carrying them reports the optimum the tiny model has
-    status, *_ = highs.solve(
+    result = highs.solve(
         tiny(),
         "min",
         {"newton_system": "augmented", "crossover": "off", "pdlp_tol": 1e-6},
     )
-    assert status == "optimal"
+    assert result.status == "optimal"
 
 
 def test_hipo_runs_where_highs_carries_it_and_is_refused_where_it_does_not():
     # the PyPI wheel lacks HiPO's extras library and would run simplex while
     # logging an error; a HiGHS built with the library runs HiPO
     if highs.hipo_available():
-        status, *_ = highs.solve(tiny(), "min", {"method": "hipo", "crossover": "off"})
-        assert status == "optimal"
+        result = highs.solve(tiny(), "min", {"method": "hipo", "crossover": "off"})
+        assert result.status == "optimal"
     else:
         with pytest.raises(RuntimeError, match="extras library"):
             highs.solve(tiny(), "min", {"method": "hipo"})
@@ -156,8 +156,8 @@ def test_an_option_highs_does_not_carry_is_refused():
 
 
 def test_an_option_highs_carries_reaches_it():
-    status, *_ = highs.solve(tiny(), "min", {"time_limit": 60.0, "presolve": "off"})
-    assert status == "optimal"
+    result = highs.solve(tiny(), "min", {"time_limit": 60.0, "presolve": "off"})
+    assert result.status == "optimal"
 
 
 def test_log_is_off_unless_a_caller_asks_and_reaches_the_solver_when_it_does(capfd):

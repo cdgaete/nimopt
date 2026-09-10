@@ -91,10 +91,10 @@ def measure(n_plants, n_warehouses, arcs_per_plant, solve=False, seed=0):
     }
     if solve:
         started = time.perf_counter()
-        status, objective, *_ = highs.solve(assembled, model.sense)
+        result = highs.solve(assembled, model.sense)
         got["solve_ms"] = (time.perf_counter() - started) * 1e3
-        got["status"] = status
-        got["objective"] = objective
+        got["status"] = result.status
+        got["objective"] = result.objective
     return got
 
 

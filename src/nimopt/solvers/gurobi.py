@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from nimopt.model import Assembled
 
 from nimopt.row import senses
-from nimopt.solvers.base import Capabilities
+from nimopt.solvers.base import Capabilities, Result
 from nimopt.solvers.options import translated
 
 BACKEND = "gurobipy"
@@ -130,15 +130,29 @@ def _named(statuses: Any, code: Any) -> str:
     return str(code)
 
 
+def _bound(model: Any, integer: bool, status: str, objective: float) -> float | None:
+    """Return the bound Gurobi proved on the optimal objective, or None.
+
+    For a model with integer columns the bound is `ObjBound`. It is None where
+    Gurobi reports an infinite value. For a model without integer columns
+    `ObjBound` is not a dual bound at every status. The bound is then the
+    objective at status `optimal` and None at any other status.
+    """
+    if not integer:
+        return objective if status == "optimal" else None
+    value = float(model.ObjBound)
+    return value if np.isfinite(value) else None
+
+
 def solve(
     assembled: "Assembled", sense: str, options: Mapping[str, Any] | None = None
-) -> tuple[str, float, npt.NDArray[np.float64], npt.NDArray[np.float64] | None, Any]:
-    """Solve an assembled model, returning its status, its vectors and its model.
+) -> Result:
+    """Solve an assembled model and return its status, its values and its bound.
 
-    The model Gurobi built is returned beside the answer, so a session holding
-    it can ask the same solved instance for a conflict or a ray. A model
-    carrying integer columns is returned with no duals: Gurobi refuses them
-    itself, and this adapter refuses that pair.
+    The model Gurobi built is returned in `Result.backend`. A session holding
+    it reads a conflict or a ray from the same solved instance. A model with
+    integer columns is returned with no duals. Gurobi defines none for one, and
+    this adapter does not report that pair.
     """
     import gurobipy as gp
     from gurobipy import GRB
@@ -179,22 +193,28 @@ def solve(
             f"does not read; nimopt names an outcome or refuses it"
         )
     integer = bool(assembled.integrality.any())
+    status = OUTCOME[reported]
     duals = None
     if not (integer and CAPABILITIES.refuses("integrality", "duals")):
         duals = np.zeros(assembled.n_rows, dtype=np.float64)
     if not model.SolCount:
-        return (
-            OUTCOME[reported],
+        return Result(
+            status,
+            False,
             0.0,
+            _bound(model, integer, status, 0.0),
             np.zeros(assembled.n_cols, dtype=np.float64),
             duals,
             model,
         )
     if duals is not None:
         duals = np.asarray(rows.Pi, dtype=np.float64)
-    return (
-        OUTCOME[reported],
-        float(model.ObjVal),
+    objective = float(model.ObjVal)
+    return Result(
+        status,
+        True,
+        objective,
+        _bound(model, integer, status, objective),
         np.asarray(columns.X, dtype=np.float64),
         duals,
         model,
