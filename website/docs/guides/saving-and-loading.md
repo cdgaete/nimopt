@@ -171,7 +171,7 @@ constraints:
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: 'max(gen[G, T]) <= 10': Sum is the one call the syntax supports
+ValueError: 'max(gen[G, T]) <= 10': the syntax supports one call; write Sum
 ```
 
 </details>

@@ -194,8 +194,8 @@ class Variable(Symbol):
         """Fill `target`, a view of one variable's columns, from `bound`.
 
         A bound over fewer dimensions than the variable is replicated over
-        the extent of the rest, transposed into the variable's own dimension
-        order, then scattered. A variable over a subset restricts the
+        the extent of the rest. It is then transposed into the variable's own
+        dimension order and scattered. A variable over a subset restricts the
         replicated array to its own members first.
         """
         if not isinstance(bound, Param):

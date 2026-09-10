@@ -133,8 +133,8 @@ def render(held: Any) -> str:
     """Return `held` as the text that reads back to it.
 
     `held` is a coefficient, an expression or a relation. The text is built
-    from the object, not from what was written: each term has its own sum,
-    sign and scale, a combination has its parentheses, and the constant comes
+    from the object, not from what was written. Each term has its own sum,
+    sign and scale. A combination has its parentheses. The constant comes
     last.
     """
     if isinstance(held, Relation):
@@ -184,24 +184,26 @@ class _Reader(ast.NodeVisitor):
 
     def generic_visit(self, node: ast.AST) -> NoReturn:
         self.reject(
-            f"{type(node).__name__} is not part of the syntax; the syntax is "
-            f"names, brackets, labels, Sum, + - * / **, a unary minus, .cyclic "
-            f"and one comparison"
+            f"{type(node).__name__} is not part of the syntax; write names, "
+            f"brackets, labels, Sum, + - * / **, a unary minus, .cyclic and "
+            f"one comparison"
         )
 
     def visit_Name(self, node: ast.Name) -> Any:
         if node.id == "Sum":
             return Sum
         if node.id not in self.symbols:
-            self.reject(f"{node.id!r} names no declared set, parameter or variable")
+            self.reject(
+                f"{node.id!r} is not a declared set, parameter or variable; "
+                f"declare it, or pass it in symbols"
+            )
         return self.symbols[node.id]
 
     def visit_Constant(self, node: ast.Constant) -> Any:
         value = node.value
         if isinstance(value, bool) or not isinstance(value, (int, float, str)):
             self.reject(
-                f"{value!r} is a {type(value).__name__}; a constant is a number "
-                f"or a label"
+                f"{value!r} is a {type(value).__name__}; write a number or a label"
             )
         return value
 
@@ -215,24 +217,31 @@ class _Reader(ast.NodeVisitor):
         held = self.visit(node.value)
         if node.attr != "cyclic" or not isinstance(held, (Set, Alias)):
             self.reject(
-                f".{node.attr} is not read; .cyclic on a set is the one attribute"
+                f".{node.attr} is not read; write .cyclic on a set, the one "
+                f"attribute the syntax supports"
             )
         return held.cyclic
 
     def visit_BinOp(self, node: ast.BinOp) -> Any:
         apply = _BINARY.get(type(node.op))
         if apply is None:
-            self.reject(f"{type(node.op).__name__} is not an operator of the syntax")
+            self.reject(
+                f"{type(node.op).__name__} is not an operator of the syntax; "
+                f"write + - * / or **"
+            )
         return apply(self.visit(node.left), self.visit(node.right))
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> Any:
         if not isinstance(node.op, ast.USub):
-            self.reject(f"{type(node.op).__name__} is not an operator of the syntax")
+            self.reject(
+                f"{type(node.op).__name__} is not an operator of the syntax; "
+                f"write a unary minus"
+            )
         return -self.visit(node.operand)
 
     def visit_Call(self, node: ast.Call) -> Any:
         if not (isinstance(node.func, ast.Name) and node.func.id == "Sum"):
-            self.reject("Sum is the one call the syntax supports")
+            self.reject("the syntax supports one call; write Sum")
         args = [self.visit(argument) for argument in node.args]
         held = {}
         for keyword in node.keywords:

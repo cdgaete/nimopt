@@ -134,8 +134,8 @@ def test_binding_gives_a_declared_parameter_its_values():
 
 
 def test_a_declared_parameter_refuses_wherever_its_values_are_read():
-    # a reader reaching the array behind materialise hands out None, which the
-    # caller meets as a TypeError naming NoneType rather than the parameter
+    # reading the array behind materialise would return None; the caller then
+    # gets a TypeError about NoneType instead of one about the parameter
     G = Set("G")
     p = Param("cost", (G,))
     with pytest.raises(ValueError, match="has no values"):

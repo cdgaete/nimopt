@@ -248,3 +248,17 @@ def test_a_variable_in_a_denominator_is_refused():
     for form in (lambda: 2.0 / gen, lambda: price[G, T] / gen, lambda: gen / gen):
         with pytest.raises(TypeError, match="linear"):
             form()
+    # the divisor is an expression, so the message names a variable
+    with pytest.raises(TypeError, match="by a variable: expressions are"):
+        gen / gen
+
+
+def test_a_divisor_that_is_not_a_number_is_named_by_its_type():
+    # a str is neither a number nor a Coefficient, and naming it a variable
+    # would describe the wrong mistake
+    G, T, _, _ = fleet()
+    gen = _gen(G, T)
+    with pytest.raises(TypeError, match="by a str; divide by a number"):
+        gen / "a"
+    with pytest.raises(TypeError, match="by a list; divide by a number"):
+        gen / [1, 2]

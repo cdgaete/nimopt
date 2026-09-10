@@ -89,13 +89,13 @@ class Param(Symbol):
         dims = tuple(s.name for s in sets)
         try:
             array = from_long(dims, coords_of(sets), columns, values)
-        except ValueError as refusal:
-            raise ValueError(f"parameter {name!r}: {refusal}") from None
+        except ValueError as error:
+            raise ValueError(f"parameter {name!r}: {error}") from None
         return cls(name, sets, array)
 
     @property
     def dims(self) -> tuple[str, ...]:
-        """The names of the sets this parameter is declared over."""
+        """Return the names of the sets this parameter is declared over."""
         return tuple(s.name for s in self.sets)
 
     def __getitem__(self, sets: Any) -> "ParamRef":
@@ -135,7 +135,7 @@ class Param(Symbol):
 
     @property
     def nnz(self) -> int:
-        """Number of coefficients this parameter contains."""
+        """Return the number of coefficients this parameter contains."""
         return self.materialise().nnz
 
     kind = "parameter"

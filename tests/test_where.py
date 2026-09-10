@@ -65,7 +65,7 @@ def test_a_constraint_condition_drops_the_rows_it_omits():
     m, P, W, x, one, cap, arcs = arcs_model()
     only_p1 = subset((P,), {"P": np.array(["p1"])})
     m.constraint("supply", Sum(W, one[P, W] * x[P, W]) <= cap[P], where=only_p1)
-    # p2's row is not stated, so its three coefficients are not either
+    # p2 has no row; its three coefficients are absent with it
     assert m.n_rows == 1
     assert m.nnz == 3
 
@@ -152,7 +152,7 @@ def shape(model):
 
 def test_rows_stated_as_sets_are_the_rows_the_product_states():
     # the full product, given as a domain and given as the sets it spans;
-    # the two spellings agree on rows and on nonzeros
+    # the two forms agree on rows and on nonzeros
     assert shape(network(lambda B, T: product((B, T)))) == (6, 4)
     assert shape(network(lambda B, T: (B, T))) == (6, 4)
 

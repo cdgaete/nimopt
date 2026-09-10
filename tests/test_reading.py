@@ -43,8 +43,8 @@ def test_the_reading_states_the_rows_the_bare_name_did():
 
 def test_a_reading_in_another_order_than_the_declaration_is_refused():
     _, P, W, x, d, _ = model()
-    refusal = r"declared over \('P', 'W'\); got \('W', 'P'\)"
-    with pytest.raises(ValueError, match=refusal):
+    message = r"declared over \('P', 'W'\); got \('W', 'P'\)"
+    with pytest.raises(ValueError, match=message):
         Sum(W, d[P, W] * x[P, W]) == d[W, P]
 
 
@@ -80,7 +80,7 @@ def test_a_coefficient_compared_with_a_coefficient_is_not_a_row():
 
 
 def scalars():
-    """A definition carrying a variable and a parameter over no dimension."""
+    """A definition with a variable and a parameter over no dimension."""
     d = Definition("scalar", sense="min")
     S = d.set("S")
     theta = d.var("theta", (), lower=-np.inf)

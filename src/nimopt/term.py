@@ -148,7 +148,7 @@ class Term:
         if self.where is not None:
             raise ValueError(
                 f"term {self.variable.name!r} already reads a condition over "
-                f"{_dims_of(self.where)}; a term takes one condition"
+                f"{_dims_of(self.where)}; restrict the term once"
             )
         given = _dims_of(domain)
         lacking = [d for d in given if d not in self.carried_dims]
@@ -174,12 +174,11 @@ class Term:
     ) -> SparseArray:
         """Return the term's coefficients over `(*frame, COLUMN)`.
 
-        The variable's columns have the value 1.0. The operations run in this
-        order: the fixed members are selected, the lag moves the columns onto
-        the rows that read them, the coefficient multiplies, the condition
-        restricts, the scale multiplies, and each summed dimension is
-        reduced. A frame wider than the term's own dimensions is filled by
-        replication.
+        The variable's columns have the value 1.0. The lag moves the columns
+        onto the rows that read them. The fixed members are selected. The
+        coefficient multiplies, the condition restricts and the scale
+        multiplies. Each summed dimension is reduced last. A frame wider than
+        the term's own dimensions is filled by replication.
         """
         array = self.variable.terms()
         for dim, (amount, mode) in self.shifts.items():
@@ -339,9 +338,14 @@ class Expression:
         if isinstance(other, Symbol):
             return NotImplemented
         if not isinstance(other, (int, float, np.number)):
+            if isinstance(other, (Expression, Term)):
+                raise TypeError(
+                    "cannot divide an expression by a variable: expressions "
+                    "are linear; divide by a number or a Coefficient"
+                )
             raise TypeError(
-                "cannot divide an expression by a variable: expressions are "
-                "linear; divide by a number or a Coefficient"
+                f"cannot divide an expression by a {type(other).__name__}; "
+                f"divide by a number or a Coefficient"
             )
         if float(other) == 0.0:
             raise ZeroDivisionError(
@@ -409,7 +413,7 @@ class Expression:
     __gt__ = _no_strict
 
     def sum(self, *args: Any, **kwargs: Any) -> Any:
-        """Raise TypeError for a reduction that names no set.
+        """Raise TypeError for a reduction that specifies no set.
 
         `numpy.sum` calls this method. Without it, `numpy.sum` returns the
         expression unchanged and reduces nothing.

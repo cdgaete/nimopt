@@ -90,8 +90,8 @@ class Coefficient:
     def __getitem__(self, sets: Any) -> Any:
         """Raise TypeError: a coefficient is read at its sets once."""
         raise TypeError(
-            f"coefficient {self.name} is already read at {self.dims}; a "
-            f"coefficient is read at its sets once"
+            f"coefficient {self.name} is already read at {self.dims}; read a "
+            f"coefficient at its sets once"
         )
 
     def _read(self, sets: Any, holder: Any) -> dict[str, Any]:
@@ -199,7 +199,7 @@ class Coefficient:
             return NotImplemented
         raise TypeError(
             f"coefficient {self.name} compared with {_rendered(other)} is not "
-            f"a row; an equation requires a variable on one side"
+            f"a row; put a variable on one side of the equation"
         )
 
     __le__ = _no_row

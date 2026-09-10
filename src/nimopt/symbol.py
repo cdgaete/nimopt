@@ -12,8 +12,8 @@ class Symbol:
     A symbol over no dimension requires no bracket. Its arithmetic and
     comparison operators delegate to the reading at the empty tuple. A symbol
     over one or more dimensions raises TypeError from every operator until it
-    is read. `kind` names the class of symbol. `expresses` names what a
-    reading of it produces. The error message contains both.
+    is read. `kind` identifies the class of symbol. `expresses` identifies
+    what a reading of it produces. The error message contains both.
     """
 
     kind: str | None = None
@@ -97,8 +97,8 @@ def read_bare(held: Any) -> Any:
     """Return a symbol over no dimension read at the empty tuple.
 
     Any other value is returned unchanged, including a symbol over one or
-    more dimensions. Such a symbol raises from its own operator, and the
-    message then names it.
+    more dimensions. Such a symbol raises from its own operator. The message
+    identifies it.
     """
     if isinstance(held, Symbol) and not held.dims:
         return held[()]

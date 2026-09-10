@@ -123,7 +123,7 @@ def resolve(
         stray = sorted(set(columns.tolist()) - resolved)
         raise ValueError(
             f"column {stray[0]} belongs to no variable of model "
-            f"{model.name!r}; the model numbers {model.n_columns} columns"
+            f"{model.name!r}; pass a column below {model.n_columns}"
         )
     return tuple(sorted(found, key=lambda held: held[1]))
 
@@ -182,6 +182,6 @@ def position_of(constraint: "Constraint", coords: Mapping[str, Any]) -> int:
     if at < 0:
         raise ValueError(
             f"constraint {constraint.name!r} has no row at {dict(coords)}; "
-            f"`absent({constraint.name!r})` names the rule that dropped it"
+            f"read `absent({constraint.name!r})` for the rule that dropped it"
         )
     return at

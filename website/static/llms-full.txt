@@ -147,7 +147,7 @@ message beside it.
 | `ValueError` | a lag is a whole number of members; got 1.7 | [/guides/lags](/guides/lags) |
 | `ValueError` | a sum is over the members of ['T'] and takes the set, not a lag of it; write the lag at the variable's reference | [/guides/lags](/guides/lags) [/reference/expression](/reference/expression) |
 | `ValueError` | parameter 'rate' is read at a lag ['T']; write the lag at the variable's reference | [/guides/lags](/guides/lags) |
-| `ValueError` | 'max(gen[G, T]) <= 10': Sum is the one call the syntax supports | [/guides/saving-and-loading](/guides/saving-and-loading) |
+| `ValueError` | 'max(gen[G, T]) <= 10': the syntax supports one call; write Sum | [/guides/saving-and-loading](/guides/saving-and-loading) |
 | `ValueError` | capital does not fall from base to what follows it | [/models/expansion](/models/expansion) |
 | `ValueError` | frames ('P',) and ('Q',) share no dimension; there is nothing to align them on | [/nimblend/arrays](/nimblend/arrays) |
 | `ValueError` | label column 't' has length 2 and the value column has length 1; they name the same entries | [/nimblend/arrays](/nimblend/arrays) |
@@ -168,7 +168,7 @@ message beside it.
 | `ValueError` | constraint 'cap' states where= with a domain that has no name; declare its members as a parameter and name that | [/reference/files](/reference/files) |
 | `ValueError` | parameter 'c' is given columns ['value', 'S']; a table states the dimensions then value: ['S', 'value'] | [/reference/files](/reference/files) |
 | `ValueError` | variable 'x' carries ['bound'], which the format does not; it takes ('sets', 'subset', 'lower', 'upper', 'integer') | [/reference/files](/reference/files) |
-| `ValueError` | constraint 'cap' has no row at {'P': 'p3'}; `absent('cap')` names the rule that dropped it | [/reference/inspection](/reference/inspection) |
+| `ValueError` | constraint 'cap' has no row at {'P': 'p3'}; read `absent('cap')` for the rule that dropped it | [/reference/inspection](/reference/inspection) |
 | `ValueError` | parameter 'cost': label column 'P' has length 1 and the value column has length 2; they name the same entries | [/reference/param](/reference/param) |
 | `TypeError` | parameter 'price' is over ('G',) and expresses no coefficient until it is read; read it at its sets as price[G] | [/reference/param](/reference/param) |
 | `ValueError` | status is 'infeasible' and the solver reports no feasible point; read `status` before reading values | [/reference/solution](/reference/solution) [/tutorial/solving](/tutorial/solving) |
@@ -1574,7 +1574,7 @@ m.row("cap", P="p3")
 Raises ValueError:
 
 ```text
-ValueError: constraint 'cap' has no row at {'P': 'p3'}; `absent('cap')` names the rule that dropped it
+ValueError: constraint 'cap' has no row at {'P': 'p3'}; read `absent('cap')` for the rule that dropped it
 ```
 
 ## `Absence`
@@ -5978,7 +5978,7 @@ constraints:
 Raises ValueError:
 
 ```text
-ValueError: 'max(gen[G, T]) <= 10': Sum is the one call the syntax supports
+ValueError: 'max(gen[G, T]) <= 10': the syntax supports one call; write Sum
 ```
 
 ## Data inline, for a model small enough to read

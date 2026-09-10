@@ -253,15 +253,15 @@ def test_a_chained_comparison_is_refused_by_the_reader():
 
 
 def test_a_name_outside_the_declarations_is_refused():
-    with pytest.raises(ValueError, match="'demand'.*names no declared"):
+    with pytest.raises(ValueError, match="'demand' is not a declared"):
         read("Sum(G, gen[G, T]) == demand", symbols(declared()))
 
 
 def test_a_call_other_than_sum_is_refused():
     held = symbols(declared())
-    with pytest.raises(ValueError, match="Sum is the one call"):
+    with pytest.raises(ValueError, match="one call; write Sum"):
         read("abs(gen[G, T])", held)
-    with pytest.raises(ValueError, match="Sum is the one call"):
+    with pytest.raises(ValueError, match="one call; write Sum"):
         read("max(gen[G, T], 1)", held)
     with pytest.raises(ValueError, match="where"):
         read("Sum(G, gen[G, T], over=live)", held)
@@ -290,7 +290,7 @@ def test_an_attribute_other_than_cyclic_is_refused():
         ("gen[G, T] <= None", "None"),
     ],
 )
-def test_a_construct_outside_the_spelling_is_refused_by_name(text, node):
+def test_a_construct_outside_the_syntax_is_refused_by_name(text, node):
     with pytest.raises(ValueError, match=node):
         read(text, symbols(declared()))
 
