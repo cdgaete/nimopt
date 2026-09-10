@@ -18,8 +18,8 @@ def test_a_capacity_column_is_bound_by_a_time_varying_availability():
     run = Param.from_dense("run", (G, T), np.ones((1, 2)))
     load = Param.from_dense("load", (T,), np.full(2, 100.0))
 
-    m.eq("cap_link", ones_gt[G, T] * gen[G, T] - avail[G, T] * cap[G] <= 0.0)
-    m.eq("balance", Sum(G, ones_gt[G, T] * gen[G, T]) == load[T])
+    m.constraint("cap_link", ones_gt[G, T] * gen[G, T] - avail[G, T] * cap[G] <= 0.0)
+    m.constraint("balance", Sum(G, ones_gt[G, T] * gen[G, T]) == load[T])
     m.set_objective(Sum(G, invest[G] * cap[G]) + Sum(G, T, run[G, T] * gen[G, T]))
 
     assembled = m.assemble()
@@ -60,7 +60,7 @@ def test_a_link_column_reaches_the_two_buses_it_joins():
     inc = Param.from_dense("inc", (B, L, T), grid)
     load = Param.from_dense("load", (B, T), np.array([[0.0, 0.0], [10.0, 10.0]]))
 
-    m.eq(
+    m.constraint(
         "balance",
         Sum(G, ones_bgt[B, G, T] * gen[B, G, T]) + Sum(L, inc[B, L, T] * flow[L, T])
         == load[B, T],

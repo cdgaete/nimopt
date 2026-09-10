@@ -49,7 +49,7 @@ T = Set("T", np.array(["t0", "t1", "t2"]))
 
 m = Model("schedule")
 x = m.var("x", (G, T))
-rows = m.eq("start", x[G, "t0"] <= 1.0)
+rows = m.constraint("start", x[G, "t0"] <= 1.0)
 
 print(rows.n_rows, rows.nnz)
 print(m.assemble().to_dense())
@@ -86,7 +86,7 @@ rate = Param.from_dense("rate", (G, T), np.array([[2.0, 4.0, 5.0], [3.0, 1.0, 6.
 
 m = Model("schedule")
 x = m.var("x", (G, T))
-rows = m.eq("start", rate[G, "t0"] * x[G, "t0"] <= 1.0)
+rows = m.constraint("start", rate[G, "t0"] * x[G, "t0"] <= 1.0)
 
 print(rate[G, "t0"].dims)
 print(m.assemble().to_dense())

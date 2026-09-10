@@ -18,7 +18,7 @@ objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
 | Member | Returns |
 | --- | --- |
 | `var(name, sets, subset=None, lower=0.0, upper=inf, integer=False)` | a `Variable` occupying the next range of columns |
-| `eq(name, relation, where=None, over=None)` | a `Constraint` occupying the next range of rows |
+| `constraint(name, relation, where=None, over=None)` | a `Constraint` occupying the next range of rows |
 | `set_objective(expression)` | nothing; sets the objective |
 | `sense` | `"min"` or `"max"`, as declared |
 | `solve(solver="highs", options=None)` | a `Solution` |
@@ -43,8 +43,8 @@ W = Set("W", np.array(["berlin", "paris", "rome"]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= 30.0)
-m.eq("total", Sum(P, W, x[P, W]) <= 100.0)
+m.constraint("supply", Sum(W, x[P, W]) <= 30.0)
+m.constraint("total", Sum(P, W, x[P, W]) <= 100.0)
 m.set_objective(Sum(P, W, x[P, W]))
 
 print(m.n_columns, m.n_rows, m.nnz)
@@ -87,7 +87,7 @@ W = Set("W", np.array(["berlin", "paris", "rome"]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= 30.0)
+m.constraint("supply", Sum(W, x[P, W]) <= 30.0)
 
 assembled = m.assemble()
 print(assembled.n_rows, assembled.n_cols)
@@ -136,7 +136,7 @@ supply = Param.from_dense("supply", (P,), np.array([30.0, 25.0]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, cost[P, W] * x[P, W]) <= supply[P])
+m.constraint("supply", Sum(W, cost[P, W] * x[P, W]) <= supply[P])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 print(m.explain())

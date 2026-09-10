@@ -46,9 +46,9 @@ def test_each_sense_is_read_from_the_bounds_the_row_carries():
     m = Model("m")
     x = m.var("x", (P,), upper=9.0)
     one = Param.from_dense("one", (P,), np.ones(1))
-    m.eq("le", one[P] * x[P] <= 4.0)
-    m.eq("ge", one[P] * x[P] >= 1.0)
-    m.eq("en", one[P] * x[P] == 2.0)
+    m.constraint("le", one[P] * x[P] <= 4.0)
+    m.constraint("ge", one[P] * x[P] >= 1.0)
+    m.constraint("en", one[P] * x[P] == 2.0)
     assert m.row("le", P="p1").sense == "<="
     assert m.row("ge", P="p1").sense == ">="
     assert m.row("en", P="p1").sense == "=="

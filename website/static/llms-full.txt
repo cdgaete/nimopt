@@ -21,7 +21,7 @@ crossed with the column space, so there is no assembly step: the array is
 the matrix.
 
 **A definition is a model without its data.** `Definition` mirrors the
-vocabulary a model is written in, `set`, `param`, `var`, `eq` and
+vocabulary a model is written in, `set`, `param`, `var`, `constraint` and
 `set_objective`, over symbols declared with no members and no values.
 `explain()` reports what it declares; `build(data)` binds a copy and returns
 a `Model`, so one definition builds as many models as it is given datasets.
@@ -227,8 +227,8 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 solution = m.solve()
@@ -261,8 +261,8 @@ supply = d.param("supply", (P,))
 demand = d.param("demand", (W,))
 x = d.var("x", (P, W))
 
-d.eq("supply", Sum(W, x[P, W]) <= supply[P])
-d.eq("demand", Sum(P, x[P, W]) >= demand[W])
+d.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+d.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 d.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 print(d.explain())
@@ -292,8 +292,8 @@ cost = d.param("cost", (P, W))
 supply = d.param("supply", (P,))
 demand = d.param("demand", (W,))
 x = d.var("x", (P, W))
-d.eq("supply", Sum(W, x[P, W]) <= supply[P])
-d.eq("demand", Sum(P, x[P, W]) >= demand[W])
+d.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+d.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 d.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 data = {
@@ -420,7 +420,7 @@ subject to  Σ_w x[p,w] ≤ s[p]        for each plant p
 ```
 
 In `nimopt`, the sets index every declaration, the parameters hold the data,
-`m.var` declares the decision variable, `m.eq` adds each constraint family
+`m.var` declares the decision variable, `m.constraint` adds each constraint family
 under a name, and `set_objective` sets the objective function.
 
 ```python
@@ -437,8 +437,8 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 solution = m.solve()
@@ -471,8 +471,8 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 solution = m.solve()
 
@@ -593,7 +593,7 @@ It selects that member and removes the set from the frame.
 
 **Relation.** An expression compared with `<=`, `>=` or `==` to a
 right-hand side. `Sum(W, x[P, W]) <= supply[P]` is a relation. It becomes
-of the model when passed to `m.eq`.
+of the model when passed to `m.constraint`.
 
 **Constraint.** A relation added to the model under a name. It produces one
 row per member of its expression's frame.
@@ -656,11 +656,11 @@ vocabulary. `build(data)` produces a `Model` for one dataset.
 
 ## `Constraint`
 
-Returned by `Model.eq`. Rows over an expression's frame, bounded by a
+Returned by `Model.constraint`. Rows over an expression's frame, bounded by a
 right-hand side.
 
 ```
-Model.eq(name, relation, where=None, over=None)
+Model.constraint(name, relation, where=None, over=None)
 ```
 
 | Argument | Meaning |
@@ -701,7 +701,7 @@ supply = Param.from_dense("supply", (P,), np.array([30.0, 25.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-rows = m.eq("supply", Sum(W, x[P, W]) <= supply[P])
+rows = m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
 print(rows.n_rows, rows.nnz)
 print(m.assemble().row_of("supply"))
 ```
@@ -729,7 +729,7 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-m.eq("supply", Sum(W, x[P, W]) <= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= demand[W])
 ```
 
 Raises ValueError:
@@ -765,7 +765,7 @@ beside it. `sense` is `"min"` or `"max"`, set once here.
 | `alias(name, base)` | a declared `Alias` over one of this definition's sets |
 | `param(name, sets)` | a declared `Param`, whose values arrive with the data |
 | `var(name, sets, subset=None, lower=0.0, upper=inf, integer=False)` | a declared `Variable` |
-| `eq(name, relation, where=None, over=None)` | nothing; registers the equation |
+| `constraint(name, relation, where=None, over=None)` | nothing; registers the constraint |
 | `build(data)` | a `Model` over the declarations, bound to `data` |
 | `explain()` | an `Explanation` of what is declared |
 | `to_yaml(instructions=False)` | the text of this definition's file, structure and no data; `instructions=True` adds the comment block that describes the format |
@@ -783,7 +783,7 @@ p_max = d.param("p_max", (generator,))
 load = d.param("load", (snapshot,))
 cost = d.param("cost", (generator,))
 p = d.var("p", (snapshot, generator), lower=0.0, upper=p_max)
-d.eq("balance", Sum(generator, p[snapshot, generator]) == load[snapshot])
+d.constraint("balance", Sum(generator, p[snapshot, generator]) == load[snapshot])
 d.set_objective(Sum(snapshot, generator, cost[generator] * p[snapshot, generator]))
 
 print(list(d.sets), list(d.parameters))
@@ -830,7 +830,7 @@ S = d.set("S")
 supply = d.param("supply", (S,))
 one = d.param("one", (S,))
 x = d.var("x", (S,))
-d.eq("supply", Sum(S, one[S] * x[S]) <= supply[S])
+d.constraint("supply", Sum(S, one[S] * x[S]) <= supply[S])
 
 print(list(d.parameters), list(d.constraints))
 ```
@@ -857,7 +857,7 @@ N = d.set("N")
 NP = d.alias("NP", N)
 limit = d.param("limit", (N, NP))
 flow = d.var("flow", (N, NP), lower=0.0)
-d.eq("cap", flow[N, NP] <= limit[N, NP])
+d.constraint("cap", flow[N, NP] <= limit[N, NP])
 d.set_objective(Sum(N, NP, limit[N, NP] * flow[N, NP]))
 
 m = d.build({"N": np.array(["a", "b"]), "limit": np.ones((2, 2))})
@@ -873,7 +873,7 @@ Output:
 ## Domains in a definition
 
 A `Domain` resolves labels through each set's coordinate, and a declared
-set has none. `where=` and `over=` on `eq`, and `subset=` on `var`,
+set has none. `where=` and `over=` on `constraint`, and `subset=` on `var`,
 therefore take a tuple of the definition's sets, meaning their full
 product, or one of its parameters, whose coefficients are the coordinates.
 Both forms resolve to the same domain, so a model and a definition declare
@@ -903,8 +903,8 @@ cost = d.param("cost", (P, W))
 supply = d.param("supply", (P,))
 demand = d.param("demand", (W,))
 flow = d.var("flow", (P, W), subset=cost, lower=0.0)
-d.eq("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
-d.eq("demand", Sum(P, cost[P, W] * flow[P, W]) >= demand[W])
+d.constraint("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
+d.constraint("demand", Sum(P, cost[P, W] * flow[P, W]) >= demand[W])
 d.set_objective(Sum(P, W, cost[P, W] * flow[P, W]))
 
 m = d.build(
@@ -1000,7 +1000,7 @@ P, W = d.set("P"), d.set("W")
 cost = d.param("cost", (P, W))
 supply = d.param("supply", (P,))
 flow = d.var("flow", (P, W), subset=cost, lower=0.0)
-d.eq("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
+d.constraint("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
 d.set_objective(Sum(P, W, cost[P, W] * flow[P, W]))
 
 e = d.explain()
@@ -1146,7 +1146,7 @@ ValueError: a sum is over the members of ['T'], so it takes the set and not a la
 ## `Relation`
 
 An expression, a sense and a right-hand side, produced by comparing an
-expression with `<=`, `>=` or `==`. `Model.eq` turns one into a
+expression with `<=`, `>=` or `==`. `Model.constraint` turns one into a
 constraint.
 
 ```python
@@ -1391,7 +1391,7 @@ d = Definition("d")
 S = d.set("S")
 c = d.param("c", (S,))
 x = d.var("x", (S,), integer=True)
-d.eq("cap", 2 * c[S] * x[S] - 1 <= 5)
+d.constraint("cap", 2 * c[S] * x[S] - 1 <= 5)
 text = d.to_yaml()
 print(text)
 print(loads(text).to_yaml() == text)
@@ -1481,7 +1481,7 @@ from nimopt import Model, Set, subset
 P = Set("P", np.array(["a", "b"]))
 m = Model("m")
 x = m.var("x", (P,))
-m.eq("cap", x[P] <= 1.0, where=subset((P,), {"P": np.array(["a"])}))
+m.constraint("cap", x[P] <= 1.0, where=subset((P,), {"P": np.array(["a"])}))
 m.to_yaml()
 ```
 
@@ -1536,7 +1536,7 @@ supply = Param.from_dense("supply", (P,), np.array([30.0, 25.0]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, cost[P, W] * x[P, W]) <= supply[P])
+m.constraint("supply", Sum(W, cost[P, W] * x[P, W]) <= supply[P])
 
 print(m.row("supply", P="porto"))
 ```
@@ -1560,7 +1560,7 @@ m = Model("m")
 x = m.var("x", (P,), upper=5.0)
 one = Param.from_dense("one", (P,), np.ones(3))
 rhs = Param.from_long("rhs", (P,), {"P": np.array(["p1", "p2"])}, np.ones(2))
-m.eq("cap", one[P] * x[P] <= rhs[P])
+m.constraint("cap", one[P] * x[P] <= rhs[P])
 
 m.row("cap", P="p3")
 ```
@@ -1619,7 +1619,7 @@ cost = Param.from_long(
     np.array([1.0, 2.0, 3.0]),
 )
 supply = Param.from_dense("supply", (P,), np.array([3.0, 3.0]))
-m.eq("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
+m.constraint("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
 
 print(m.absent("supply"))
 ```
@@ -1652,7 +1652,7 @@ objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
 | Member | Returns |
 | --- | --- |
 | `var(name, sets, subset=None, lower=0.0, upper=inf, integer=False)` | a `Variable` occupying the next range of columns |
-| `eq(name, relation, where=None, over=None)` | a `Constraint` occupying the next range of rows |
+| `constraint(name, relation, where=None, over=None)` | a `Constraint` occupying the next range of rows |
 | `set_objective(expression)` | nothing; sets the objective |
 | `sense` | `"min"` or `"max"`, as declared |
 | `solve(solver="highs", options=None)` | a `Solution` |
@@ -1677,8 +1677,8 @@ W = Set("W", np.array(["berlin", "paris", "rome"]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= 30.0)
-m.eq("total", Sum(P, W, x[P, W]) <= 100.0)
+m.constraint("supply", Sum(W, x[P, W]) <= 30.0)
+m.constraint("total", Sum(P, W, x[P, W]) <= 100.0)
 m.set_objective(Sum(P, W, x[P, W]))
 
 print(m.n_columns, m.n_rows, m.nnz)
@@ -1716,7 +1716,7 @@ W = Set("W", np.array(["berlin", "paris", "rome"]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= 30.0)
+m.constraint("supply", Sum(W, x[P, W]) <= 30.0)
 
 assembled = m.assemble()
 print(assembled.n_rows, assembled.n_cols)
@@ -1760,7 +1760,7 @@ supply = Param.from_dense("supply", (P,), np.array([30.0, 25.0]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, cost[P, W] * x[P, W]) <= supply[P])
+m.constraint("supply", Sum(W, cost[P, W] * x[P, W]) <= supply[P])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 print(m.explain())
@@ -2132,8 +2132,8 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 solution = m.solve()
 
@@ -2165,8 +2165,8 @@ W = Set("W", np.array(["berlin", "paris", "rome"]))
 
 m = Model("infeasible")
 x = m.var("x", (P, W))
-m.eq("floor", Sum(W, x[P, W]) >= 10.0)
-m.eq("ceiling", Sum(W, x[P, W]) <= 1.0)
+m.constraint("floor", Sum(W, x[P, W]) >= 10.0)
+m.constraint("ceiling", Sum(W, x[P, W]) <= 1.0)
 m.set_objective(Sum(P, W, x[P, W]))
 
 m.solve().objective
@@ -2254,7 +2254,7 @@ one = Param.from_dense("one", (T,), np.ones(2))
 
 m = Model("m")
 x = m.var("x", (T,), upper=3.0, integer=True)
-m.eq("cap", one[T] * x[T] <= 2.0)
+m.constraint("cap", one[T] * x[T] <= 2.0)
 m.set_objective(Sum(T, one[T] * x[T]))
 
 m.solve().dual("cap")
@@ -2296,7 +2296,7 @@ cost = Param.from_dense("cost", (GEN,), np.array([1.0, 5.0]))
 
 m = Model("dispatch", sense="min")
 p = m.var("p", (SNAP, GEN), lower=0.0, upper=p_max)
-m.eq("balance", Sum(GEN, p[SNAP, GEN]) == load[SNAP])
+m.constraint("balance", Sum(GEN, p[SNAP, GEN]) == load[SNAP])
 m.set_objective(Sum(SNAP, GEN, cost[GEN] * p[SNAP, GEN]))
 
 with m.session() as session:
@@ -2345,7 +2345,7 @@ cost = Param.from_dense("cost", (GEN,), np.array([1.0, 5.0]))
 
 m = Model("dispatch", sense="min")
 p = m.var("p", (SNAP, GEN), lower=0.0, upper=p_max)
-m.eq("balance", Sum(GEN, p[SNAP, GEN]) == load[SNAP])
+m.constraint("balance", Sum(GEN, p[SNAP, GEN]) == load[SNAP])
 m.set_objective(Sum(SNAP, GEN, cost[GEN] * p[SNAP, GEN]))
 
 with m.session() as session:
@@ -2552,7 +2552,7 @@ m = Model("cvar", sense="min")
 theta = m.var("theta", (), lower=-np.inf)
 p = m.var("p", (S,))
 
-m.eq("tail", theta - Sum(S, p[S]) >= 0.0)
+m.constraint("tail", theta - Sum(S, p[S]) >= 0.0)
 m.set_objective(theta)
 print(m.n_columns, m.n_rows)
 print(m.constraints["tail"].relation)
@@ -3518,7 +3518,7 @@ W = Set("W", np.array([f"w{i}" for i in range(100)]))
 m = Model("transport")
 x = m.var("x", (P, W))
 for i in range(20):
-    m.eq(f"cap{i}", Sum(W, x[P, W]) <= 1.0)
+    m.constraint(f"cap{i}", Sum(W, x[P, W]) <= 1.0)
 
 print(m.n_rows, m.nnz)
 ```
@@ -3563,7 +3563,7 @@ W = Set("W", np.array(["w0", "w1", "w2"]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= 1.0)
+m.constraint("supply", Sum(W, x[P, W]) <= 1.0)
 
 print(x.terms().dims)
 print(m.assemble().to_dense())
@@ -4291,7 +4291,7 @@ Relation <=
 
 ## Adding a constraint
 
-`m.eq(name, relation)` adds the relation to the model under a name and
+`m.constraint(name, relation)` adds the relation to the model under a name and
 returns the `Constraint`. The name identifies the constraint's rows in the
 matrix and its dual values in the solution. A constraint produces one row
 per member of its expression's frame.
@@ -4308,8 +4308,8 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-supply_rows = m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-demand_rows = m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+supply_rows = m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+demand_rows = m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 
 print(supply_rows.n_rows, supply_rows.nnz)
 print(demand_rows.n_rows, demand_rows.nnz)
@@ -4351,7 +4351,7 @@ supply = Param.from_dense("supply", (P,), np.array([30.0, 25.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-m.eq("supply", Sum(W, x[P, W]) <= supply)
+m.constraint("supply", Sum(W, x[P, W]) <= supply)
 ```
 
 Raises TypeError:
@@ -4371,7 +4371,7 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-m.eq("supply", Sum(W, x[P, W]) <= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= demand[W])
 ```
 
 Raises ValueError:
@@ -4434,8 +4434,8 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 solution = m.solve()
@@ -4474,8 +4474,8 @@ demand = Param.from_dense("demand", (W,), np.array([40.0, 15.0, 15.0]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 solution = m.solve()
@@ -4520,7 +4520,7 @@ capacity = Param.from_dense("capacity", (BIN,), np.full(5, 306.0))
 
 m = Model("knapsack", sense="max")
 x = m.var("x", (ITEM,), integer=True, upper=1.0)
-m.eq("capacity", Sum(ITEM, weight[BIN, ITEM] * x[ITEM]) <= capacity[BIN])
+m.constraint("capacity", Sum(ITEM, weight[BIN, ITEM] * x[ITEM]) <= capacity[BIN])
 m.set_objective(Sum(ITEM, value[ITEM] * x[ITEM]))
 
 solution = m.solve(options={"node_limit": 1})
@@ -4560,8 +4560,8 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 
 assembled = m.assemble()
 print(m.n_rows, m.n_columns, m.nnz)
@@ -4615,8 +4615,8 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 solution = m.solve()
 
@@ -4670,8 +4670,8 @@ routes = subset(
 
 m = Model("transport")
 x = m.var("x", (P, W), subset=routes)
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 solution = m.solve()
 
@@ -4719,8 +4719,8 @@ routes = subset(
 
 m = Model("transport")
 x = m.var("x", (P, W), subset=routes)
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 solution = m.solve()
 
@@ -4755,8 +4755,8 @@ routes = subset(
 
 m = Model("transport")
 x = m.var("x", (P, W), subset=routes)
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 solution = m.solve()
 
@@ -4806,8 +4806,8 @@ cost = Param.from_dense("cost", (P, W), np.ones((200, 100)))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= 1.0)
-m.eq("demand", Sum(P, x[P, W]) >= 1.0)
+m.constraint("supply", Sum(W, x[P, W]) <= 1.0)
+m.constraint("demand", Sum(P, x[P, W]) >= 1.0)
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 print(m.n_columns)
@@ -4844,8 +4844,8 @@ W = Set("W", np.array([f"w{i}" for i in range(100)]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= 1.0)
-m.eq("demand", Sum(P, x[P, W]) >= 1.0)
+m.constraint("supply", Sum(W, x[P, W]) <= 1.0)
+m.constraint("demand", Sum(P, x[P, W]) >= 1.0)
 
 assembled = m.assemble()
 print(assembled.n_rows, assembled.n_cols)
@@ -5038,7 +5038,7 @@ unit_cost = price[G, T] / eta[G, T]
 
 m = Model("dispatch", sense="min")
 gen = m.var("gen", (G, T), lower=0.0, upper=cap)
-m.eq("balance", Sum(G, gen[G, T]) == load[T])
+m.constraint("balance", Sum(G, gen[G, T]) == load[T])
 m.set_objective(Sum(G, T, unit_cost[G, T] * gen[G, T]))
 
 print(unit_cost.name, unit_cost.dims)
@@ -5154,7 +5154,7 @@ one = Param.from_dense("one", (P,), np.ones(1))
 
 m = Model("m", sense="max")
 x = m.var("x", (P,), upper=100.0)
-m.eq("cap", one[P] * x[P] + 1.0 <= 5.0)
+m.constraint("cap", one[P] * x[P] + 1.0 <= 5.0)
 m.set_objective(Sum(P, one[P] * x[P]) + 7.0)
 
 print(m.assemble().n_cols, m.assemble().row_upper)
@@ -5247,7 +5247,7 @@ arcs = subset(
 
 m = Model("network")
 x = m.var("x", (P, W))
-rows = m.eq("capacity", Sum(W, x[P, W], where=arcs) <= 10.0)
+rows = m.constraint("capacity", Sum(W, x[P, W], where=arcs) <= 10.0)
 
 print(x.n_columns)
 print(rows.n_rows, rows.nnz)
@@ -5271,7 +5271,7 @@ model never uses the other members.
 
 ## Restricting the rows
 
-`m.eq(..., where=domain)` takes a domain over the constraint's frame and
+`m.constraint(..., where=domain)` takes a domain over the constraint's frame and
 keeps the rows in it. A row outside the condition is not produced.
 
 ```python
@@ -5284,7 +5284,7 @@ W = Set("W", np.array(["w0", "w1", "w2"]))
 m = Model("network")
 x = m.var("x", (P, W))
 only_p0 = subset((P,), {"P": np.array(["p0"])})
-rows = m.eq("capacity", Sum(W, x[P, W]) <= 10.0, where=only_p0)
+rows = m.constraint("capacity", Sum(W, x[P, W]) <= 10.0, where=only_p0)
 
 print(rows.n_rows)
 print(m.assemble().to_dense())
@@ -5313,7 +5313,7 @@ m = Model("network")
 x = m.var("x", (P, W))
 by_warehouse = subset((W,), {"W": np.array(["w0"])})
 
-m.eq("capacity", Sum(W, x[P, W]) <= 10.0, where=by_warehouse)
+m.constraint("capacity", Sum(W, x[P, W]) <= 10.0, where=by_warehouse)
 ```
 
 Raises ValueError:
@@ -5342,7 +5342,7 @@ W = Set("W", np.array(["w0", "w1", "w2"]))
 
 m = Model("network")
 x = m.var("x", (P, W))
-rows = m.eq("capacity", Sum(W, x[P, W]) <= 10.0, over=product((P,)))
+rows = m.constraint("capacity", Sum(W, x[P, W]) <= 10.0, over=product((P,)))
 
 print(rows.n_rows)
 ```
@@ -5368,7 +5368,7 @@ W = Set("W", np.array(["w0", "w1", "w2"]))
 m = Model("network")
 x = m.var("x", (P, W))
 
-m.eq(
+m.constraint(
     "capacity",
     Sum(W, x[P, W]) <= 10.0,
     where=subset((P,), {"P": np.array(["p0"])}),
@@ -5430,7 +5430,7 @@ T = Set("T", np.array(["t0", "t1", "t2"]))
 
 m = Model("schedule")
 x = m.var("x", (G, T))
-rows = m.eq("start", x[G, "t0"] <= 1.0)
+rows = m.constraint("start", x[G, "t0"] <= 1.0)
 
 print(rows.n_rows, rows.nnz)
 print(m.assemble().to_dense())
@@ -5462,7 +5462,7 @@ rate = Param.from_dense("rate", (G, T), np.array([[2.0, 4.0, 5.0], [3.0, 1.0, 6.
 
 m = Model("schedule")
 x = m.var("x", (G, T))
-rows = m.eq("start", rate[G, "t0"] * x[G, "t0"] <= 1.0)
+rows = m.constraint("start", rate[G, "t0"] * x[G, "t0"] <= 1.0)
 
 print(rate[G, "t0"].dims)
 print(m.assemble().to_dense())
@@ -5701,7 +5701,7 @@ T = Set("T", np.array(["t0", "t1", "t2"]))
 
 m = Model("schedule")
 x = m.var("x", (T,))
-rows = m.eq("carry", x[T] - x[T - 1] <= 0.0)
+rows = m.constraint("carry", x[T] - x[T - 1] <= 0.0)
 
 print(rows.n_rows, rows.nnz)
 print(m.assemble().to_dense())
@@ -5733,7 +5733,7 @@ T = Set("T", np.array(["t0", "t1", "t2"]))
 
 m = Model("schedule")
 x = m.var("x", (T,))
-rows = m.eq("carry", x[T] - x[T.cyclic - 1] <= 0.0)
+rows = m.constraint("carry", x[T] - x[T.cyclic - 1] <= 0.0)
 
 print(rows.n_rows, rows.nnz)
 print(m.assemble().to_dense())
@@ -5836,7 +5836,7 @@ G, T = d.set("G"), d.set("T")
 price, eta = d.param("price", (G, T)), d.param("eta", (G, T))
 cap, load = d.param("cap", (G, T)), d.param("load", (T,))
 gen = d.var("gen", (G, T), upper=cap)
-d.eq("balance", Sum(G, gen[G, T]) == load[T])
+d.constraint("balance", Sum(G, gen[G, T]) == load[T])
 d.set_objective(Sum(G, T, 2 * (price[G, T] / eta[G, T]) * gen[G, T]))
 
 print(d.to_yaml())
@@ -6072,7 +6072,7 @@ from nimopt import Definition, loads
 d = Definition("dispatch", sense="min")
 T = d.set("T")
 load, gen = d.param("load", (T,)), d.var("gen", (T,))
-d.eq("balance", gen[T] == load[T])
+d.constraint("balance", gen[T] == load[T])
 text = d.to_yaml(instructions=True)
 print("\n".join(text.splitlines()[:5]))
 print(loads(text).to_yaml() == d.to_yaml())
@@ -6194,7 +6194,7 @@ arcs = subset(
 
 m = Model("network")
 x = m.var("x", (P, W), subset=arcs)
-rows = m.eq("capacity", Sum(W, x[P, W]) <= 10.0)
+rows = m.constraint("capacity", Sum(W, x[P, W]) <= 10.0)
 
 print(rows.n_rows, rows.nnz)
 print(m.assemble().to_dense())

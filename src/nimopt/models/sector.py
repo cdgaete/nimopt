@@ -37,7 +37,7 @@ def definition() -> Definition:
     cost = d.param("cost", (R, K))
     demand = d.param("demand", (R, T))
     gen = d.var("gen", (R, K, T), subset=sited, lower=0.0, upper=capacity)
-    d.eq("balance", Sum(K, gen[R, K, T]) == demand[R, T])
+    d.constraint("balance", Sum(K, gen[R, K, T]) == demand[R, T])
     d.set_objective(Sum(R, K, T, cost[R, K] * gen[R, K, T]))
     return d
 

@@ -59,7 +59,7 @@ d = Definition("d")
 S = d.set("S")
 c = d.param("c", (S,))
 x = d.var("x", (S,), integer=True)
-d.eq("cap", 2 * c[S] * x[S] - 1 <= 5)
+d.constraint("cap", 2 * c[S] * x[S] - 1 <= 5)
 text = d.to_yaml()
 print(text)
 print(loads(text).to_yaml() == text)
@@ -164,7 +164,7 @@ from nimopt import Model, Set, subset
 P = Set("P", np.array(["a", "b"]))
 m = Model("m")
 x = m.var("x", (P,))
-m.eq("cap", x[P] <= 1.0, where=subset((P,), {"P": np.array(["a"])}))
+m.constraint("cap", x[P] <= 1.0, where=subset((P,), {"P": np.array(["a"])}))
 m.to_yaml()
 ```
 

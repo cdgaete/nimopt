@@ -34,7 +34,7 @@ def definition() -> Definition:
     load = d.param("load", (snapshot,))
     cost = d.param("cost", (generator,))
     p = d.var("p", (snapshot, generator), lower=0.0, upper=p_max)
-    d.eq("balance", Sum(generator, p[snapshot, generator]) == load[snapshot])
+    d.constraint("balance", Sum(generator, p[snapshot, generator]) == load[snapshot])
     d.set_objective(Sum(snapshot, generator, cost[generator] * p[snapshot, generator]))
     return d
 

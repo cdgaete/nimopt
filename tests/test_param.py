@@ -91,7 +91,7 @@ def test_a_solved_models_values_become_another_models_coefficients():
     )
     one = Param.from_dense("one", (T,), np.ones(3))
     rhs = Param.from_dense("rhs", (T,), np.array([1.0, 2.0, 3.0]))
-    m.eq("c", one[T] * x[T] >= rhs[T])
+    m.constraint("c", one[T] * x[T] >= rhs[T])
     m.set_objective(Sum(T, one[T] * x[T]))
     solved = m.solve()
 

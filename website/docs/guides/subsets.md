@@ -112,7 +112,7 @@ arcs = subset(
 
 m = Model("network")
 x = m.var("x", (P, W), subset=arcs)
-rows = m.eq("capacity", Sum(W, x[P, W]) <= 10.0)
+rows = m.constraint("capacity", Sum(W, x[P, W]) <= 10.0)
 
 print(rows.n_rows, rows.nnz)
 print(m.assemble().to_dense())

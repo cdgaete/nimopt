@@ -323,7 +323,7 @@ def test_nothing_a_caller_reads_carries_a_backends_type():
     one = Param.from_dense("one", (T,), np.ones(2))
     m = Model("m")
     x = m.var("x", (T,), upper=1.0)
-    m.eq("floor", one[T] * x[T] >= 4.0)
+    m.constraint("floor", one[T] * x[T] >= 4.0)
     m.set_objective(Sum(T, one[T] * x[T]))
     with m.session() as session:
         answer = session.solve()

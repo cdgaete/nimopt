@@ -36,6 +36,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   `feasible`, `objective`, `bound`, `col_value`, `row_dual` and `backend`.
   `Result` validates `feasible`, `objective` and `bound` against `status`.
 - The package supports Python 3.12, 3.13 and 3.14, and numpy from 2.3.
+- `Model.constraint` and `Definition.constraint` replace the method `eq`;
+  every relation goes through them.
 
 ## 0.1.2 - 2026-09-09
 

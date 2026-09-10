@@ -29,7 +29,7 @@ def test_a_row_no_term_reaches_is_dropped_and_says_so():
         np.array([1.0, -1.0, 1.0, -1.0]),
     )
     zero = Param.from_dense("zero", (B, T), np.zeros((2, 3)))
-    m.eq("balance", Sum(L, inc[B, L, T] * flow[L, T]) == zero[B, T])
+    m.constraint("balance", Sum(L, inc[B, L, T] * flow[L, T]) == zero[B, T])
     a = m.absent("balance")
     assert isinstance(a, Absence)
     assert a.stated_by == "terms"
@@ -46,7 +46,9 @@ def test_a_row_a_condition_omits_is_dropped_and_says_so():
     m = Model("m")
     x = m.var("x", (P,), upper=5.0)
     one = Param.from_dense("one", (P,), np.ones(3))
-    m.eq("cap", one[P] * x[P] <= 1.0, where=subset((P,), {"P": np.array(["p1", "p3"])}))
+    m.constraint(
+        "cap", one[P] * x[P] <= 1.0, where=subset((P,), {"P": np.array(["p1", "p3"])})
+    )
     a = m.absent("cap")
     assert (a.expected, a.standing) == (3, 2)
     assert dropped_by(a, "where") == [{"P": "p2"}]
@@ -58,7 +60,7 @@ def test_a_row_the_right_hand_side_misses_is_dropped_and_says_so():
     x = m.var("x", (P,), upper=5.0)
     one = Param.from_dense("one", (P,), np.ones(3))
     rhs = Param.from_long("rhs", (P,), {"P": np.array(["p1", "p2"])}, np.ones(2))
-    m.eq("cap", one[P] * x[P] <= rhs[P])
+    m.constraint("cap", one[P] * x[P] <= rhs[P])
     a = m.absent("cap")
     assert (a.expected, a.standing) == (3, 2)
     assert dropped_by(a, "absent-rhs") == [{"P": "p3"}]
@@ -78,7 +80,7 @@ def test_a_coefficient_absent_inside_a_sum_drops_a_term_not_a_row():
         np.array([1.0, 2.0, 3.0]),
     )
     supply = Param.from_dense("supply", (P,), np.array([3.0, 3.0]))
-    m.eq("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
+    m.constraint("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
     a = m.absent("supply")
     assert (a.expected, a.standing) == (2, 2)
     assert a.dropped_rows == ()
@@ -116,7 +118,7 @@ def test_every_dropped_row_is_accounted_for_by_exactly_one_rule():
     x = m.var("x", (P,), upper=5.0)
     one = Param.from_dense("one", (P,), np.ones(4))
     rhs = Param.from_long("rhs", (P,), {"P": np.array(["p1", "p2", "p3"])}, np.ones(3))
-    m.eq(
+    m.constraint(
         "cap",
         one[P] * x[P] <= rhs[P],
         where=subset((P,), {"P": np.array(["p1", "p3", "p4"])}),
@@ -134,7 +136,7 @@ def test_a_constraint_that_drops_nothing_says_so_without_an_empty_rule():
     m = Model("m")
     x = m.var("x", (P,), upper=5.0)
     one = Param.from_dense("one", (P,), np.ones(2))
-    m.eq("cap", one[P] * x[P] <= 1.0)
+    m.constraint("cap", one[P] * x[P] <= 1.0)
     a = m.absent("cap")
     assert (a.expected, a.standing) == (2, 2)
     assert a.dropped_rows == ()
@@ -167,22 +169,22 @@ def every_absence():
     reaches = Model("reaches")
     y = reaches.var("y", (P,), upper=5.0)
     sparse = Param.from_long("sparse", (P,), {"P": np.array(["p1", "p2"])}, np.ones(2))
-    reaches.eq("rows", sparse[P] * y[P] <= 1.0)
+    reaches.constraint("rows", sparse[P] * y[P] <= 1.0)
 
     condition = Model("condition")
     c = condition.var("x", (P,), upper=5.0)
-    condition.eq(
+    condition.constraint(
         "rows", one[P] * c[P] <= 1.0, where=subset((P,), {"P": np.array(["p1"])})
     )
 
     rhs = Model("rhs")
     r = rhs.var("x", (P,), upper=5.0)
     cap = Param.from_long("cap", (P,), {"P": np.array(["p1"])}, np.ones(1))
-    rhs.eq("rows", one[P] * r[P] <= cap[P])
+    rhs.constraint("rows", one[P] * r[P] <= cap[P])
 
     stated = Model("stated")
     s = stated.var("x", (P,), upper=5.0)
-    stated.eq("rows", one[P] * s[P] <= 1.0, over=product((P,)))
+    stated.constraint("rows", one[P] * s[P] <= 1.0, over=product((P,)))
 
     W = Set("W", np.array(["w1", "w2"]))
     summed = Model("summed")
@@ -193,7 +195,7 @@ def every_absence():
         {"P": np.array(["p1", "p2", "p3"]), "W": np.array(["w1", "w1", "w1"])},
         np.ones(3),
     )
-    summed.eq("rows", Sum(W, arcs[P, W] * f[P, W]) <= 1.0)
+    summed.constraint("rows", Sum(W, arcs[P, W] * f[P, W]) <= 1.0)
 
     return [m.absent("rows") for m in (reaches, condition, rhs, stated, summed)]
 

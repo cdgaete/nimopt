@@ -138,7 +138,7 @@ def _two_bus_model():
 def test_rows_derived_from_the_terms_drop_a_bus_a_term_misses():
     m, B, T, expression, _ = _two_bus_model()
     load = Param.from_dense("load", (B, T), np.zeros((2, 2)))
-    constraint = m.eq("balance", expression == load[B, T])
+    constraint = m.constraint("balance", expression == load[B, T])
     # the link reaches both buses but the generator reaches b0 only, so the
     # intersection keeps b0's two hours and drops b1 entirely
     assert constraint.n_rows == 2
@@ -147,7 +147,7 @@ def test_rows_derived_from_the_terms_drop_a_bus_a_term_misses():
 def test_a_stated_row_domain_carries_every_bus():
     m, B, T, expression, _ = _two_bus_model()
     load = Param.from_dense("load", (B, T), np.zeros((2, 2)))
-    constraint = m.eq("balance", expression == load[B, T], over=product((B, T)))
+    constraint = m.constraint("balance", expression == load[B, T], over=product((B, T)))
     assert constraint.n_rows == 4
     # the generator's two entries and the link's four
     assert constraint.nnz == 6
@@ -158,14 +158,14 @@ def test_stating_rows_and_narrowing_them_together_is_refused():
     load = Param.from_dense("load", (B, T), np.zeros((2, 2)))
     rows = product((B, T))
     with pytest.raises(ValueError, match="state one"):
-        m.eq("balance", expression == load[B, T], where=rows, over=rows)
+        m.constraint("balance", expression == load[B, T], where=rows, over=rows)
 
 
 def test_a_stated_row_domain_over_other_dimensions_is_refused():
     m, B, T, expression, _ = _two_bus_model()
     load = Param.from_dense("load", (B, T), np.zeros((2, 2)))
     with pytest.raises(ValueError, match="free dimensions"):
-        m.eq("balance", expression == load[B, T], over=product((T,)))
+        m.constraint("balance", expression == load[B, T], over=product((T,)))
 
 
 def test_a_right_hand_side_missing_a_stated_row_is_refused():
@@ -178,7 +178,7 @@ def test_a_right_hand_side_missing_a_stated_row_is_refused():
         np.zeros(2),
     )
     with pytest.raises(ValueError, match="covers every row"):
-        m.eq("balance", expression == partial[B, T], over=product((B, T)))
+        m.constraint("balance", expression == partial[B, T], over=product((B, T)))
 
 
 def test_a_constraint_keeps_the_row_domain_it_was_given():
@@ -189,8 +189,8 @@ def test_a_constraint_keeps_the_row_domain_it_was_given():
     x = m.var("x", (P,), upper=5.0)
     one = Param.from_dense("one", (P,), np.ones(3))
     keep = subset((P,), {"P": np.array(["p1", "p3"])})
-    narrowed = m.eq("cap", one[P] * x[P] <= 1.0, where=keep)
-    stated = m.eq("all", one[P] * x[P] <= 1.0, over=product((P,)))
+    narrowed = m.constraint("cap", one[P] * x[P] <= 1.0, where=keep)
+    stated = m.constraint("all", one[P] * x[P] <= 1.0, over=product((P,)))
     assert narrowed.where is keep
     assert narrowed.over is None
     assert stated.over is not None
@@ -207,7 +207,7 @@ def test_a_constraint_narrows_to_the_same_shape_when_it_is_re_run():
     x = m.var("x", (P,), upper=5.0)
     one = Param.from_dense("one", (P,), np.ones(3))
     rhs = Param.from_long("rhs", (P,), {"P": np.array(["p1", "p2"])}, np.ones(2))
-    c = m.eq("cap", one[P] * x[P] <= rhs[P])
+    c = m.constraint("cap", one[P] * x[P] <= rhs[P])
     rows, values, nnz = narrow(c)
     assert rows.size == c.n_rows
     assert nnz == c.nnz

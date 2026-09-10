@@ -13,7 +13,7 @@ def dispatch(load=(25.0, 20.0, 5.0)):
     cost = Param.from_dense("cost", (GEN,), np.array([1.0, 5.0]))
     m = Model("dispatch", sense="min")
     p = m.var("p", (SNAP, GEN), lower=0.0, upper=p_max)
-    m.eq("balance", Sum(GEN, p[SNAP, GEN]) == want[SNAP])
+    m.constraint("balance", Sum(GEN, p[SNAP, GEN]) == want[SNAP])
     m.set_objective(Sum(SNAP, GEN, cost[GEN] * p[SNAP, GEN]))
     return m
 
@@ -30,7 +30,7 @@ def unbounded():
     price = Param.from_dense("price", (T,), np.array([-1.0, -1.0]))
     m = Model("unbounded", sense="min")
     x = m.var("x", (T,), lower=0.0, upper=np.inf)
-    m.eq("floor", one[T] * x[T] >= 1.0)
+    m.constraint("floor", one[T] * x[T] >= 1.0)
     m.set_objective(Sum(T, price[T] * x[T]))
     return m
 
@@ -42,7 +42,7 @@ def odd():
     one = Param.from_dense("one", (T,), np.ones(1))
     m = Model("odd", sense="min")
     x = m.var("x", (T,), lower=0.0, upper=10.0, integer=True)
-    m.eq("odd", two[T] * x[T] == 5.0)
+    m.constraint("odd", two[T] * x[T] == 5.0)
     m.set_objective(Sum(T, one[T] * x[T]))
     return m
 
@@ -109,7 +109,7 @@ def test_a_mixed_integer_model_has_no_duals_to_read():
     T = Set("T", np.arange(2))
     one = Param.from_dense("one", (T,), np.ones(2))
     x = m.var("x", (T,), upper=3.0, integer=True)
-    m.eq("cap", one[T] * x[T] <= 2.0)
+    m.constraint("cap", one[T] * x[T] <= 2.0)
     m.set_objective(Sum(T, one[T] * x[T]))
     solved = m.solve()
     assert solved.status == "optimal"

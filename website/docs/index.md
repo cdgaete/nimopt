@@ -51,8 +51,8 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 solution = m.solve()
@@ -90,8 +90,8 @@ supply = d.param("supply", (P,))
 demand = d.param("demand", (W,))
 x = d.var("x", (P, W))
 
-d.eq("supply", Sum(W, x[P, W]) <= supply[P])
-d.eq("demand", Sum(P, x[P, W]) >= demand[W])
+d.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+d.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 d.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 print(d.explain())
@@ -126,8 +126,8 @@ cost = d.param("cost", (P, W))
 supply = d.param("supply", (P,))
 demand = d.param("demand", (W,))
 x = d.var("x", (P, W))
-d.eq("supply", Sum(W, x[P, W]) <= supply[P])
-d.eq("demand", Sum(P, x[P, W]) >= demand[W])
+d.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+d.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 d.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 data = {

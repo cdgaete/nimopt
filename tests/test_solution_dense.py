@@ -17,7 +17,7 @@ def transport(sparse_arcs=False):
     cost = Param.from_dense("c", (P, W), np.arange(1.0, 7.0).reshape(2, 3))
     one = Param.from_dense("one", (P, W), np.ones((2, 3)))
     m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
-    m.eq(
+    m.constraint(
         "supply",
         Sum(W, one[P, W] * x[P, W])
         >= Param.from_dense("a", (P,), np.array([1.0, 2.0]))[P],
@@ -68,7 +68,7 @@ def test_a_dual_over_dropped_rows_stays_sparse():
     one = Param.from_dense("one", (S, T), np.ones((2, 3)))
     m.set_objective(Sum(S, T, one[S, T] * level[S, T]))
     # the lag drops t0, so the constraint states four of the six rows
-    m.eq(
+    m.constraint(
         "bal",
         level[S, T] - level[S, T - 1]
         <= Param.from_dense("step", (S, T), np.ones((2, 3)))[S, T],

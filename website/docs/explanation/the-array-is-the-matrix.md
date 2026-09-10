@@ -19,7 +19,7 @@ W = Set("W", np.array(["w0", "w1", "w2"]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= 1.0)
+m.constraint("supply", Sum(W, x[P, W]) <= 1.0)
 
 print(x.terms().dims)
 print(m.assemble().to_dense())

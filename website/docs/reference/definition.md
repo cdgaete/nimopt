@@ -26,7 +26,7 @@ beside it. `sense` is `"min"` or `"max"`, set once here.
 | `alias(name, base)` | a declared `Alias` over one of this definition's sets |
 | `param(name, sets)` | a declared `Param`, whose values arrive with the data |
 | `var(name, sets, subset=None, lower=0.0, upper=inf, integer=False)` | a declared `Variable` |
-| `eq(name, relation, where=None, over=None)` | nothing; registers the equation |
+| `constraint(name, relation, where=None, over=None)` | nothing; registers the constraint |
 | `build(data)` | a `Model` over the declarations, bound to `data` |
 | `explain()` | an `Explanation` of what is declared |
 | `to_yaml(instructions=False)` | the text of this definition's file, structure and no data; `instructions=True` adds the comment block that describes the format |
@@ -44,7 +44,7 @@ p_max = d.param("p_max", (generator,))
 load = d.param("load", (snapshot,))
 cost = d.param("cost", (generator,))
 p = d.var("p", (snapshot, generator), lower=0.0, upper=p_max)
-d.eq("balance", Sum(generator, p[snapshot, generator]) == load[snapshot])
+d.constraint("balance", Sum(generator, p[snapshot, generator]) == load[snapshot])
 d.set_objective(Sum(snapshot, generator, cost[generator] * p[snapshot, generator]))
 
 print(list(d.sets), list(d.parameters))
@@ -101,7 +101,7 @@ S = d.set("S")
 supply = d.param("supply", (S,))
 one = d.param("one", (S,))
 x = d.var("x", (S,))
-d.eq("supply", Sum(S, one[S] * x[S]) <= supply[S])
+d.constraint("supply", Sum(S, one[S] * x[S]) <= supply[S])
 
 print(list(d.parameters), list(d.constraints))
 ```
@@ -133,7 +133,7 @@ N = d.set("N")
 NP = d.alias("NP", N)
 limit = d.param("limit", (N, NP))
 flow = d.var("flow", (N, NP), lower=0.0)
-d.eq("cap", flow[N, NP] <= limit[N, NP])
+d.constraint("cap", flow[N, NP] <= limit[N, NP])
 d.set_objective(Sum(N, NP, limit[N, NP] * flow[N, NP]))
 
 m = d.build({"N": np.array(["a", "b"]), "limit": np.ones((2, 2))})
@@ -154,7 +154,7 @@ print(m.n_columns, m.n_rows)
 ## Domains in a definition
 
 A `Domain` resolves labels through each set's coordinate, and a declared
-set has none. `where=` and `over=` on `eq`, and `subset=` on `var`,
+set has none. `where=` and `over=` on `constraint`, and `subset=` on `var`,
 therefore take a tuple of the definition's sets, meaning their full
 product, or one of its parameters, whose coefficients are the coordinates.
 Both forms resolve to the same domain, so a model and a definition declare
@@ -184,8 +184,8 @@ cost = d.param("cost", (P, W))
 supply = d.param("supply", (P,))
 demand = d.param("demand", (W,))
 flow = d.var("flow", (P, W), subset=cost, lower=0.0)
-d.eq("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
-d.eq("demand", Sum(P, cost[P, W] * flow[P, W]) >= demand[W])
+d.constraint("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
+d.constraint("demand", Sum(P, cost[P, W] * flow[P, W]) >= demand[W])
 d.set_objective(Sum(P, W, cost[P, W] * flow[P, W]))
 
 m = d.build(

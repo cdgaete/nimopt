@@ -17,8 +17,8 @@ def transport():
     cost = Param.from_dense("c", (P, W), np.array([[2.0, 3.0, 1.0], [5.0, 4.0, 8.0]]))
     supply = Param.from_dense("supply", (P,), np.array([30.0, 40.0]))
     demand = Param.from_dense("demand", (W,), np.array([20.0, 25.0, 15.0]))
-    m.eq("supply", Sum(W, one[P, W] * x[P, W]) <= supply[P])
-    m.eq("demand", Sum(P, one[P, W] * x[P, W]) >= demand[W])
+    m.constraint("supply", Sum(W, one[P, W] * x[P, W]) <= supply[P])
+    m.constraint("demand", Sum(P, one[P, W] * x[P, W]) >= demand[W])
     m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
     return m, P, W
 
@@ -116,7 +116,7 @@ def test_a_model_with_no_objective_costs_nothing():
     P = Set("P", np.array(["p1", "p2"]))
     x = m.var("x", (P,))
     one = Param.from_dense("a", (P,), np.ones(2))
-    m.eq("c", one[P] * x[P] <= 1.0)
+    m.constraint("c", one[P] * x[P] <= 1.0)
     assert list(m.assemble().col_cost) == [0.0, 0.0]
 
 
@@ -130,7 +130,7 @@ def _assembly_peak(n_constraints):
     x = m.var("x", (P, W))
     one = Param.from_dense("a", (P, W), np.ones((400, 200)))
     for i in range(n_constraints):
-        m.eq(f"c{i}", Sum(W, one[P, W] * x[P, W]) <= 1.0)
+        m.constraint(f"c{i}", Sum(W, one[P, W] * x[P, W]) <= 1.0)
     tracemalloc.start()
     got = m.assemble()
     _, peak = tracemalloc.get_traced_memory()

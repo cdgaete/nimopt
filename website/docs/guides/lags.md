@@ -21,7 +21,7 @@ T = Set("T", np.array(["t0", "t1", "t2"]))
 
 m = Model("schedule")
 x = m.var("x", (T,))
-rows = m.eq("carry", x[T] - x[T - 1] <= 0.0)
+rows = m.constraint("carry", x[T] - x[T - 1] <= 0.0)
 
 print(rows.n_rows, rows.nnz)
 print(m.assemble().to_dense())
@@ -58,7 +58,7 @@ T = Set("T", np.array(["t0", "t1", "t2"]))
 
 m = Model("schedule")
 x = m.var("x", (T,))
-rows = m.eq("carry", x[T] - x[T.cyclic - 1] <= 0.0)
+rows = m.constraint("carry", x[T] - x[T.cyclic - 1] <= 0.0)
 
 print(rows.n_rows, rows.nnz)
 print(m.assemble().to_dense())

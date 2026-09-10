@@ -53,11 +53,11 @@ def definition() -> Definition:
     discharge = d.var("discharge", (S, T), lower=0.0)
     soc = d.var("soc", (S, T), lower=0.0)
 
-    d.eq(
+    d.constraint(
         "balance",
         Sum(G, gen[G, T]) + Sum(S, discharge[S, T]) - Sum(S, charge[S, T]) == load[T],
     )
-    d.eq(
+    d.constraint(
         "state_of_charge",
         soc[S, T]
         - soc[S, T.cyclic - 1]
@@ -65,11 +65,11 @@ def definition() -> Definition:
         + discharge_eta[S, T] * discharge[S, T]
         == 0.0,
     )
-    d.eq("generation_limit", gen[G, T] <= capacity[G, T])
-    d.eq("ramp", gen[G, T] - gen[G, T - 1] <= ramp_limit[G, T])
-    d.eq("charge_limit", charge[S, T] <= power[S, T])
-    d.eq("discharge_limit", discharge[S, T] <= power[S, T])
-    d.eq("energy_limit", soc[S, T] <= energy[S, T])
+    d.constraint("generation_limit", gen[G, T] <= capacity[G, T])
+    d.constraint("ramp", gen[G, T] - gen[G, T - 1] <= ramp_limit[G, T])
+    d.constraint("charge_limit", charge[S, T] <= power[S, T])
+    d.constraint("discharge_limit", discharge[S, T] <= power[S, T])
+    d.constraint("energy_limit", soc[S, T] <= energy[S, T])
     d.set_objective(Sum(G, T, cost[G, T] * gen[G, T]))
     return d
 

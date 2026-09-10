@@ -18,8 +18,8 @@ def transport():
     cost = Param.from_dense("c", (P, W), np.array([[1.0, 2.0], [3.0, 1.0]]))
     supply = Param.from_dense("supply", (P,), np.array([10.0, 10.0]))
     demand = Param.from_dense("demand", (W,), np.array([6.0, 8.0]))
-    m.eq("supply", Sum(W, one[P, W] * x[P, W]) <= supply[P])
-    m.eq("demand", Sum(P, one[P, W] * x[P, W]) >= demand[W])
+    m.constraint("supply", Sum(W, one[P, W] * x[P, W]) <= supply[P])
+    m.constraint("demand", Sum(P, one[P, W] * x[P, W]) >= demand[W])
     m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
     return m
 
@@ -66,7 +66,7 @@ def test_a_maximised_model_flips_the_optimum():
     P = Set("P", np.array(["p1"]))
     x = m.var("x", (P,), lower=0.0, upper=4.0)
     one = Param.from_dense("a", (P,), np.ones(1))
-    m.eq("cap", one[P] * x[P] <= 3.0)
+    m.constraint("cap", one[P] * x[P] <= 3.0)
     m.set_objective(Sum(P, one[P] * x[P]))
     assert m.solve().objective == pytest.approx(3.0)
 
@@ -86,7 +86,7 @@ def test_a_dual_is_labelled_by_the_sets_its_constraint_is_over():
     x = m.var("x", (P,), lower=0.0, upper=10.0)
     one = Param.from_dense("one", (P,), np.ones(2))
     cap = Param.from_dense("cap", (P,), np.array([3.0, 4.0]))
-    m.eq("supply", one[P] * x[P] <= cap[P])
+    m.constraint("supply", one[P] * x[P] <= cap[P])
     cost = Param.from_dense("c", (P,), np.array([-1.0, -1.0]))
     m.set_objective(Sum(P, cost[P] * x[P]))
     solution = m.solve()
@@ -103,7 +103,7 @@ def infeasible():
     x = m.var("x", (P,), lower=0.0, upper=1.0)
     one = Param.from_dense("one", (P,), np.ones(2))
     floor = Param.from_dense("floor", (P,), np.array([5.0, 5.0]))
-    m.eq("floor", one[P] * x[P] >= floor[P])
+    m.constraint("floor", one[P] * x[P] >= floor[P])
     m.set_objective(Sum(P, one[P] * x[P]))
     return m
 

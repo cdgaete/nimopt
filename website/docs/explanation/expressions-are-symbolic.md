@@ -71,7 +71,7 @@ W = Set("W", np.array([f"w{i}" for i in range(100)]))
 m = Model("transport")
 x = m.var("x", (P, W))
 for i in range(20):
-    m.eq(f"cap{i}", Sum(W, x[P, W]) <= 1.0)
+    m.constraint(f"cap{i}", Sum(W, x[P, W]) <= 1.0)
 
 print(m.n_rows, m.nnz)
 ```

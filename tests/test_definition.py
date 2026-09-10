@@ -13,7 +13,7 @@ def dispatch():
     load = d.param("load", (snapshot,))
     cost = d.param("cost", (generator,))
     p = d.var("p", (snapshot, generator), lower=0.0, upper=p_max)
-    d.eq("balance", Sum(generator, p[snapshot, generator]) == load[snapshot])
+    d.constraint("balance", Sum(generator, p[snapshot, generator]) == load[snapshot])
     d.set_objective(Sum(snapshot, generator, cost[generator] * p[snapshot, generator]))
     return d
 
@@ -64,7 +64,7 @@ def test_an_equation_may_carry_the_name_of_the_parameter_that_bounds_it():
     supply = d.param("supply", (S,))
     one = d.param("one", (S,))
     x = d.var("x", (S,))
-    d.eq("supply", Sum(S, one[S] * x[S]) <= supply[S])
+    d.constraint("supply", Sum(S, one[S] * x[S]) <= supply[S])
     assert list(d.parameters) == ["supply", "one"]
     assert list(d.constraints) == ["supply"]
 
@@ -142,7 +142,7 @@ def test_a_model_built_from_a_definition_equals_one_built_directly():
     load = Param.from_dense("load", (snapshot,), data()["load"])
     cost = Param.from_dense("cost", (generator,), np.array([1.0, 2.0, 50.0]))
     p = m.var("p", (snapshot, generator), lower=0.0, upper=p_max)
-    m.eq("balance", Sum(generator, p[snapshot, generator]) == load[snapshot])
+    m.constraint("balance", Sum(generator, p[snapshot, generator]) == load[snapshot])
     m.set_objective(Sum(snapshot, generator, cost[generator] * p[snapshot, generator]))
     assert (built.n_columns, built.n_rows, built.nnz) == (
         m.n_columns,
@@ -164,8 +164,8 @@ def transport():
     supply = d.param("supply", (P,))
     demand = d.param("demand", (W,))
     flow = d.var("flow", (P, W), subset=cost, lower=0.0)
-    d.eq("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
-    d.eq("demand", Sum(P, cost[P, W] * flow[P, W]) >= demand[W])
+    d.constraint("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
+    d.constraint("demand", Sum(P, cost[P, W] * flow[P, W]) >= demand[W])
     d.set_objective(Sum(P, W, cost[P, W] * flow[P, W]))
     return d
 
@@ -219,7 +219,7 @@ def storage():
     inflow = d.param("inflow", (T,))
     level = d.var("level", (T,), lower=0.0)
     # the lag is stated where the variable is referenced
-    d.eq("balance", one[T] * level[T] - one[T] * level[T - 1] == inflow[T])
+    d.constraint("balance", one[T] * level[T] - one[T] * level[T - 1] == inflow[T])
     d.set_objective(Sum(T, one[T] * level[T]))
     return d
 
@@ -254,8 +254,10 @@ def nodal():
     live = d.param("live", (B, T))
     cost = d.param("cost", (L, T))
     flow = d.var("flow", (L, T), lower=-1.0, upper=1.0)
-    d.eq("balance", Sum(L, inc[B, L, T] * flow[L, T]) == zero[B, T], over=(B, T))
-    d.eq("live", Sum(L, inc[B, L, T] * flow[L, T]) == zero[B, T], over=live)
+    d.constraint(
+        "balance", Sum(L, inc[B, L, T] * flow[L, T]) == zero[B, T], over=(B, T)
+    )
+    d.constraint("live", Sum(L, inc[B, L, T] * flow[L, T]) == zero[B, T], over=live)
     d.set_objective(Sum(L, T, cost[L, T] * flow[L, T]))
     return d
 
@@ -315,7 +317,7 @@ def test_a_symbol_is_named_by_an_identifier_other_than_sum():
     S = d.set("S")
     x = d.var("x", (S,))
     # a constraint stands in no expression, so its name is free
-    d.eq("supply-1", x[S] <= 1.0)
+    d.constraint("supply-1", x[S] <= 1.0)
     assert "supply-1" in d.constraints
 
 
@@ -338,7 +340,7 @@ def stock_data():
 
 def test_a_definition_states_a_fixed_member_and_checks_it_when_the_set_binds():
     d, G, T, start, rate, x = stock()
-    d.eq("initial", rate[G, "t0"] * x[G, "t0"] == start[G])
+    d.constraint("initial", rate[G, "t0"] * x[G, "t0"] == start[G])
     m = d.build(stock_data())
     assert repr(m.row("initial", G="g1")) == "initial[G='g1']  row 1\n  1·x[g1,t0] == 7"
     missing = dict(stock_data(), T=np.array(["t1", "t2"]))
@@ -350,7 +352,7 @@ def test_a_definition_states_a_fixed_member_and_checks_it_when_the_set_binds():
 
 def test_a_fixed_member_of_a_coefficient_is_checked_when_the_set_binds():
     d, G, T, start, rate, x = stock()
-    d.eq("scaled", rate[G, "t0"] * x[G, T] <= 1.0)
+    d.constraint("scaled", rate[G, "t0"] * x[G, T] <= 1.0)
     missing = dict(stock_data(), T=np.array(["t1", "t2"]))
     with pytest.raises(
         ValueError, match="parameter 'rate' is read at member 't0' of dimension 'T'"

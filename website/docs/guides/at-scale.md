@@ -20,8 +20,8 @@ cost = Param.from_dense("cost", (P, W), np.ones((200, 100)))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= 1.0)
-m.eq("demand", Sum(P, x[P, W]) >= 1.0)
+m.constraint("supply", Sum(W, x[P, W]) <= 1.0)
+m.constraint("demand", Sum(P, x[P, W]) >= 1.0)
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 
 print(m.n_columns)
@@ -63,8 +63,8 @@ W = Set("W", np.array([f"w{i}" for i in range(100)]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= 1.0)
-m.eq("demand", Sum(P, x[P, W]) >= 1.0)
+m.constraint("supply", Sum(W, x[P, W]) <= 1.0)
+m.constraint("demand", Sum(P, x[P, W]) >= 1.0)
 
 assembled = m.assemble()
 print(assembled.n_rows, assembled.n_cols)

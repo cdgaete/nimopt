@@ -48,8 +48,8 @@ def definition() -> Definition:
     p = d.var("p", (S, G, T), lower=0.0)
     shed = d.var("shed", (S, T), lower=0.0)
 
-    d.eq("capacity", p[S, G, T] - cap[G] <= 0.0)
-    d.eq("balance", Sum(G, p[S, G, T]) + shed[S, T] == demand[S, T])
+    d.constraint("capacity", p[S, G, T] - cap[G] <= 0.0)
+    d.constraint("balance", Sum(G, p[S, G, T]) + shed[S, T] == demand[S, T])
     d.set_objective(
         Sum(G, capital[G] * cap[G])
         + Sum(S, G, T, weight[S] * cost[S, G] * p[S, G, T])

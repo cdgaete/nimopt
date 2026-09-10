@@ -44,7 +44,7 @@ supply = Param.from_dense("supply", (P,), np.array([30.0, 25.0]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, cost[P, W] * x[P, W]) <= supply[P])
+m.constraint("supply", Sum(W, cost[P, W] * x[P, W]) <= supply[P])
 
 print(m.row("supply", P="porto"))
 ```
@@ -73,7 +73,7 @@ m = Model("m")
 x = m.var("x", (P,), upper=5.0)
 one = Param.from_dense("one", (P,), np.ones(3))
 rhs = Param.from_long("rhs", (P,), {"P": np.array(["p1", "p2"])}, np.ones(2))
-m.eq("cap", one[P] * x[P] <= rhs[P])
+m.constraint("cap", one[P] * x[P] <= rhs[P])
 
 m.row("cap", P="p3")
 ```
@@ -137,7 +137,7 @@ cost = Param.from_long(
     np.array([1.0, 2.0, 3.0]),
 )
 supply = Param.from_dense("supply", (P,), np.array([3.0, 3.0]))
-m.eq("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
+m.constraint("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
 
 print(m.absent("supply"))
 ```

@@ -24,7 +24,7 @@ def arcs_model():
 
 def test_a_sum_over_a_condition_keeps_only_the_named_coordinates():
     m, P, W, x, one, cap, arcs = arcs_model()
-    m.eq("supply", Sum(W, one[P, W] * x[P, W], where=arcs) <= cap[P])
+    m.constraint("supply", Sum(W, one[P, W] * x[P, W], where=arcs) <= cap[P])
     # three arcs across two rows, against six on the full product
     assert m.nnz == 3
     assert m.n_rows == 2
@@ -32,13 +32,13 @@ def test_a_sum_over_a_condition_keeps_only_the_named_coordinates():
 
 def test_a_condition_leaves_the_full_product_unrestricted():
     m, P, W, x, one, cap, arcs = arcs_model()
-    m.eq("supply", Sum(W, one[P, W] * x[P, W]) <= cap[P])
+    m.constraint("supply", Sum(W, one[P, W] * x[P, W]) <= cap[P])
     assert m.nnz == 6
 
 
 def test_a_condition_names_the_columns_the_arcs_stand_for():
     m, P, W, x, one, cap, arcs = arcs_model()
-    m.eq("supply", Sum(W, one[P, W] * x[P, W], where=arcs) <= cap[P])
+    m.constraint("supply", Sum(W, one[P, W] * x[P, W], where=arcs) <= cap[P])
     assembled = m.assemble()
     # p1 reaches w1 and w2, which are columns 0 and 1; p2 reaches w3, column 5
     assert np.array_equal(assembled.indices, np.array([0, 1, 5], dtype=np.int32))
@@ -55,7 +55,7 @@ def test_a_condition_over_a_dimension_the_variable_lacks_is_refused():
 def test_a_condition_survives_a_coefficient_and_a_scale():
     m, P, W, x, one, cap, arcs = arcs_model()
     expression = 2.0 * Sum(W, one[P, W] * x[P, W], where=arcs)
-    m.eq("supply", expression <= cap[P])
+    m.constraint("supply", expression <= cap[P])
     assembled = m.assemble()
     assert m.nnz == 3
     assert np.array_equal(assembled.values, np.array([2.0, 2.0, 2.0]))
@@ -64,7 +64,7 @@ def test_a_condition_survives_a_coefficient_and_a_scale():
 def test_a_constraint_condition_drops_the_rows_it_omits():
     m, P, W, x, one, cap, arcs = arcs_model()
     only_p1 = subset((P,), {"P": np.array(["p1"])})
-    m.eq("supply", Sum(W, one[P, W] * x[P, W]) <= cap[P], where=only_p1)
+    m.constraint("supply", Sum(W, one[P, W] * x[P, W]) <= cap[P], where=only_p1)
     # p2's row is not stated, so its three coefficients are not either
     assert m.n_rows == 1
     assert m.nnz == 3
@@ -73,13 +73,15 @@ def test_a_constraint_condition_drops_the_rows_it_omits():
 def test_a_constraint_condition_over_the_wrong_frame_is_refused():
     m, P, W, x, one, cap, arcs = arcs_model()
     with pytest.raises(ValueError, match="free dimensions"):
-        m.eq("supply", Sum(W, one[P, W] * x[P, W]) <= cap[P], where=arcs)
+        m.constraint("supply", Sum(W, one[P, W] * x[P, W]) <= cap[P], where=arcs)
 
 
 def test_a_constraint_condition_and_a_sum_condition_compose():
     m, P, W, x, one, cap, arcs = arcs_model()
     only_p1 = subset((P,), {"P": np.array(["p1"])})
-    m.eq("supply", Sum(W, one[P, W] * x[P, W], where=arcs) <= cap[P], where=only_p1)
+    m.constraint(
+        "supply", Sum(W, one[P, W] * x[P, W], where=arcs) <= cap[P], where=only_p1
+    )
     # of the three arcs, only p1's two stand once p2's row is dropped
     assert m.n_rows == 1
     assert m.nnz == 2
@@ -104,7 +106,7 @@ def test_a_condition_may_name_a_dimension_the_coefficient_introduces():
         },
     )
     rhs = Param.from_dense("rhs", (B, T), np.zeros((2, 2)))
-    m.eq("balance", Sum(L, inc[B, L, T] * p[L, T], where=live) >= rhs[B, T])
+    m.constraint("balance", Sum(L, inc[B, L, T] * p[L, T], where=live) >= rhs[B, T])
     assembled = m.assemble()
     # only b0's own link entries survive the condition
     assert int(assembled.values.size) == 2
@@ -132,7 +134,9 @@ def network(rows):
         np.array([1.0, -1.0, 1.0, -1.0]),
     )
     zero = Param.from_dense("zero", (B, T), np.zeros((2, 3)))
-    m.eq("balance", Sum(L, inc[B, L, T] * flow[L, T]) == zero[B, T], over=rows(B, T))
+    m.constraint(
+        "balance", Sum(L, inc[B, L, T] * flow[L, T]) == zero[B, T], over=rows(B, T)
+    )
     return m
 
 
@@ -176,7 +180,7 @@ def test_a_condition_named_as_a_parameter_restricts_a_sum():
     x = m.var("x", (P, W), upper=10.0)
     one = Param.from_dense("one", (P, W), np.ones((2, 2)))
     cap = Param.from_dense("cap", (P,), np.array([5.0, 5.0]))
-    m.eq("capacity", Sum(W, one[P, W] * x[P, W], where=arcs) <= cap[P])
+    m.constraint("capacity", Sum(W, one[P, W] * x[P, W], where=arcs) <= cap[P])
     # three arcs across two rows, against four on the full product
     assert m.nnz == 3
     assert m.n_rows == 2

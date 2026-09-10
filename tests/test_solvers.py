@@ -14,7 +14,7 @@ def assembled_model():
     m = Model("m")
     x = m.var("x", (T,), upper=1.0)
     one = Param.from_dense("one", (T,), np.ones(2))
-    m.eq("cap", one[T] * x[T] <= 1.0)
+    m.constraint("cap", one[T] * x[T] <= 1.0)
     m.set_objective(Sum(T, one[T] * x[T]))
     return m.assemble()
 
@@ -123,7 +123,7 @@ def test_a_model_the_backend_refuses_is_not_solved_on():
     S = Set("S", np.array(["a", "b"]))
     x = m.var("x", (S,), lower=0.0, upper=1.0)
     m.set_objective(Sum(S, x[S]))
-    m.eq("floor", x[S] >= 1.0)
+    m.constraint("floor", x[S] >= 1.0)
     assembled = m.assemble()
     # one cost short of the column count the matrix states
     assembled.col_cost = np.asarray(assembled.col_cost, dtype=np.float64)[:-1]

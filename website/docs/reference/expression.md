@@ -138,7 +138,7 @@ ValueError: a sum is over the members of ['T'], so it takes the set and not a la
 ## `Relation`
 
 An expression, a sense and a right-hand side, produced by comparing an
-expression with `<=`, `>=` or `==`. `Model.eq` turns one into a
+expression with `<=`, `>=` or `==`. `Model.constraint` turns one into a
 constraint.
 
 ```python

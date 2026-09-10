@@ -50,7 +50,7 @@ P, W = d.set("P"), d.set("W")
 cost = d.param("cost", (P, W))
 supply = d.param("supply", (P,))
 flow = d.var("flow", (P, W), subset=cost, lower=0.0)
-d.eq("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
+d.constraint("supply", Sum(W, cost[P, W] * flow[P, W]) <= supply[P])
 d.set_objective(Sum(P, W, cost[P, W] * flow[P, W]))
 
 e = d.explain()

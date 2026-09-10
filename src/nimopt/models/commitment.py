@@ -38,9 +38,9 @@ def definition() -> Definition:
 
     on = d.var("on", (T, G), lower=0.0, upper=1.0, integer=True)
     gen = d.var("gen", (T, G), lower=0.0)
-    d.eq("capacity", gen[T, G] - p_max[G] * on[T, G] <= 0.0)
-    d.eq("minimum", gen[T, G] - p_min[G] * on[T, G] >= 0.0)
-    d.eq("balance", Sum(G, gen[T, G]) == load[T])
+    d.constraint("capacity", gen[T, G] - p_max[G] * on[T, G] <= 0.0)
+    d.constraint("minimum", gen[T, G] - p_min[G] * on[T, G] >= 0.0)
+    d.constraint("balance", Sum(G, gen[T, G]) == load[T])
     d.set_objective(Sum(T, G, cost[G] * gen[T, G]) + Sum(T, G, no_load[G] * on[T, G]))
     return d
 

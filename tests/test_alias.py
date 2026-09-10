@@ -28,7 +28,7 @@ def test_a_constraint_sums_over_the_alias():
     x = m.var("x", (N, NP))
     d = Param.from_dense("d", (N, NP), np.arange(9.0).reshape(3, 3))
     rhs = Param.from_dense("r", (N,), np.ones(3))
-    m.eq("row", Sum(NP, d[N, NP] * x[N, NP]) <= rhs[N])
+    m.constraint("row", Sum(NP, d[N, NP] * x[N, NP]) <= rhs[N])
     assembled = m.assemble()
     assert m.n_rows == 3
     assert m.n_columns == 9
@@ -97,7 +97,7 @@ def test_an_alias_binds_with_the_set_it_names():
     NP = d.alias("NP", N)
     flow = d.var("flow", (N, NP), lower=0.0)
     limit = d.param("limit", (N, NP))
-    d.eq("cap", flow[N, NP] <= limit[N, NP])
+    d.constraint("cap", flow[N, NP] <= limit[N, NP])
     d.set_objective(Sum(N, NP, limit[N, NP] * flow[N, NP]))
     m = d.build({"N": np.array(["a", "b"]), "limit": np.ones((2, 2))})
     assert m.n_columns == 4
@@ -112,7 +112,7 @@ def test_a_definition_with_an_alias_round_trips_through_its_file():
     NP = d.alias("NP", N)
     flow = d.var("flow", (N, NP), lower=0.0)
     limit = d.param("limit", (N, NP))
-    d.eq("cap", flow[N, NP] <= limit[N, NP])
+    d.constraint("cap", flow[N, NP] <= limit[N, NP])
     text = d.to_yaml()
     assert "aliases:\n  NP: N\n" in text
     assert loads(text).to_yaml() == text
@@ -124,7 +124,7 @@ def test_a_model_writes_the_aliases_it_is_declared_over_apart_from_its_sets():
     m = Model("network")
     x = m.var("x", (N, NP))
     limit = Param.from_dense("limit", (N, NP), np.ones((2, 2)))
-    m.eq("cap", x[N, NP] <= limit[N, NP])
+    m.constraint("cap", x[N, NP] <= limit[N, NP])
     text = m.to_yaml()
     assert "sets: [N]\naliases:\n  NP: N\n" in text
     assert "NP of N" in repr(m.explain())
@@ -154,7 +154,7 @@ def test_a_model_writes_the_base_of_every_alias_it_is_declared_over():
     m = Model("net")
     f = m.var("f", (B2,))
     limit = Param.from_dense("limit", (B2,), np.ones(2))
-    m.eq("cap", f[B2] <= limit[B2])
+    m.constraint("cap", f[B2] <= limit[B2])
     text = m.to_yaml()
     assert "sets: [B]" in text
     assert loads(text).to_yaml() == text

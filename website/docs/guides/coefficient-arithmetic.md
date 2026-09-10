@@ -28,7 +28,7 @@ unit_cost = price[G, T] / eta[G, T]
 
 m = Model("dispatch", sense="min")
 gen = m.var("gen", (G, T), lower=0.0, upper=cap)
-m.eq("balance", Sum(G, gen[G, T]) == load[T])
+m.constraint("balance", Sum(G, gen[G, T]) == load[T])
 m.set_objective(Sum(G, T, unit_cost[G, T] * gen[G, T]))
 
 print(unit_cost.name, unit_cost.dims)
@@ -164,7 +164,7 @@ one = Param.from_dense("one", (P,), np.ones(1))
 
 m = Model("m", sense="max")
 x = m.var("x", (P,), upper=100.0)
-m.eq("cap", one[P] * x[P] + 1.0 <= 5.0)
+m.constraint("cap", one[P] * x[P] + 1.0 <= 5.0)
 m.set_objective(Sum(P, one[P] * x[P]) + 7.0)
 
 print(m.assemble().n_cols, m.assemble().row_upper)

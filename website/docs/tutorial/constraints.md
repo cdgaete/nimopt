@@ -51,7 +51,7 @@ Relation <=
 
 ## Adding a constraint
 
-`m.eq(name, relation)` adds the relation to the model under a name and
+`m.constraint(name, relation)` adds the relation to the model under a name and
 returns the `Constraint`. The name identifies the constraint's rows in the
 matrix and its dual values in the solution. A constraint produces one row
 per member of its expression's frame.
@@ -68,8 +68,8 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-supply_rows = m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-demand_rows = m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+supply_rows = m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+demand_rows = m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 
 print(supply_rows.n_rows, supply_rows.nnz)
 print(demand_rows.n_rows, demand_rows.nnz)
@@ -116,7 +116,7 @@ supply = Param.from_dense("supply", (P,), np.array([30.0, 25.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-m.eq("supply", Sum(W, x[P, W]) <= supply)
+m.constraint("supply", Sum(W, x[P, W]) <= supply)
 ```
 
 <!-- output -->
@@ -141,7 +141,7 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-m.eq("supply", Sum(W, x[P, W]) <= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= demand[W])
 ```
 
 <!-- output -->

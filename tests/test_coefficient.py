@@ -37,7 +37,7 @@ def test_a_derived_coefficient_builds_the_model_its_arithmetic_states():
 
     m = Model("dispatch", sense="min")
     gen = m.var("gen", (G, T), lower=0.0, upper=cap)
-    m.eq("balance", Sum(G, gen[G, T]) == load[T])
+    m.constraint("balance", Sum(G, gen[G, T]) == load[T])
     m.set_objective(Sum(G, T, unit_cost[G, T] * gen[G, T]))
     answer = m.solve()
     assert answer.status == "optimal"
@@ -145,7 +145,7 @@ def test_a_coefficient_is_written_before_its_data_exists():
     cap = d.param("capacity", (G, T))
     gen = d.var("gen", (G, T), lower=0.0, upper=cap)
     unit_cost = price[G, T] / eta[G, T]
-    d.eq("balance", Sum(G, gen[G, T]) == load[T])
+    d.constraint("balance", Sum(G, gen[G, T]) == load[T])
     d.set_objective(Sum(G, T, unit_cost[G, T] * gen[G, T]))
 
     assert "(fuel_price[G, T] / efficiency[G, T])" in repr(d.explain())
@@ -184,7 +184,7 @@ def test_a_model_reports_every_parameter_a_derived_coefficient_reads():
     load = Param.from_dense("load", (T,), np.full(3, 100.0))
     m = Model("dispatch", sense="min")
     gen = m.var("gen", (G, T), upper=80.0)
-    m.eq("balance", Sum(G, gen[G, T]) == load[T])
+    m.constraint("balance", Sum(G, gen[G, T]) == load[T])
     m.set_objective(Sum(G, T, (price[G, T] / eta[G, T])[G, T] * gen[G, T]))
     found = m.explain()
     assert [p.name for p in found.parameters] == ["load", "fuel_price", "efficiency"]
@@ -223,7 +223,7 @@ def test_a_variable_divided_by_a_coefficient_is_the_reciprocal_times_it():
     m = Model("m", sense="min")
     gen = m.var("gen", (G, T), lower=0.0, upper=200.0)
     # meeting the load with the energy each unit delivers per unit of fuel
-    m.eq("balance", Sum(G, gen[G, T] / eta[G, T]) == load[T])
+    m.constraint("balance", Sum(G, gen[G, T] / eta[G, T]) == load[T])
     m.set_objective(Sum(G, T, price[G, T] * gen[G, T]))
     assert m.solve().status == "optimal"
 

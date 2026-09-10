@@ -41,7 +41,7 @@ def definition(scale: int = 1) -> Definition:
         generation = unit[T] if generation is None else generation + unit[T]
         term = price[T] * unit[T]
         spend = term if spend is None else spend + term
-    d.eq("balance", generation == load[T])
+    d.constraint("balance", generation == load[T])
     d.set_objective(Sum(T, spend))
     return d
 

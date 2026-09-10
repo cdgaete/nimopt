@@ -37,7 +37,7 @@ def definition() -> Definition:
     cost = d.param("cost", (G,))
     load = d.param("load", (T,))
     gen = d.var("gen", (T, G), lower=0.0, upper=profile)
-    d.eq("balance", Sum(G, gen[T, G]) == load[T])
+    d.constraint("balance", Sum(G, gen[T, G]) == load[T])
     d.set_objective(Sum(T, G, cost[G] * gen[T, G]))
     return d
 

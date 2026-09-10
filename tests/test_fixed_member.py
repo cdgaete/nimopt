@@ -32,7 +32,7 @@ def test_a_member_reference_carries_that_members_columns():
 def test_a_parameter_at_a_member_supplies_the_coefficient():
     m, S, T, inflow = storage_shapes()
     x = m.var("x", (S, T))
-    m.eq("pin", inflow[S, "t1"] * x[S, "t1"] == 0.0)
+    m.constraint("pin", inflow[S, "t1"] * x[S, "t1"] == 0.0)
     assembled = m.assemble()
     # column 1 carries inflow[s1,t1] = 1.0 and column 4 carries inflow[s2,t1] = 4.0
     assert np.array_equal(assembled.values, np.array([1.0, 4.0]))
@@ -43,7 +43,7 @@ def test_two_variables_at_the_same_member_share_a_row():
     m, S, T, inflow = storage_shapes()
     level = m.var("level", (S, T))
     release = m.var("release", (S, T))
-    m.eq("boundary", level[S, "t0"] + release[S, "t0"] == 0.0)
+    m.constraint("boundary", level[S, "t0"] + release[S, "t0"] == 0.0)
     assert m.n_rows == 2
     assert m.nnz == 4
 
@@ -51,7 +51,7 @@ def test_two_variables_at_the_same_member_share_a_row():
 def test_a_member_reference_composes_with_a_sum_over_the_other_dimension():
     m, S, T, inflow = storage_shapes()
     x = m.var("x", (S, T))
-    m.eq("total", Sum(S, x[S, "t2"]) == 0.0)
+    m.constraint("total", Sum(S, x[S, "t2"]) == 0.0)
     assert m.n_rows == 1
     assert m.nnz == 2
 
@@ -79,7 +79,7 @@ def test_a_reference_of_the_wrong_length_is_still_refused():
 def test_a_parameter_reference_is_a_right_hand_side():
     m, S, T, inflow = storage_shapes()
     x = m.var("x", (S, T))
-    m.eq("row", x[S, T] == inflow[S, T])
+    m.constraint("row", x[S, T] == inflow[S, T])
     assembled = m.assemble()
     assert m.n_rows == 6
     assert np.array_equal(assembled.row_lower, np.arange(6.0))
@@ -88,7 +88,7 @@ def test_a_parameter_reference_is_a_right_hand_side():
 def test_a_right_hand_side_at_a_member_is_read_there():
     m, S, T, inflow = storage_shapes()
     x = m.var("x", (S, T))
-    m.eq("row", x[S, "t1"] == inflow[S, "t1"])
+    m.constraint("row", x[S, "t1"] == inflow[S, "t1"])
     assembled = m.assemble()
     # inflow[s1,t1] = 1.0 and inflow[s2,t1] = 4.0
     assert np.array_equal(assembled.row_lower, np.array([1.0, 4.0]))
@@ -98,4 +98,4 @@ def test_a_right_hand_side_over_the_wrong_frame_is_refused():
     m, S, T, inflow = storage_shapes()
     x = m.var("x", (S, T))
     with pytest.raises(ValueError, match="free dimensions"):
-        m.eq("row", x[S, "t1"] == inflow[S, T])
+        m.constraint("row", x[S, "t1"] == inflow[S, T])

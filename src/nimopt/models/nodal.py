@@ -36,7 +36,7 @@ def definition() -> Definition:
     cost = d.param("cost", (G,))
     demand = d.param("demand", (B, T))
     gen = d.var("gen", (T, G), lower=0.0, upper=p_max)
-    d.eq("balance", Sum(G, at[G, B] * gen[T, G]) == demand[B, T])
+    d.constraint("balance", Sum(G, at[G, B] * gen[T, G]) == demand[B, T])
     d.set_objective(Sum(T, G, cost[G] * gen[T, G]))
     return d
 

@@ -163,7 +163,7 @@ class Model:
         for variable in self.variables.values():
             variable.total_columns = self._n_columns
 
-    def eq(
+    def constraint(
         self, name: str, relation: Any, where: Any = None, over: Any = None
     ) -> Constraint:
         """Declare an equation from a comparison of an expression.

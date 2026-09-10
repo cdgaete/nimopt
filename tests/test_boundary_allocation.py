@@ -42,7 +42,7 @@ def build_transport(parts):
     P, W, cost, supply = parts
     m = Model("transport")
     x = m.var("x", (P, W))
-    m.eq("supply", Sum(W, cost[P, W] * x[P, W]) <= supply[P])
+    m.constraint("supply", Sum(W, cost[P, W] * x[P, W]) <= supply[P])
     m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
     return m
 
@@ -134,7 +134,7 @@ def build_network(parts):
     B, L, T, inc, zero, cost = parts
     m = Model("network")
     flow = m.var("flow", (L, T), lower=-np.inf)
-    m.eq(
+    m.constraint(
         "balance",
         Sum(L, inc[B, L, T] * flow[L, T]) == zero[B, T],
         over=product((B, T)),

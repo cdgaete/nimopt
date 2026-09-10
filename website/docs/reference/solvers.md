@@ -67,7 +67,7 @@ one = Param.from_dense("one", (T,), np.ones(2))
 
 m = Model("m")
 x = m.var("x", (T,), upper=3.0, integer=True)
-m.eq("cap", one[T] * x[T] <= 2.0)
+m.constraint("cap", one[T] * x[T] <= 2.0)
 m.set_objective(Sum(T, one[T] * x[T]))
 
 m.solve().dual("cap")
@@ -114,7 +114,7 @@ cost = Param.from_dense("cost", (GEN,), np.array([1.0, 5.0]))
 
 m = Model("dispatch", sense="min")
 p = m.var("p", (SNAP, GEN), lower=0.0, upper=p_max)
-m.eq("balance", Sum(GEN, p[SNAP, GEN]) == load[SNAP])
+m.constraint("balance", Sum(GEN, p[SNAP, GEN]) == load[SNAP])
 m.set_objective(Sum(SNAP, GEN, cost[GEN] * p[SNAP, GEN]))
 
 with m.session() as session:
@@ -168,7 +168,7 @@ cost = Param.from_dense("cost", (GEN,), np.array([1.0, 5.0]))
 
 m = Model("dispatch", sense="min")
 p = m.var("p", (SNAP, GEN), lower=0.0, upper=p_max)
-m.eq("balance", Sum(GEN, p[SNAP, GEN]) == load[SNAP])
+m.constraint("balance", Sum(GEN, p[SNAP, GEN]) == load[SNAP])
 m.set_objective(Sum(SNAP, GEN, cost[GEN] * p[SNAP, GEN]))
 
 with m.session() as session:

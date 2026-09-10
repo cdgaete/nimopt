@@ -97,7 +97,7 @@ m = Model("cvar", sense="min")
 theta = m.var("theta", (), lower=-np.inf)
 p = m.var("p", (S,))
 
-m.eq("tail", theta - Sum(S, p[S]) >= 0.0)
+m.constraint("tail", theta - Sum(S, p[S]) >= 0.0)
 m.set_objective(theta)
 print(m.n_columns, m.n_rows)
 print(m.constraints["tail"].relation)

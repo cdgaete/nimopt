@@ -172,9 +172,9 @@ def nominal_bounds(model, data, dims, made):
             name = f"{label}-ext-{nom}-{suffix}"
             bound = over_members(name, dim, names, values)
             if sense == ">=":
-                model.eq(name, variable[dim] >= bound[dim])
+                model.constraint(name, variable[dim] >= bound[dim])
             else:
-                model.eq(name, variable[dim] <= bound[dim])
+                model.constraint(name, variable[dim] <= bound[dim])
 
 
 def over_grid(name, dims, keys, names, grid, keep):
@@ -217,7 +217,7 @@ def fixed_operational(model, data, dims, made):
                 if sense == ">="
                 else variable[dim, dims["T"]] <= bound[dim, dims["T"]]
             )
-            model.eq(name, relation)
+            model.constraint(name, relation)
 
     store = ~data.storage_units_p_nom_extendable.astype(bool)
     su_nom = data.storage_units_p_nom
@@ -239,7 +239,7 @@ def fixed_operational(model, data, dims, made):
                 if sense == ">="
                 else variable[dims["U"], dims["T"]] <= bound[dims["U"], dims["T"]]
             )
-            model.eq(name, relation)
+            model.constraint(name, relation)
 
 
 def member_hours(dim, hours_dim, names, keep, hours):
@@ -310,7 +310,7 @@ def extendable_operational(model, data, dims, made):
             share = per_unit(name, dim, time, names, grid, keep)
             body = variable[dim, time] - share[dim, time] * capacity[dim]
             relation = body >= 0.0 if side == "lower" else body <= 0.0
-            model.eq(name, relation, over=rows)
+            model.constraint(name, relation, over=rows)
 
 
 KIRCHHOFF_SCALE = 1e5
@@ -527,7 +527,7 @@ def network_rows(model, data, dims, made):
         balance = balance + part
     load = Param.from_dense("load", (bus, time), _load_grid(data, data.buses))
     rows = member_hours(bus, time, data.buses, attached(data), len(data.snapshots))
-    model.eq("Bus-nodal_balance", balance == load[bus, time], over=rows)
+    model.constraint("Bus-nodal_balance", balance == load[bus, time], over=rows)
 
     cycles = data.cycles * (data.lines_x_pu_eff * KIRCHHOFF_SCALE)[:, None]
     line, cycle = dims["L"], dims["C"]
@@ -538,7 +538,7 @@ def network_rows(model, data, dims, made):
         {cycle.name: cols, line.name: data.lines_names[rows]},
         cycles[rows, cols],
     )
-    model.eq(
+    model.constraint(
         "Kirchhoff-Voltage-Law",
         Sum(line, law[cycle, line] * made["Line-s"][line, time]) == 0.0,
     )
@@ -594,7 +594,7 @@ def temporal_rows(model, data, dims, made):
     ):
         body = body + part
     body = body + power[store, time] * made["Store-p"][store, time]
-    model.eq("Store-energy_balance", body == 0.0, over=product((store, time)))
+    model.constraint("Store-energy_balance", body == 0.0, over=product((store, time)))
 
     unit = dims["U"]
     names = data.storage_units_names
@@ -639,7 +639,7 @@ def temporal_rows(model, data, dims, made):
     ):
         body = body + part
     body = body + spilled[unit, time] * made["StorageUnit-spill"][unit, time]
-    model.eq(
+    model.constraint(
         "StorageUnit-energy_balance",
         body
         == Param.from_dense("su_inflow", (unit, time), -inflow * weight)[unit, time],
@@ -682,7 +682,7 @@ def energy_sum_rows(model, data, dims, made):
         bound = Param.from_long(
             f"{name}-bound", (generator,), {generator.name: names[live]}, values[live]
         )
-        model.eq(
+        model.constraint(
             name,
             body >= bound[generator] if sense == ">=" else body <= bound[generator],
         )
@@ -696,7 +696,7 @@ def _primary_energy(model, data, dims, made, label, carrier, sense, constant):
     rate = per_unit(label, generator, time, data.generators_names, grid, keep)
     output = made["Generator-p"]
     body = Sum(generator, time, rate[generator, time] * output[generator, time])
-    model.eq(label, body <= constant if sense == "<=" else body >= constant)
+    model.constraint(label, body <= constant if sense == "<=" else body >= constant)
 
 
 def _operational_limit(model, data, dims, made, label, carrier, sense, constant):
@@ -719,7 +719,7 @@ def _operational_limit(model, data, dims, made, label, carrier, sense, constant)
     )
     held = made["Store-e"]
     body = Sum(store, time, coefficient[store, time] * held[store, time])
-    model.eq(label, body >= constant if sense == ">=" else body <= constant)
+    model.constraint(label, body >= constant if sense == ">=" else body <= constant)
 
 
 # a carbon budget PyPSA carries on a store of its own states no row here

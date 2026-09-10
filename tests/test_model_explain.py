@@ -87,7 +87,7 @@ def test_a_model_declared_directly_explains_without_a_definition():
     m = Model("direct", sense="max")
     x = m.var("x", (P,), upper=4.0)
     one = Param.from_dense("one", (P,), np.ones(2))
-    m.eq("cap", one[P] * x[P] <= 3.0)
+    m.constraint("cap", one[P] * x[P] <= 3.0)
     m.set_objective(Sum(P, one[P] * x[P]))
     e = m.explain()
     assert (e.name, e.sense, e.built) == ("direct", "max", True)
@@ -123,7 +123,7 @@ def test_a_constraint_reads_back_as_the_relation_it_was_declared_from():
     P = Set("P", np.array(["a", "b"]))
     m = Model("m")
     x = m.var("x", (P,))
-    held = m.eq("cap", x[P] <= 1.0)
+    held = m.constraint("cap", x[P] <= 1.0)
     assert repr(held.relation) == "x[P] <= 1"
 
 
@@ -133,8 +133,8 @@ def test_two_parameters_sharing_a_name_are_refused_where_the_model_walks_them():
     second = Param.from_dense("cost", (P,), np.ones(2))
     m = Model("m")
     x = m.var("x", (P,))
-    m.eq("one", first[P] * x[P] <= 1.0)
-    m.eq("two", second[P] * x[P] <= 1.0)
+    m.constraint("one", first[P] * x[P] <= 1.0)
+    m.constraint("two", second[P] * x[P] <= 1.0)
     with pytest.raises(ValueError, match="two parameters named 'cost'"):
         m.explain()
 
@@ -152,7 +152,7 @@ def test_a_built_explanation_spells_its_relations_beside_its_counts():
     one = Param.from_dense("one", (P,), np.ones(2))
     m = Model("m")
     x = m.var("x", (P,))
-    m.eq("cap", one[P] * x[P] + 1 <= 5.0)
+    m.constraint("cap", one[P] * x[P] + 1 <= 5.0)
     m.set_objective(Sum(P, x[P]) + 7.0)
     lines = repr(m.explain()).splitlines()
     assert lines[-2] == "  constraint  cap (P)  one[P] * x[P] + 1 <= 5  2 rows  2 nz"

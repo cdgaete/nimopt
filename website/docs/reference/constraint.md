@@ -7,11 +7,11 @@ description: The rows an expression produces, the right-hand side that bounds th
 
 ## `Constraint`
 
-Returned by `Model.eq`. Rows over an expression's frame, bounded by a
+Returned by `Model.constraint`. Rows over an expression's frame, bounded by a
 right-hand side.
 
 ```
-Model.eq(name, relation, where=None, over=None)
+Model.constraint(name, relation, where=None, over=None)
 ```
 
 | Argument | Meaning |
@@ -52,7 +52,7 @@ supply = Param.from_dense("supply", (P,), np.array([30.0, 25.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-rows = m.eq("supply", Sum(W, x[P, W]) <= supply[P])
+rows = m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
 print(rows.n_rows, rows.nnz)
 print(m.assemble().row_of("supply"))
 ```
@@ -85,7 +85,7 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 m = Model("transport")
 x = m.var("x", (P, W))
 
-m.eq("supply", Sum(W, x[P, W]) <= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= demand[W])
 ```
 
 <!-- output -->

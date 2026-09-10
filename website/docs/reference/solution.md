@@ -45,8 +45,8 @@ demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
 
 m = Model("transport")
 x = m.var("x", (P, W))
-m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
 m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
 solution = m.solve()
 
@@ -83,8 +83,8 @@ W = Set("W", np.array(["berlin", "paris", "rome"]))
 
 m = Model("infeasible")
 x = m.var("x", (P, W))
-m.eq("floor", Sum(W, x[P, W]) >= 10.0)
-m.eq("ceiling", Sum(W, x[P, W]) <= 1.0)
+m.constraint("floor", Sum(W, x[P, W]) >= 10.0)
+m.constraint("ceiling", Sum(W, x[P, W]) <= 1.0)
 m.set_objective(Sum(P, W, x[P, W]))
 
 m.solve().objective

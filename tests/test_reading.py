@@ -36,7 +36,7 @@ def test_every_sense_refuses_a_right_hand_side_that_is_not_read():
 
 def test_the_reading_states_the_rows_the_bare_name_did():
     m, P, W, x, d, cap = model()
-    m.eq("supply", Sum(W, d[P, W] * x[P, W]) <= cap[P])
+    m.constraint("supply", Sum(W, d[P, W] * x[P, W]) <= cap[P])
     assert m.constraints["supply"].n_rows == 2
     assert m.constraints["supply"].nnz == 6
 
@@ -58,8 +58,8 @@ def test_a_relation_built_by_hand_reads_its_right_hand_side_too():
 
 def test_a_coefficient_on_the_left_states_the_row_the_flipped_spelling_does():
     m, P, W, x, d, cap = model()
-    m.eq("flipped", cap[P] >= Sum(W, d[P, W] * x[P, W]))
-    m.eq("plain", Sum(W, d[P, W] * x[P, W]) <= cap[P])
+    m.constraint("flipped", cap[P] >= Sum(W, d[P, W] * x[P, W]))
+    m.constraint("plain", Sum(W, d[P, W] * x[P, W]) <= cap[P])
     flipped, plain = m.constraints["flipped"], m.constraints["plain"]
     assert flipped.sense == plain.sense == "<="
     assert flipped.n_rows == plain.n_rows
@@ -68,7 +68,7 @@ def test_a_coefficient_on_the_left_states_the_row_the_flipped_spelling_does():
 
 def test_a_coefficient_on_the_left_of_an_equality_states_the_same_row():
     m, P, W, x, d, cap = model()
-    m.eq("flipped", cap[P] == Sum(W, d[P, W] * x[P, W]))
+    m.constraint("flipped", cap[P] == Sum(W, d[P, W] * x[P, W]))
     assert m.constraints["flipped"].sense == "=="
     assert m.constraints["flipped"].n_rows == 2
 
@@ -112,7 +112,7 @@ def test_a_parameter_over_no_dimension_multiplies_a_variable_bare():
 
 def test_a_parameter_over_no_dimension_states_a_right_hand_side_bare():
     d, _, theta, k, _, _ = scalars()
-    d.eq("lid", theta <= k)
+    d.constraint("lid", theta <= k)
     built = d.build({"S": np.array(["s1"]), "k": np.array(4.0), "a": np.array([1.0])})
     assert built.constraints["lid"].n_rows == 1
     lower = np.empty(1)
@@ -186,7 +186,7 @@ def test_a_parameter_over_dimensions_compared_bare_names_its_reading():
 def test_an_equation_takes_a_comparison_and_refuses_anything_else():
     d, S, _, _, x, a = scalars()
     with pytest.raises(TypeError, match="takes a comparison of an expression"):
-        d.eq("c", True)
+        d.constraint("c", True)
 
 
 def test_a_relation_folds_an_expression_on_the_right_however_it_is_built():

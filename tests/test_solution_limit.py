@@ -17,7 +17,7 @@ def knapsack(n=120, k=10, seed=1):
     cap = Param.from_dense("cap", (K,), np.full(k, 0.3 * 25.5 * n))
     m = Model("mdknap", sense="max")
     x = m.var("x", (ITEM,), integer=True, upper=1.0)
-    m.eq("cap", Sum(ITEM, w[K, ITEM] * x[ITEM]) <= cap[K])
+    m.constraint("cap", Sum(ITEM, w[K, ITEM] * x[ITEM]) <= cap[K])
     m.set_objective(Sum(ITEM, v[ITEM] * x[ITEM]))
     return m
 
@@ -29,7 +29,7 @@ def tiny_knapsack():
     v = Param.from_dense("v", (J,), np.array([7.0, 5.0, 4.0, 3.0]))
     w = Param.from_dense("w", (J,), np.array([5.0, 4.0, 3.0, 2.0]))
     x = m.var("x", (J,), integer=True, upper=1.0)
-    m.eq("cap", Sum(J, w[J] * x[J]) <= 9.0)
+    m.constraint("cap", Sum(J, w[J] * x[J]) <= 9.0)
     m.set_objective(Sum(J, v[J] * x[J]))
     return m
 
@@ -44,7 +44,7 @@ def dense_lp(n=60, seed=3):
     b = Param.from_dense("b", (K,), rng.uniform(50, 90, n))
     m = Model("denselp", sense="min")
     x = m.var("x", (ITEM,), lower=0.0, upper=100.0)
-    m.eq("need", Sum(ITEM, a[K, ITEM] * x[ITEM]) >= b[K])
+    m.constraint("need", Sum(ITEM, a[K, ITEM] * x[ITEM]) >= b[K])
     m.set_objective(Sum(ITEM, c[ITEM] * x[ITEM]))
     return m
 
@@ -60,8 +60,8 @@ def transport(constant=0.0):
     demand = Param.from_dense("demand", (W,), np.array([20.0, 15.0, 15.0]))
     m = Model("transport")
     x = m.var("x", (P, W))
-    m.eq("supply", Sum(W, x[P, W]) <= supply[P])
-    m.eq("demand", Sum(P, x[P, W]) >= demand[W])
+    m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+    m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
     m.set_objective(Sum(P, W, cost[P, W] * x[P, W]) + constant)
     return m
 

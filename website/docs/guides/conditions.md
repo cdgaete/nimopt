@@ -30,7 +30,7 @@ arcs = subset(
 
 m = Model("network")
 x = m.var("x", (P, W))
-rows = m.eq("capacity", Sum(W, x[P, W], where=arcs) <= 10.0)
+rows = m.constraint("capacity", Sum(W, x[P, W], where=arcs) <= 10.0)
 
 print(x.n_columns)
 print(rows.n_rows, rows.nnz)
@@ -59,7 +59,7 @@ model never uses the other members.
 
 ## Restricting the rows
 
-`m.eq(..., where=domain)` takes a domain over the constraint's frame and
+`m.constraint(..., where=domain)` takes a domain over the constraint's frame and
 keeps the rows in it. A row outside the condition is not produced.
 
 ```python
@@ -72,7 +72,7 @@ W = Set("W", np.array(["w0", "w1", "w2"]))
 m = Model("network")
 x = m.var("x", (P, W))
 only_p0 = subset((P,), {"P": np.array(["p0"])})
-rows = m.eq("capacity", Sum(W, x[P, W]) <= 10.0, where=only_p0)
+rows = m.constraint("capacity", Sum(W, x[P, W]) <= 10.0, where=only_p0)
 
 print(rows.n_rows)
 print(m.assemble().to_dense())
@@ -106,7 +106,7 @@ m = Model("network")
 x = m.var("x", (P, W))
 by_warehouse = subset((W,), {"W": np.array(["w0"])})
 
-m.eq("capacity", Sum(W, x[P, W]) <= 10.0, where=by_warehouse)
+m.constraint("capacity", Sum(W, x[P, W]) <= 10.0, where=by_warehouse)
 ```
 
 <!-- output -->
@@ -140,7 +140,7 @@ W = Set("W", np.array(["w0", "w1", "w2"]))
 
 m = Model("network")
 x = m.var("x", (P, W))
-rows = m.eq("capacity", Sum(W, x[P, W]) <= 10.0, over=product((P,)))
+rows = m.constraint("capacity", Sum(W, x[P, W]) <= 10.0, over=product((P,)))
 
 print(rows.n_rows)
 ```
@@ -171,7 +171,7 @@ W = Set("W", np.array(["w0", "w1", "w2"]))
 m = Model("network")
 x = m.var("x", (P, W))
 
-m.eq(
+m.constraint(
     "capacity",
     Sum(W, x[P, W]) <= 10.0,
     where=subset((P,), {"P": np.array(["p0"])}),

@@ -24,7 +24,7 @@ crossed with the column space, so there is no assembly step: the array is
 the matrix.
 
 **A definition is a model without its data.** `Definition` mirrors the
-vocabulary a model is written in, `set`, `param`, `var`, `eq` and
+vocabulary a model is written in, `set`, `param`, `var`, `constraint` and
 `set_objective`, over symbols declared with no members and no values.
 `explain()` reports what it declares; `build(data)` binds a copy and returns
 a `Model`, so one definition builds as many models as it is given datasets.

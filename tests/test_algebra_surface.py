@@ -83,8 +83,8 @@ REFUSED = [
     ("c[P - 1]", "state the lag"),
     ("P - 1.7", "whole number"),
     ("(P - 1) - 1", "one lag"),
-    ("m.eq('r', x[P] <= 'a')", "right-hand side"),
-    ("m.eq('r', x[P] <= None)", "right-hand side"),
+    ("m.constraint('r', x[P] <= 'a')", "right-hand side"),
+    ("m.constraint('r', x[P] <= None)", "right-hand side"),
     ("np.sum(x[P])", "Sum"),
     ("np.array([1.0, 2.0]) * x[P]", "Param.from_dense"),
     ("len(x[P])", "no length"),
@@ -125,7 +125,10 @@ def test_a_form_nimopt_does_not_express_says_so(spelling, names):
 
 
 REWRITES = [
-    ("0.0 <= x[P] <= 1.0", ["m.eq('lo', x[P] >= 0.0)", "m.eq('hi', x[P] <= 1.0)"]),
+    (
+        "0.0 <= x[P] <= 1.0",
+        ["m.constraint('lo', x[P] >= 0.0)", "m.constraint('hi', x[P] <= 1.0)"],
+    ),
     ("Sum(P - 1, x[P])", ["Sum(P, x[P - 1])"]),
     ("x[P] < 1.0", ["x[P] <= 1.0"]),
     (

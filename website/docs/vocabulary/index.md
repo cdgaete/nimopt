@@ -82,7 +82,7 @@ It selects that member and removes the set from the frame.
 
 **Relation.** An expression compared with `<=`, `>=` or `==` to a
 right-hand side. `Sum(W, x[P, W]) <= supply[P]` is a relation. It becomes
-of the model when passed to `m.eq`.
+of the model when passed to `m.constraint`.
 
 **Constraint.** A relation added to the model under a name. It produces one
 row per member of its expression's frame.

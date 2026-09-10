@@ -131,7 +131,9 @@ class Definition:
         )
         return self.variables[name]
 
-    def eq(self, name: str, relation: Any, where: Any = None, over: Any = None) -> None:
+    def constraint(
+        self, name: str, relation: Any, where: Any = None, over: Any = None
+    ) -> None:
         """Declare an equation from a comparison of an expression.
 
         `where=` narrows the rows and `over=` states them, each as a tuple of
@@ -225,7 +227,7 @@ class Definition:
         for at, (name, (relation, where, over)) in enumerate(
             bound.constraints.items(), start=1
         ):
-            model.eq(name, relation, where, over)
+            model.constraint(name, relation, where, over)
             if held is not None:
                 held.step(at, name)
         if held is not None:

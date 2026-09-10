@@ -53,9 +53,9 @@ def definition() -> Definition:
     p = d.var("p", (S, G, T), lower=0.0)
     shed = d.var("shed", (S, T), lower=0.0)
 
-    d.eq("capacity", p[S, G, T] - p_max[G] * on[T, G] <= 0.0)
-    d.eq("minimum", p[S, G, T] - p_min[G] * on[T, G] >= 0.0)
-    d.eq("balance", Sum(G, p[S, G, T]) + shed[S, T] == demand[S, T])
+    d.constraint("capacity", p[S, G, T] - p_max[G] * on[T, G] <= 0.0)
+    d.constraint("minimum", p[S, G, T] - p_min[G] * on[T, G] >= 0.0)
+    d.constraint("balance", Sum(G, p[S, G, T]) + shed[S, T] == demand[S, T])
     d.set_objective(
         Sum(T, G, no_load[G] * on[T, G])
         + Sum(S, G, T, weight[S] * cost[S, G] * p[S, G, T])

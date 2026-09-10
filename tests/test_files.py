@@ -55,9 +55,9 @@ def dispatch():
     load_ = d.param("load", (T,))
     budget, live = d.param("budget", (G,)), d.param("live", (G,))
     gen = d.var("gen", (G, T), upper=cap)
-    d.eq("balance", Sum(G, gen[G, T]) == load_[T])
-    d.eq("ramp", gen[G, T] - gen[G, T - 1] <= ramp_limit[G, T])
-    d.eq("annual_cap", Sum(T, gen[G, T]) <= budget[G], where=live)
+    d.constraint("balance", Sum(G, gen[G, T]) == load_[T])
+    d.constraint("ramp", gen[G, T] - gen[G, T - 1] <= ramp_limit[G, T])
+    d.constraint("annual_cap", Sum(T, gen[G, T]) <= budget[G], where=live)
     d.set_objective(Sum(G, T, (price[G, T] / eta[G, T]) * gen[G, T]))
     return d
 
@@ -96,7 +96,7 @@ def test_a_subset_and_stated_rows_write_as_the_definition_takes_them():
     P, W = d.set("P"), d.set("W")
     cost = d.param("cost", (P, W))
     flow = d.var("flow", (P, W), subset=cost)
-    d.eq("all", Sum(W, flow[P, W]) <= 1.0, over=(P,))
+    d.constraint("all", Sum(W, flow[P, W]) <= 1.0, over=(P,))
     text = d.to_yaml()
     assert "    subset: cost\n" in text
     assert "    over: [P]\n" in text
@@ -110,7 +110,7 @@ def test_a_model_writes_its_structure_in_order_of_first_appearance():
     cost = Param.from_dense("cost", (P,), np.ones(2))
     m = Model("m", sense="max")
     x = m.var("x", (P,), upper=cost)
-    m.eq("cap", Sum(P, cost[P] * x[P]) <= 3.0)
+    m.constraint("cap", Sum(P, cost[P] * x[P]) <= 3.0)
     assert m.to_yaml() == textwrap.dedent(
         """\
         version: 2
@@ -134,7 +134,7 @@ def test_a_model_over_a_domain_with_no_name_is_refused_by_name():
     P = Set("P", np.array(["a", "b"]))
     m = Model("m")
     x = m.var("x", (P,))
-    m.eq("cap", x[P] <= 1.0, where=subset((P,), {"P": np.array(["a"])}))
+    m.constraint("cap", x[P] <= 1.0, where=subset((P,), {"P": np.array(["a"])}))
     with pytest.raises(ValueError, match="constraint 'cap'.*no name.*parameter"):
         m.to_yaml()
     n = Model("n")
@@ -233,7 +233,7 @@ def test_a_model_inlines_its_data_in_the_three_shapes():
     cap = Param.from_dense("cap", (P,), np.array([4.0, 9.0]))
     m = Model("m")
     x = m.var("x", (P, W), subset=cost, upper=cap)
-    m.eq("cap", Sum(W, cost[P, W] * x[P, W]) <= cap[P])
+    m.constraint("cap", Sum(W, cost[P, W] * x[P, W]) <= cap[P])
     text = m.to_yaml(inline=True)
     # `cap` leads `cost` because a variable's bounds are walked before its subset
     assert text.endswith(
@@ -263,7 +263,7 @@ def test_a_long_parameter_covering_its_product_inlines_as_a_grid():
     )
     m = Model("m")
     x = m.var("x", (P,), upper=full)
-    m.eq("cap", x[P] <= full[P])
+    m.constraint("cap", x[P] <= full[P])
     assert "  full: [1.0, 2.0]\n" in m.to_yaml(inline=True)
 
 
@@ -392,7 +392,7 @@ def test_a_sidecar_keeps_the_dtype_each_label_column_carries(tmp_path):
     )
     m = Model("m")
     x = m.var("x", (P, T), subset=cost)
-    m.eq("cap", Sum(T, cost[P, T] * x[P, T]) <= 1.0)
+    m.constraint("cap", Sum(T, cost[P, T] * x[P, T]) <= 1.0)
     path = tmp_path / "m.yaml"
     save(m, path)
     with np.load(tmp_path / "m.npz", allow_pickle=False) as held:
@@ -407,7 +407,7 @@ def test_an_objective_over_no_dimension_survives_the_file():
     S = d.set("S")
     theta = d.var("theta", (), lower=-np.inf)
     x = d.var("x", (S,))
-    d.eq("tail", theta - Sum(S, x[S]) >= 0.0)
+    d.constraint("tail", theta - Sum(S, x[S]) >= 0.0)
     d.set_objective(theta)
     text = d.to_yaml()
     assert "objective: theta\n" in text

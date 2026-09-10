@@ -369,7 +369,7 @@ def _definition(spec: Mapping[str, Any]) -> Definition:
                 f"{what} reads to no comparison: {entry['relation']!r} states an "
                 f"expression and no sense"
             )
-        d.eq(
+        d.constraint(
             name,
             relation,
             where=_read_domain(d, entry.get("where"), f"{what} where"),

@@ -63,8 +63,8 @@ def test_constraints_take_successive_row_ranges():
     P = Set("P", np.array(["p1", "p2"]))
     x = m.var("x", (P,))
     one = Param.from_dense("a", (P,), np.ones(2))
-    first = m.eq("c1", one[P] * x[P] <= 1.0)
-    second = m.eq("c2", one[P] * x[P] >= 0.0)
+    first = m.constraint("c1", one[P] * x[P] <= 1.0)
+    second = m.constraint("c2", one[P] * x[P] >= 0.0)
     assert (first.n_rows, second.n_rows) == (2, 2)
     assert m.n_rows == 4
     assert m.nnz == 4
@@ -137,15 +137,15 @@ def test_a_model_carries_no_second_way_to_set_a_sense():
         Model("m").sense = "max"
 
 
-def test_an_equation_is_stated_with_eq_for_every_sense():
+def test_a_constraint_accepts_every_relation_sense():
     T = Set("T", np.array([0, 1]))
     m = Model("m")
     x = m.var("x", (T,), upper=5.0)
     one = Param.from_dense("one", (T,), np.ones(2))
-    # eq is the equation, not the equality: every sense goes through it
-    assert m.eq("le", one[T] * x[T] <= 1.0).sense == "<="
-    assert m.eq("ge", one[T] * x[T] >= 0.0).sense == ">="
-    assert m.eq("en", one[T] * x[T] == 1.0).sense == "=="
+    # constraint takes every relation sense, not only equality
+    assert m.constraint("le", one[T] * x[T] <= 1.0).sense == "<="
+    assert m.constraint("ge", one[T] * x[T] >= 0.0).sense == ">="
+    assert m.constraint("en", one[T] * x[T] == 1.0).sense == "=="
 
 
 def test_a_model_carries_no_second_way_to_state_an_equation():

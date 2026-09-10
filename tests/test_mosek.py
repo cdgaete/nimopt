@@ -54,7 +54,7 @@ def revenue():
     price = Param.from_dense("price", (GEN,), np.array([3.0, 1.0]))
     m = Model("revenue", sense="max")
     p = m.var("p", (SNAP, GEN), lower=0.0, upper=p_max)
-    m.eq("market", Sum(GEN, p[SNAP, GEN]) <= demand[SNAP])
+    m.constraint("market", Sum(GEN, p[SNAP, GEN]) <= demand[SNAP])
     m.set_objective(Sum(SNAP, GEN, price[GEN] * p[SNAP, GEN]))
     return m
 
@@ -272,7 +272,7 @@ def covering(n=200, k=40, seed=5):
     need = Param.from_dense("need", (K,), np.full(k, 1.0))
     m = Model("cover", sense="min")
     x = m.var("x", (ITEM,), integer=True, upper=1.0)
-    m.eq("cover", Sum(ITEM, a[K, ITEM] * x[ITEM]) >= need[K])
+    m.constraint("cover", Sum(ITEM, a[K, ITEM] * x[ITEM]) >= need[K])
     m.set_objective(Sum(ITEM, c[ITEM] * x[ITEM]))
     return m
 

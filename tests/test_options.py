@@ -80,7 +80,7 @@ def tiny():
     m = Model("m")
     x = m.var("x", (T,), upper=1.0)
     one = Param.from_dense("one", (T,), np.ones(2))
-    m.eq("cap", one[T] * x[T] <= 1.0)
+    m.constraint("cap", one[T] * x[T] <= 1.0)
     m.set_objective(Sum(T, one[T] * x[T]))
     return m.assemble()
 

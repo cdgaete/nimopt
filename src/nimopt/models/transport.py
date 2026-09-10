@@ -41,8 +41,8 @@ def definition(integer: bool = False) -> Definition:
     demand = d.param("demand", (W,))
     upper = d.param("capacity", (P, W)) if integer else np.inf
     flow = d.var("flow", (P, W), subset=cost, lower=0.0, upper=upper, integer=integer)
-    d.eq("supply", Sum(W, flow[P, W]) <= supply[P])
-    d.eq("demand", Sum(P, flow[P, W]) >= demand[W])
+    d.constraint("supply", Sum(W, flow[P, W]) <= supply[P])
+    d.constraint("demand", Sum(P, flow[P, W]) >= demand[W])
     d.set_objective(Sum(P, W, cost[P, W] * flow[P, W]))
     return d
 
