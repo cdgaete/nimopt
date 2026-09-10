@@ -331,3 +331,22 @@ def test_mosek_reports_no_values_where_it_reaches_no_point():
     assert repr(solved) == "Solution('node_limit', no values)"
     with pytest.raises(ValueError, match="reports no feasible point"):
         solved.primal("x")
+
+
+class NoRelaxation:
+    """A task reporting a relaxation count of zero and a bound of zero."""
+
+    def getintinf(self, item):
+        return 0
+
+    def getdouinf(self, item):
+        return 0.0
+
+
+def test_the_mosek_bound_at_an_optimum_is_the_objective_without_a_relaxation():
+    # Mosek defines mio_obj_bound after a relaxation; at a count of zero its
+    # 0.0 is not a bound, and an optimum is bounded by its own objective
+    import mosek as backend
+
+    assert mosek._bound(backend, NoRelaxation(), True, "optimal", 12.0) == 12.0
+    assert mosek._bound(backend, NoRelaxation(), True, "node_limit", 12.0) is None

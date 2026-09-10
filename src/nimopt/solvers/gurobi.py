@@ -135,8 +135,8 @@ def _bound(model: Any, integer: bool, status: str, objective: float) -> float | 
 
     For a model with integer columns the bound is `ObjBound`. It is None where
     Gurobi reports an infinite value. For a model without integer columns
-    `ObjBound` is not a dual bound at every status. The bound is then the
-    objective at status `optimal` and None at any other status.
+    `ObjBound` is not a dual bound. The bound is then the objective at status
+    `optimal` and None at any other status.
     """
     if not integer:
         return objective if status == "optimal" else None

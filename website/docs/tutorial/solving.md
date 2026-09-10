@@ -99,9 +99,15 @@ solver instance open and `diagnose()` returns the conflicting rows. See
 ## A solve stopped at a limit
 
 An option in `options()` stops the solver early. A solver stopped at a
-limit reports the best point it found, and `feasible` is True for it. Read
-`bound` for what the solver proved about the optimum and `gap` for the
-distance from the objective to that bound.
+limit reports the best point it found, and `feasible` is True for it.
+`objective` and `primal` then return that point. `bound` returns what the
+solver proved about the optimum, an upper bound under sense `max` and a
+lower bound under sense `min`. `gap` returns the relative distance from the
+objective to that bound.
+
+A search stopped after one node returns whichever point the solver found
+there. The solver's thread count determines that point. The example below
+reports what holds of every such point.
 
 ```python
 import numpy as np
@@ -120,9 +126,10 @@ m.eq("capacity", Sum(ITEM, weight[BIN, ITEM] * x[ITEM]) <= capacity[BIN])
 m.set_objective(Sum(ITEM, value[ITEM] * x[ITEM]))
 
 solution = m.solve(options={"node_limit": 1})
-print(solution.status, solution.feasible)
-print(f"objective {solution.objective:.1f}, bound {solution.bound:.1f}")
-print(f"gap {solution.gap:.2%}")
+print(f"status: {solution.status}")
+print(f"feasible: {solution.feasible}")
+print(f"the bound is above the objective: {solution.bound > solution.objective}")
+print(f"the gap is positive: {solution.gap > 0.0}")
 ```
 
 <!-- output -->
@@ -130,9 +137,10 @@ print(f"gap {solution.gap:.2%}")
 <summary>Output</summary>
 
 ```text
-solution_limit True
-objective 1035.5, bound 1045.1
-gap 0.92%
+status: solution_limit
+feasible: True
+the bound is above the objective: True
+the gap is positive: True
 ```
 
 </details>

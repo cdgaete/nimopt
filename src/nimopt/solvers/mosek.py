@@ -202,15 +202,13 @@ def _bound(
 
     For a model with integer columns the bound is `mio_obj_bound`. Mosek
     defines that item after it solves a relaxation, and `mio_num_relax` counts
-    the relaxations it solved. The bound is None at a count of zero and None
-    where Mosek reports an infinite value. For a model without integer columns
-    Mosek defines no dual bound. The bound is then the objective at status
-    `optimal` and None at any other status.
+    the relaxations it solved. The bound is None where Mosek reports an
+    infinite value. Where Mosek defines no dual bound, at a relaxation count of
+    zero or for a model without integer columns, the bound is the objective at
+    status `optimal` and None at any other status.
     """
-    if not integer:
+    if not integer or task.getintinf(mosek.iinfitem.mio_num_relax) == 0:
         return objective if status == "optimal" else None
-    if task.getintinf(mosek.iinfitem.mio_num_relax) == 0:
-        return None
     value = float(task.getdouinf(mosek.dinfitem.mio_obj_bound))
     return value if np.isfinite(value) else None
 

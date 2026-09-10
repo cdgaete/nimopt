@@ -85,6 +85,11 @@ class Result:
                 "status is 'optimal' and feasible is False; report a feasible "
                 "point at status 'optimal'"
             )
+        if self.status == "infeasible" and self.feasible:
+            raise ValueError(
+                "status is 'infeasible' and feasible is True; report no "
+                "feasible point at status 'infeasible'"
+            )
         if self.bound is not None and not np.isfinite(self.bound):
             raise ValueError(f"bound is {self.bound}; pass a finite bound or pass None")
         if self.feasible and not np.isfinite(self.objective):
