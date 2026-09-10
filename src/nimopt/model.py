@@ -22,8 +22,8 @@ from nimopt.names import COLUMN, ROW
 from nimopt.param import Param
 from nimopt.progress import reporter
 from nimopt.sets import Alias
-from nimopt.spelling import spell
 from nimopt.symbol import read_at_its_sets
+from nimopt.syntax import render
 from nimopt.term import Expression
 from nimopt.variable import Variable
 
@@ -257,7 +257,7 @@ class Model:
             ),
             constraints=tuple(
                 ConstraintShape(
-                    name, c.frame, c.sense, c.n_rows, c.nnz, spell(c.relation)
+                    name, c.frame, c.sense, c.n_rows, c.nnz, render(c.relation)
                 )
                 for name, c in self.constraints.items()
             ),

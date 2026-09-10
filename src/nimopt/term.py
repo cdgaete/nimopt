@@ -290,9 +290,9 @@ class Expression:
         return tuple(seen)
 
     def __repr__(self) -> str:
-        from nimopt.spelling import spell
+        from nimopt.syntax import render
 
-        return spell(self)
+        return render(self)
 
     def __add__(self, other: Any) -> Any:
         """The expression with `other` added, a symbol read first.
@@ -530,9 +530,9 @@ class Relation:
         self.rhs = rhs
 
     def __repr__(self) -> str:
-        from nimopt.spelling import spell
+        from nimopt.syntax import render
 
-        return spell(self)
+        return render(self)
 
     def __bool__(self) -> bool:
         raise TypeError(f"a relation has no truth value; {_CHAINED}")

@@ -126,7 +126,7 @@ def _rhs(rhs: Any) -> str:
     return number(rhs)
 
 
-def spell(held: Any) -> str:
+def render(held: Any) -> str:
     """`held` as the text that reads back to it.
 
     A coefficient, an expression or a relation, spelled from what the object

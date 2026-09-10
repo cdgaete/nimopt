@@ -11,7 +11,7 @@ import yaml
 from nimopt.definition import Definition
 from nimopt.model import Model
 from nimopt.param import Param
-from nimopt.spelling import read, spell
+from nimopt.syntax import read, render
 from nimopt.term import Relation
 
 VERSION = 2
@@ -273,7 +273,7 @@ def structure(held: Any) -> dict[str, Any]:
             entry["integer"] = True
         out["variables"][v.name] = entry
     for name, relation, where, over in constraints:
-        entry = {"relation": spell(relation)}
+        entry = {"relation": render(relation)}
         for slot, value in (
             ("where", _domain(where, f"constraint {name!r}", "where=")),
             ("over", _domain(over, f"constraint {name!r}", "over=")),
@@ -282,7 +282,7 @@ def structure(held: Any) -> dict[str, Any]:
                 entry[slot] = value
         out["constraints"][name] = entry
     if objective is not None:
-        out["objective"] = spell(objective)
+        out["objective"] = render(objective)
     return out
 
 

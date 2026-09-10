@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from nimopt import Definition, Model, Param, Set, Sum
-from nimopt.spelling import read, spell
+from nimopt.syntax import read, render
 
 
 def model():
@@ -63,7 +63,7 @@ def test_a_coefficient_on_the_left_states_the_row_the_flipped_spelling_does():
     flipped, plain = m.constraints["flipped"], m.constraints["plain"]
     assert flipped.sense == plain.sense == "<="
     assert flipped.n_rows == plain.n_rows
-    assert spell(flipped.relation) == spell(plain.relation)
+    assert render(flipped.relation) == render(plain.relation)
 
 
 def test_a_coefficient_on_the_left_of_an_equality_states_the_same_row():
@@ -92,22 +92,22 @@ def scalars():
 
 def test_a_variable_over_no_dimension_enters_an_expression_bare():
     _, S, theta, _, x, _ = scalars()
-    assert spell(theta + x[S]) == "theta + x[S]"
-    assert spell(x[S] - theta) == "x[S] - theta"
-    assert spell(2.0 * theta) == "2 * theta"
-    assert spell(-theta) == "-theta"
+    assert render(theta + x[S]) == "theta + x[S]"
+    assert render(x[S] - theta) == "x[S] - theta"
+    assert render(2.0 * theta) == "2 * theta"
+    assert render(-theta) == "-theta"
 
 
 def test_a_variable_over_no_dimension_is_the_same_term_bracketed_or_bare():
     _, S, theta, _, x, _ = scalars()
-    assert spell(theta[()]) == "theta"
-    assert spell(theta + x[S]) == spell(theta[()] + x[S])
+    assert render(theta[()]) == "theta"
+    assert render(theta + x[S]) == render(theta[()] + x[S])
 
 
 def test_a_parameter_over_no_dimension_multiplies_a_variable_bare():
     _, S, _, k, x, _ = scalars()
-    assert spell(k * x[S]) == "k * x[S]"
-    assert spell(x[S] * k) == "k * x[S]"
+    assert render(k * x[S]) == "k * x[S]"
+    assert render(x[S] * k) == "k * x[S]"
 
 
 def test_a_parameter_over_no_dimension_states_a_right_hand_side_bare():
@@ -146,13 +146,13 @@ def test_a_scalar_round_trips_through_its_spelling():
         "k * theta <= 3",
         "Sum(S, x[S]) + theta == k",
     ):
-        assert spell(read(text, symbols)) == text
+        assert render(read(text, symbols)) == text
 
 
 def test_an_objective_takes_a_variable_over_no_dimension_bare():
     d, _, theta, _, _, _ = scalars()
     d.set_objective(theta)
-    assert spell(d.objective) == "theta"
+    assert render(d.objective) == "theta"
 
 
 def test_an_objective_names_the_reading_a_variable_over_dimensions_wants():
@@ -195,5 +195,5 @@ def test_a_relation_folds_an_expression_on_the_right_however_it_is_built():
     _, S, theta, _, x, _ = scalars()
     built = Relation(x[S], "<=", x[S] + theta)
     assert built.rhs == 0.0
-    assert spell(built) == spell(x[S] <= x[S] + theta)
+    assert render(built) == render(x[S] <= x[S] + theta)
     assert "Relation" in repr(type(built))

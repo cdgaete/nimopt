@@ -24,8 +24,8 @@ from nimopt.model import Model
 from nimopt.param import Param
 from nimopt.progress import reporter
 from nimopt.sets import Alias, Set, check_members
-from nimopt.spelling import spell
 from nimopt.symbol import read_at_its_sets
+from nimopt.syntax import render
 from nimopt.term import Expression, ParamRef, Relation
 from nimopt.variable import Variable
 
@@ -168,7 +168,7 @@ class Definition:
                     relation.sense,
                     None,
                     None,
-                    spell(relation),
+                    render(relation),
                 )
                 for name, (relation, _, _) in self.constraints.items()
             ),

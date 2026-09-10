@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from nimopt.param import Param
-from nimopt.spelling import spell
+from nimopt.syntax import render
 
 if TYPE_CHECKING:
     from nimopt.variable import Variable
@@ -159,7 +159,7 @@ def objective_constant(expression: Any) -> float:
 
 def objective_text(expression: Any) -> str | None:
     """The objective's spelling, or None for no objective."""
-    return None if expression is None else spell(expression)
+    return None if expression is None else render(expression)
 
 
 def _members(subset: Any) -> str | None:
