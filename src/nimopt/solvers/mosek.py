@@ -42,7 +42,7 @@ CAPABILITIES = Capabilities(
         "conflict": "absent",
         "ray": "native",
     },
-    refused=(("integrality", "duals"),),
+    rejected=(("integrality", "duals"),),
 )
 
 OPTIMAL = ("optimal", "integer_optimal")
@@ -251,7 +251,7 @@ def solve(
         )
     integer = bool(assembled.integrality.any())
     duals = None
-    if not (integer and CAPABILITIES.refuses("integrality", "duals")):
+    if not (integer and CAPABILITIES.rejects("integrality", "duals")):
         duals = np.zeros(assembled.n_rows, dtype=np.float64)
     which = _defined(mosek, task, integer)
     if which is None:

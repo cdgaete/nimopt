@@ -39,6 +39,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - `Model.constraint` and `Definition.constraint` replace the method `eq`;
   every relation goes through them.
 - The install section of the documentation opens on the PyPI install.
+- `Capabilities.rejected` and `Capabilities.rejects(one, other)` replace
+  `refused` and `refuses`. The repr writes `rejects a+b`.
 
 ## 0.1.2 - 2026-09-09
 

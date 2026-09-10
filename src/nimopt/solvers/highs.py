@@ -33,7 +33,7 @@ CAPABILITIES = Capabilities(
         "conflict": "native",
         "ray": "native",
     },
-    refused=(("integrality", "duals"),),
+    rejected=(("integrality", "duals"),),
 )
 
 OUTCOME = {
@@ -230,7 +230,7 @@ def solve(
     solution = highs.getSolution()
     integer = bool(assembled.integrality.any())
     duals = None
-    if not (integer and CAPABILITIES.refuses("integrality", "duals")):
+    if not (integer and CAPABILITIES.rejects("integrality", "duals")):
         duals = np.asarray(solution.row_dual, dtype=np.float64)
     info = highs.getInfo()
     status = OUTCOME[reported]

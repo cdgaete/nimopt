@@ -41,7 +41,7 @@ CAPABILITIES = Capabilities(
         "conflict": "native",
         "ray": "native",
     },
-    refused=(("integrality", "duals"),),
+    rejected=(("integrality", "duals"),),
 )
 
 OUTCOME = {
@@ -195,7 +195,7 @@ def solve(
     integer = bool(assembled.integrality.any())
     status = OUTCOME[reported]
     duals = None
-    if not (integer and CAPABILITIES.refuses("integrality", "duals")):
+    if not (integer and CAPABILITIES.rejects("integrality", "duals")):
         duals = np.zeros(assembled.n_rows, dtype=np.float64)
     if not model.SolCount:
         return Result(

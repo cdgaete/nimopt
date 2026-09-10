@@ -34,9 +34,9 @@ print(capabilities("mosek"))
 
 ```text
 True
-highs  integrality native · duals native · conflict native · ray native  refuses duals+integrality
-gurobi  integrality native · duals native · conflict native · ray native  refuses duals+integrality
-mosek  integrality native · duals native · conflict absent · ray native  refuses duals+integrality
+highs  integrality native · duals native · conflict native · ray native  rejects duals+integrality
+gurobi  integrality native · duals native · conflict native · ray native  rejects duals+integrality
+mosek  integrality native · duals native · conflict absent · ray native  rejects duals+integrality
 ```
 
 </details>
@@ -48,9 +48,9 @@ mosek  integrality native · duals native · conflict absent · ray native  refu
 | --- | --- |
 | `solver` | the adapter's name |
 | `support` | one of `"native"` or `"absent"` per capability |
-| `refused` | the pairs this adapter refuses together |
+| `rejected` | the pairs this adapter refuses together |
 | `supports(capability)` | whether the adapter handles it at all |
-| `refuses(one, other)` | whether it refuses the two together |
+| `rejects(one, other)` | whether it refuses the two together |
 
 The capabilities are `integrality`, `duals`, `conflict` and `ray`. A flat
 set is insufficient: a solver can support two and refuse their

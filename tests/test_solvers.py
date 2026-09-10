@@ -53,9 +53,9 @@ def test_a_descriptor_is_readable_whether_or_not_its_backend_is_installed():
 def test_both_adapters_refuse_a_mixed_integer_models_duals():
     # a mixed-integer model's duals are not the relaxation's duals
     for name in ADAPTERS:
-        assert capabilities(name).refuses("integrality", "duals")
-        assert capabilities(name).refuses("duals", "integrality")
-        assert not capabilities(name).refuses("conflict", "ray")
+        assert capabilities(name).rejects("integrality", "duals")
+        assert capabilities(name).rejects("duals", "integrality")
+        assert not capabilities(name).rejects("conflict", "ray")
 
 
 def test_a_solver_the_seam_does_not_adapt_is_refused():
@@ -105,7 +105,7 @@ def test_a_capability_that_is_absent_is_answered_for_rather_than_missing():
 
 
 def test_a_refused_pair_names_two_capabilities_the_seam_carries():
-    with pytest.raises(ValueError, match="a refused pair names two"):
+    with pytest.raises(ValueError, match="a rejected pair names two"):
         Capabilities("x", dict.fromkeys(CAPABILITIES, "native"), (("duals",),))
 
 
@@ -113,7 +113,7 @@ def test_a_descriptor_reads_as_what_the_adapter_does():
     rendered = repr(capabilities("highs"))
     assert rendered.startswith("highs")
     assert "conflict native" in rendered
-    assert "refuses duals+integrality" in rendered
+    assert "rejects duals+integrality" in rendered
 
 
 def test_a_model_the_backend_refuses_is_not_solved_on():

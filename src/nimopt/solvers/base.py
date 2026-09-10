@@ -104,14 +104,14 @@ class Capabilities:
     """What one adapter does, and which of its capabilities refuse each other.
 
     A flat set is insufficient: a solver can hold two capabilities and refuse
-    their combination. `refused` carries those pairs, so a caller reads what a
+    their combination. `rejected` carries those pairs, so a caller reads what a
     solver will not do for a given model rather than discovering it in a
     vector that means nothing.
     """
 
     solver: str
     support: dict[str, str]
-    refused: tuple[tuple[str, str], ...]
+    rejected: tuple[tuple[str, str], ...]
 
     def __post_init__(self) -> None:
         unknown = sorted(set(self.support) - set(CAPABILITIES))
@@ -132,20 +132,20 @@ class Capabilities:
                     f"support is one of {SUPPORT}; {self.solver!r} states "
                     f"{support!r} for {capability!r}"
                 )
-        for pair in self.refused:
+        for pair in self.rejected:
             unknown = sorted(set(pair) - set(CAPABILITIES))
             if len(pair) != 2 or unknown:
                 raise ValueError(
-                    f"a refused pair names two capabilities of {CAPABILITIES}; "
+                    f"a rejected pair names two capabilities of {CAPABILITIES}; "
                     f"{self.solver!r} states {pair}"
                 )
 
     def __repr__(self) -> str:
         does = " · ".join(f"{c} {self.support[c]}" for c in CAPABILITIES)
-        if not self.refused:
+        if not self.rejected:
             return f"{self.solver}  {does}"
-        refuses = " · ".join("+".join(sorted(p)) for p in self.refused)
-        return f"{self.solver}  {does}  refuses {refuses}"
+        rejects = " · ".join("+".join(sorted(p)) for p in self.rejected)
+        return f"{self.solver}  {does}  rejects {rejects}"
 
     def supports(self, capability: str) -> bool:
         """Whether this adapter answers for `capability` at all."""
@@ -153,8 +153,8 @@ class Capabilities:
             raise ValueError(f"the capabilities are {CAPABILITIES}; got {capability!r}")
         return self.support[capability] != "absent"
 
-    def refuses(self, one: str, other: str) -> bool:
+    def rejects(self, one: str, other: str) -> bool:
         """Whether this adapter refuses two capabilities together."""
         return tuple(sorted((one, other))) in tuple(
-            tuple(sorted(pair)) for pair in self.refused
+            tuple(sorted(pair)) for pair in self.rejected
         )
