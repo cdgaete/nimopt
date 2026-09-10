@@ -86,7 +86,7 @@ def tiny():
 
 
 def test_the_highs_map_covers_the_whole_vocabulary():
-    # a vocabulary an adapter half-carries would refuse an option on one
+    # a vocabulary an adapter covers in part would reject an option on one
     # solver and take it on the other
     assert set(highs.OPTION_NAMES) == {o.name for o in VOCABULARY}
     assert set(highs.OPTION_VALUES) <= set(highs.OPTION_NAMES)
@@ -102,7 +102,7 @@ def test_the_gurobi_map_covers_the_whole_vocabulary():
 def test_an_option_a_solver_does_not_carry_is_refused_by_name():
     from nimopt.solvers import gurobi
 
-    with pytest.raises(ValueError, match="gurobi carries no option 'newton_system'"):
+    with pytest.raises(ValueError, match="gurobi has no option 'newton_system'"):
         translated(
             {"newton_system": "augmented"},
             gurobi.OPTION_NAMES,
@@ -129,8 +129,8 @@ def test_a_choice_a_solver_lacks_is_refused_naming_what_it_takes():
 
 
 def test_the_interior_point_options_reach_highs():
-    # HiGHS accepts the HiPO and PDLP settings whichever method runs, so a
-    # solve carrying them reports the optimum the tiny model has
+    # HiGHS accepts the HiPO and PDLP settings whichever method runs; a solve
+    # with them reports the optimum the tiny model has
     result = highs.solve(
         tiny(),
         "min",
@@ -166,7 +166,7 @@ def test_log_is_off_unless_a_caller_asks_and_reaches_the_solver_when_it_does(cap
     highs.solve(tiny(), "min")
     assert capfd.readouterr().out == "", "a solve is silent by default"
     highs.solve(tiny(), "min", {"log": True})
-    assert capfd.readouterr().out != "", "log=True reaches the solver"
+    assert capfd.readouterr().out != "", "log=True is passed to the solver"
 
 
 def test_a_thread_count_highs_cannot_take_says_why():
@@ -213,7 +213,7 @@ def test_reading_it_for_a_solver_needs_no_backend_installed():
 
 def test_every_native_highs_name_resolves_in_highs():
     # a name HiGHS renames upstream would misconfigure a solve silently;
-    # setOptionValue answering kError is what catches it here
+    # setOptionValue returning kError is what catches it here
     highspy = pytest.importorskip("highspy")
     from nimopt import options
 

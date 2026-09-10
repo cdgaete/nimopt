@@ -1,10 +1,8 @@
-"""Adapters handing an assembled model to a solver.
+"""Adapters passing an assembled model to a solver.
 
-`available()` reports which adapters can run here and what each declares, so
-an agent choosing a solver reads it rather than guessing. `capabilities(name)`
-answers for an adapter whether or not its backend is installed: a descriptor
-states what the adapter does as shipped, and reading one is how a caller
-decides what to install.
+`available()` reports which adapters run in this environment and what each
+declares. `capabilities(name)` reports for one adapter whether or not its
+backend is installed. A descriptor describes the adapter as shipped.
 """
 
 from dataclasses import replace
@@ -20,23 +18,22 @@ ADAPTERS = ("highs", "gurobi", "mosek")
 
 
 def adapter(name: str) -> ModuleType:
-    """The module adapting the named solver."""
+    """Return the module adapting the named solver."""
     if name not in ADAPTERS:
         raise ValueError(f"the solvers are {ADAPTERS}; got {name!r}")
     return import_module(f"nimopt.solvers.{name}")
 
 
 def capabilities(name: str) -> Capabilities:
-    """What the named adapter does, as shipped.
+    """Return what the named adapter does, as shipped.
 
-    Readable whether or not the backend is installed: an adapter names its
-    library only where it drives it.
+    The descriptor is readable whether or not the backend is installed.
     """
     return adapter(name).CAPABILITIES
 
 
 def available() -> dict[str, Capabilities]:
-    """Every adapter whose backend can be imported here, with what it declares."""
+    """Return every adapter whose backend can be imported, with its descriptor."""
     return {
         name: capabilities(name)
         for name in ADAPTERS
@@ -45,13 +42,12 @@ def available() -> dict[str, Capabilities]:
 
 
 def options(solver: str | None = None) -> tuple[Option, ...]:
-    """Every option a caller can set, or those under one solver's own names.
+    """Return every option a caller can set, or those under one solver's names.
 
-    Named without a solver it is the vocabulary itself. Named with one, each
-    option carries that solver's own spelling and its own values, which is
-    what a caller reads to follow an option into the solver's documentation.
-    An option the solver does not carry reads back with `native` of `None`,
-    and a choice it lacks is absent from `native_choices`.
+    Called without a solver it returns `OPTIONS`. Called with one, each option
+    reports that solver's own name in `native` and its own values in
+    `native_choices`. An option the solver lacks has `native` of None, and a
+    choice it lacks is absent from `native_choices`.
     """
     if solver is None:
         return OPTIONS

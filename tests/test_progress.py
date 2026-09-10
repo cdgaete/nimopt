@@ -21,7 +21,7 @@ class Recorded:
 
 
 class Terminal(io.StringIO):
-    """A stream that answers as a terminal does."""
+    """A stream that reports itself as a terminal."""
 
     def isatty(self):
         return True
@@ -39,8 +39,8 @@ def test_a_reporter_of_the_callers_own_is_taken_as_it_is():
 
 
 def test_a_report_to_a_pipe_writes_nothing():
-    # a redirected run carries the text it was going to carry, and no
-    # carriage returns or bars in the middle of it
+    # a redirected run writes the same text, with no carriage returns and no
+    # bars in the middle of it
     stream = io.StringIO()
     bar = Progress(stream)
     bar.start(100, "building m")

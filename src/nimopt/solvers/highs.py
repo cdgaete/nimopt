@@ -1,14 +1,11 @@
 """The HiGHS adapter.
 
-HiGHS takes a row-wise matrix as the same three arrays `Assembled` carries,
-so the handoff passes them without building another form. The column kinds
-cross the same way, as an array rather than a value stated per column.
+HiGHS reads a row-wise matrix as the same three arrays `Assembled` contains.
+The adapter passes those arrays without building another form. The column
+kinds are passed as one array over the columns.
 
-Every model status HiGHS can report is either named in `OUTCOME`, which maps
-into the seam's `STATUS`, or listed in `FAILED` and raised. A status the
-adapter does not know is refused rather than folded into a catch-all, because
-a caller reading a status it was never given cannot tell an answer from the
-absence of one.
+`OUTCOME` maps a HiGHS model status into `STATUS`. `FAILED` lists the HiGHS
+statuses this adapter raises on. A status in neither raises.
 """
 
 from collections.abc import Mapping
@@ -101,11 +98,11 @@ _PROBED = {}
 
 
 def hipo_available() -> bool:
-    """Whether this HiGHS carries HiPO's extras library.
+    """Return whether this HiGHS provides HiPO's extras library.
 
-    HiGHS keeps HiPO's orderings and its BLAS in a library it loads at run
-    time, and asked for HiPO without it, it logs an error and runs simplex.
-    A two-column probe with the log captured answers once per process.
+    HiGHS loads HiPO's orderings and its BLAS from a library at run time.
+    Without that library HiGHS logs an error and runs simplex. This function
+    solves a two-column model with the log captured, once per process.
     """
     if "hipo" not in _PROBED:
         import highspy
@@ -146,10 +143,9 @@ def solve(
 ) -> Result:
     """Solve an assembled model and return its status, its values and its bound.
 
-    The model HiGHS built is returned in `Result.backend`. A session holding it
-    reads a conflict or a ray from the same solved instance. A model with
-    integer columns is returned with no duals. HiGHS reports the relaxation's
-    duals for one, and this adapter does not report that pair.
+    `Result.backend` is the model HiGHS built. A session reads a conflict or a
+    ray from that solved instance. `Result.row_dual` is None for a model with
+    integer columns.
     """
     import highspy
 
@@ -158,10 +154,9 @@ def solve(
     settings = translated(options, OPTION_NAMES, OPTION_VALUES, solver="highs")
     if settings.get("solver") == "hipo" and not hipo_available():
         raise RuntimeError(
-            "this HiGHS was built without HiPO's extras library, so "
-            "method='hipo' would log an error and run simplex instead; install "
-            "a HiGHS carrying `libhighs_extras` beside `libhighs`, or choose "
-            "another method"
+            "method is 'hipo' and this HiGHS provides no HiPO extras library; "
+            "install a HiGHS with `libhighs_extras` beside `libhighs`, or "
+            "choose another method"
         )
     lp = highspy.HighsLp()
     lp.num_col_ = assembled.n_cols
@@ -192,40 +187,41 @@ def solve(
     for key, value in settings.items():
         if highs.setOptionValue(key, value) != highspy.HighsStatus.kOk:
             raise ValueError(
-                f"HiGHS refused option {key!r} at {value!r}; it states a name "
-                f"and a type, and answers an error rather than raising"
+                f"HiGHS rejected option {key!r} at {value!r}; pass a name and "
+                f"a value HiGHS accepts"
             )
     if highs.passModel(lp) == highspy.HighsStatus.kError:
         raise RuntimeError(
-            f"HiGHS refused the model it was passed: {assembled.n_cols} "
+            f"HiGHS rejected the model it was passed: {assembled.n_cols} "
             f"columns against {assembled.col_cost.size} costs, "
             f"{assembled.col_lower.size} lower and {assembled.col_upper.size} "
-            f"upper column bounds; {assembled.n_rows} rows against "
+            f"upper column bounds, {assembled.n_rows} rows against "
             f"{assembled.row_lower.size} lower and {assembled.row_upper.size} "
-            f"upper row bounds"
+            f"upper row bounds; pass vectors of the declared column and row "
+            f"counts"
         )
     threads = (
-        " HiGHS fixes its thread count at the first solve a process runs, "
-        "so `threads` states the same count from that solve onwards."
+        " HiGHS fixes its thread count at the first solve of a process. A "
+        "later `threads` value does not change it."
         if "threads" in (options or {})
         else ""
     )
     if highs.run() == highspy.HighsStatus.kError:
         raise RuntimeError(
-            f"HiGHS answered an error running the model it was passed, and "
-            f"reached no outcome to report.{threads}"
+            f"HiGHS returned an error running the model and reported no "
+            f"outcome; check the model and the options.{threads}"
         )
 
     reported = str(highs.getModelStatus()).split(".")[-1]
     if reported in FAILED:
         raise RuntimeError(
-            f"HiGHS stopped without solving the model: {reported}. The model "
-            f"was passed to the solver but no outcome was reached.{threads}"
+            f"HiGHS stopped at model status {reported} without solving the "
+            f"model; check the model and the options.{threads}"
         )
     if reported not in OUTCOME:
         raise RuntimeError(
-            f"HiGHS reported model status {reported!r}, which this adapter "
-            f"does not read; nimopt names an outcome or refuses it"
+            f"HiGHS reported the model status {reported!r}; this adapter maps "
+            f"no outcome to it, report it as a defect"
         )
     solution = highs.getSolution()
     integer = bool(assembled.integrality.any())
@@ -250,23 +246,19 @@ def solve(
 
 
 def conflict(backend: Any) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]:
-    """The rows and columns of an irreducible infeasible subsystem.
+    """Return the rows and columns of an irreducible infeasible subsystem.
 
-    The strategy is set here rather than at the solve, so a solve nobody asks
-    a question of pays nothing for one. HiGHS computes the set over the
-    model's linear relaxation and reports an invalid one where that relaxation
-    is feasible; an invalid set is refused rather than handed back, because a
-    conflict nothing proved minimal is one an agent would act on.
+    The strategy option is set here, not at the solve. HiGHS computes the
+    subsystem over the model's linear relaxation. An invalid subsystem raises
+    RuntimeError.
     """
     backend.setOptionValue("iis_strategy", IRREDUCIBLE)
     reported, iis = backend.getIis()
     if not iis.valid_:
         raise RuntimeError(
             f"HiGHS computed no conflict and reported "
-            f"{str(reported).split('.')[-1]}: it could not prove this model "
-            f"infeasible from its linear relaxation, which is what its "
-            f"irreducible set is computed over. A model infeasible only "
-            f"through its integrality reaches this"
+            f"{str(reported).split('.')[-1]}; HiGHS computes a conflict over "
+            f"the linear relaxation alone, and this relaxation is feasible"
         )
     return (
         np.asarray(iis.row_index_, dtype=np.int64),
@@ -275,7 +267,7 @@ def conflict(backend: Any) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]
 
 
 def ray(backend: Any) -> npt.NDArray[np.float64] | None:
-    """The direction an unbounded model runs off in, or None where there is none."""
+    """Return the primal ray of an unbounded model, or None where none exists."""
     _, found, values = backend.getPrimalRay()
     if not found:
         return None

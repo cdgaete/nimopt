@@ -1,13 +1,11 @@
 """Technologies sited in some regions, running in every hour.
 
-Mixed density: the region-technology map is sparse — a technology exists in
-some regions and not others — while every sited pair runs in every hour. The
-generation variable therefore takes its columns from a parameter that carries
-the sparse pairs crossed with the whole horizon.
+Mixed density: the region-technology map is sparse, and every sited pair runs
+in every hour. The generation variable takes its columns from a parameter
+holding the sparse pairs crossed with the whole horizon.
 
-Each region meets its own demand from the technologies sited in it, so the
-optimum is a merit order per region and hour, which is what `reference`
-computes.
+Each region meets its own demand from the technologies sited in it, and
+`reference` computes a merit order per region and hour.
 """
 
 from collections.abc import Mapping
@@ -29,7 +27,7 @@ DEMAND = {"north": (100.0, 130.0, 80.0, 50.0), "south": (90.0, 140.0, 60.0, 110.
 
 
 def definition() -> Definition:
-    """The sector model, with no data bound."""
+    """Return the sector model, with no data bound."""
     d = Definition("sector", sense="min")
     R, K, T = d.set("R"), d.set("K"), d.set("T")
     sited = d.param("sited", (R, K, T))
@@ -43,7 +41,7 @@ def definition() -> Definition:
 
 
 def _pairs(scale: int) -> list[tuple[str, str, float, float]]:
-    """The sited region-technology pairs, repeated `scale` times by region."""
+    """Return the sited region-technology pairs, repeated `scale` times."""
     return [
         (f"{region}{k}", technology, capacity, price)
         for k in range(scale)
@@ -52,7 +50,7 @@ def _pairs(scale: int) -> list[tuple[str, str, float, float]]:
 
 
 def data(scale: int = 1) -> dict[str, Any]:
-    """Inputs for `scale` copies of the region set, over `HOURS * scale` hours."""
+    """Return inputs for `scale` copies of the regions, over the scaled hours."""
     pairs = _pairs(scale)
     hours = np.arange(HOURS * scale)
     regions = list(dict.fromkeys(region for region, _, _, _ in pairs))
@@ -93,7 +91,7 @@ def data(scale: int = 1) -> dict[str, Any]:
 
 
 def reference(data: Mapping[str, Any]) -> float:
-    """What the sector costs, by merit order over each region and hour."""
+    """Return what the sector costs, by merit order over each region and hour."""
     columns, capacity = data["capacity"]
     prices = data["cost"][1]
     total = 0.0

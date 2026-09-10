@@ -11,8 +11,8 @@ def dropped_by(absence, rule):
 
 
 def test_a_row_no_term_reaches_is_dropped_and_says_so():
-    # the incidence carries no entry in the third hour, so no term reaches
-    # those bus-hours and the rows are not stated
+    # the incidence has no entry in the third hour; no term covers those
+    # bus-hours, and those rows are absent
     B = Set("B", np.array(["b0", "b1"]))
     T = Set("T", np.array([0, 1, 2]))
     L = Set("L", np.array(["l0", "l1"]))
@@ -92,8 +92,8 @@ def test_a_coefficient_absent_inside_a_sum_drops_a_term_not_a_row():
 
 
 def test_rows_stated_outright_drop_nothing_and_say_so():
-    # under over= the rows are stated, so an empty dropped_rows is structural
-    # and an agent reading stated_by knows it
+    # under over= the rows are declared, an empty dropped_rows is structural,
+    # and stated_by reports which branch produced the rows
     a = nodal().build(nodal_data()).absent("live")
     assert a.stated_by == "over"
     assert a.dropped_rows == ()
@@ -166,10 +166,10 @@ def every_absence():
     P = Set("P", np.array(["p1", "p2", "p3"]))
     one = Param.from_dense("one", (P,), np.ones(3))
 
-    reaches = Model("reaches")
-    y = reaches.var("y", (P,), upper=5.0)
+    absent_term = Model("absent_term")
+    y = absent_term.var("y", (P,), upper=5.0)
     sparse = Param.from_long("sparse", (P,), {"P": np.array(["p1", "p2"])}, np.ones(2))
-    reaches.constraint("rows", sparse[P] * y[P] <= 1.0)
+    absent_term.constraint("rows", sparse[P] * y[P] <= 1.0)
 
     condition = Model("condition")
     c = condition.var("x", (P,), upper=5.0)
@@ -197,12 +197,12 @@ def every_absence():
     )
     summed.constraint("rows", Sum(W, arcs[P, W] * f[P, W]) <= 1.0)
 
-    return [m.absent("rows") for m in (reaches, condition, rhs, stated, summed)]
+    return [m.absent("rows") for m in (absent_term, condition, rhs, stated, summed)]
 
 
 def test_every_absence_rule_is_produced_by_some_model():
-    # a rule nothing produces is dead vocabulary an agent branches on and
-    # never reaches
+    # a rule no model produces is dead vocabulary an agent branches on and
+    # never runs
     found = every_absence()
     rows = {d.rule for a in found for d in a.dropped_rows}
     terms = {d.rule for a in found for d in a.dropped_terms}

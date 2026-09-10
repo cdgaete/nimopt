@@ -5,7 +5,7 @@ from nimopt import Model, Param, Session, Set, Sum
 
 
 def dispatch(load=(25.0, 20.0, 5.0)):
-    """Three snapshots against a fleet carrying 30."""
+    """Three snapshots against a fleet of 30."""
     SNAP = Set("snapshot", np.arange(len(load)))
     GEN = Set("generator", np.array(["wind", "gas"]))
     p_max = Param.from_dense("p_max", (GEN,), np.array([10.0, 20.0]))
@@ -19,7 +19,7 @@ def dispatch(load=(25.0, 20.0, 5.0)):
 
 
 def infeasible():
-    """The second snapshot asks for 100 against a fleet carrying 30."""
+    """The second snapshot demands 100 against a fleet of 30."""
     return dispatch(load=(25.0, 100.0, 5.0))
 
 
@@ -131,7 +131,7 @@ def test_a_model_with_no_upper_bound_and_a_negative_cost_is_unbounded():
 
 
 def test_a_conflict_names_the_rows_that_cannot_hold_together():
-    # the second snapshot asks for 100 against a fleet carrying 30
+    # the second snapshot demands 100 against a fleet of 30
     with infeasible().session() as session:
         assert session.solve().status == "infeasible"
         found = session.diagnose()
@@ -198,14 +198,14 @@ def test_an_unbounded_model_names_the_direction_it_runs_off_in():
 
 def test_a_diagnosis_before_a_solve_is_refused():
     with dispatch().session() as session:
-        with pytest.raises(ValueError, match="solve before diagnosing"):
+        with pytest.raises(ValueError, match="call `solve` before"):
             session.diagnose()
 
 
 def test_highs_refuses_a_conflict_it_could_not_prove():
-    # HiGHS computes its conflict over the linear relaxation, so a model
-    # infeasible only through its integrality reaches no conflict at all;
-    # the rows it names then are not one, and are not handed over
+    # HiGHS computes its conflict over the linear relaxation; a model
+    # infeasible only through its integrality yields no conflict, and the
+    # rows HiGHS reports then are not one
     with odd().session() as session:
         assert session.solve().status == "infeasible"
         with pytest.raises(RuntimeError, match="linear relaxation"):

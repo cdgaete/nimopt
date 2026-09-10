@@ -48,7 +48,7 @@ def test_each_model_states_a_definition_its_data_and_its_reference(name):
 
 @pytest.mark.parametrize("name", MODELS)
 def test_each_model_explains_itself_with_nothing_bound(name):
-    # the slice the documentation takes: a definition answers before data
+    # the slice the documentation takes: a definition explains before data
     explained = module(name).definition().explain()
     assert explained.built is False
     assert explained.sets and explained.variables and explained.constraints
@@ -85,8 +85,8 @@ def test_a_model_at_scale_still_answers_its_reference(name):
 
 def test_the_baseline_shape_is_a_merit_order():
     inputs = module("dispatch").data()
-    # the fleet is cheapest-first, so the load is met by wind, then solar,
-    # then gas, and the reference states what that costs
+    # the fleet is cheapest first; the load is met by wind, then solar, then
+    # gas, and the reference computes what that costs
     assert module("dispatch").reference(inputs) == pytest.approx(1920.0)
     # data() suffixes each copy of the fleet, so scale 1 is one copy of it
     assert list(inputs["generator"]) == ["wind0", "solar0", "gas0"]
@@ -105,7 +105,7 @@ def test_the_arithmetic_a_reference_shares_is_a_merit_order():
 def test_a_load_the_fleet_cannot_meet_is_refused_by_the_arithmetic():
     from nimopt.models._arithmetic import merit_order
 
-    with pytest.raises(ValueError, match="carry 3.0 against a load of 9.0"):
+    with pytest.raises(ValueError, match="total 3.0 against a load of 9.0"):
         merit_order(np.array([3.0]), np.array([1.0]), np.array([9.0]))
 
 
@@ -137,7 +137,7 @@ def test_mixed_density_is_dense_in_one_axis_and_sparse_in_the_other():
     built = held.definition().build(inputs)
     regions, techs, hours = (len(inputs[k]) for k in ("R", "K", "T"))
     sited = len(inputs["sited"][1])
-    # every sited pair carries every hour, and the pairs are a subset
+    # every sited pair covers every hour, and the pairs are a subset
     assert built.n_columns == sited
     assert sited % hours == 0
     assert sited // hours < regions * techs
@@ -251,7 +251,7 @@ def test_every_page_the_corpus_ships_is_listed_in_the_sidebar():
 
 
 def test_no_model_is_named_by_the_package_root():
-    # naming one model costs one; importing the package must not load eight
+    # importing one model loads one; importing the package must not load eight
     import subprocess
     import sys
 
@@ -273,8 +273,8 @@ def test_every_reference_is_a_number_the_solve_agrees_with():
 
 
 def test_a_ramp_row_is_not_stated_at_the_hour_that_has_no_predecessor():
-    # one model carries both lag rules: the state of charge wraps and keeps
-    # every hour, the ramp does not and loses the first
+    # one model uses both lag rules: the charge row wraps and keeps every
+    # hour, and the ramp row loses the first
     held = module("storage")
     inputs = held.data()
     built = held.definition().build(inputs)
@@ -286,7 +286,7 @@ def test_a_ramp_row_is_not_stated_at_the_hour_that_has_no_predecessor():
 
 
 def test_every_limit_the_store_carries_is_a_row():
-    # a limit an agent wants a dual for has to be a row rather than a bound
+    # a limit an agent reads a dual for is a row, not a bound
     held = module("storage")
     built = held.definition().build(held.data())
     assert set(built.constraints) == {

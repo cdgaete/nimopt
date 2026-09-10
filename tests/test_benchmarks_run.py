@@ -29,10 +29,10 @@ def test_the_storage_benchmark_states_the_rows_the_horizon_allows():
     from bench_storage import measure
 
     got = measure(n_generators=10, n_storage=2, n_hours=168)
-    # gen over (G, T) plus charge, discharge and state of charge over (S, T)
+    # gen over (G, T) plus charge, discharge and stored energy over (S, T)
     assert got["cols"] == 10 * 168 + 3 * 2 * 168
-    # the ramp row at the first hour has no predecessor and is not stated;
-    # the cyclic state of charge reaches the last hour and keeps every row
+    # the ramp row at the first hour has no predecessor and is absent; the
+    # cyclic charge row reads the last hour and keeps every row
     ramp_rows = 10 * (168 - 1)
     storage_rows = 2 * 168
     assert got["rows"] == 168 + storage_rows + 10 * 168 + ramp_rows + 3 * storage_rows
@@ -89,7 +89,7 @@ def test_a_rung_measured_without_a_solve_reports_its_shape():
     for side in ("nimopt", "linopy"):
         got = sides[side]
         assert got["rows"] > 0 and got["cols"] > 0 and got["nnz"] > 0, side
-        # a rung too large to solve still states what it built
+        # a rung too large to solve still reports what it built
         assert "objective" not in got, side
 
 

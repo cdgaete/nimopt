@@ -379,8 +379,8 @@ def test_the_data_a_sidecar_carries_is_named_by_the_file(tmp_path):
 
 
 def test_a_sidecar_keeps_the_dtype_each_label_column_carries(tmp_path):
-    # a structured array read row by row hands back a datetime64 as the
-    # integer behind it, and the label then resolves against nothing
+    # a structured array read row by row returns a datetime64 as the integer
+    # behind it, and the label then resolves against nothing
     hours = np.array(["2030-01-01", "2030-01-02", "2030-01-03"], dtype="datetime64[ns]")
     P = Set("P", np.array(["a", "b"]))
     T = Set("T", hours)

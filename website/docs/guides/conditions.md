@@ -184,7 +184,7 @@ m.constraint(
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: constraint 'capacity' states its rows with over= and narrows them with where=; state one
+ValueError: constraint 'capacity' is given over= and where= together; pass one of them
 ```
 
 </details>

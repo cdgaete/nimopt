@@ -90,8 +90,8 @@ def test_each_adapter_returns_a_set_that_conflicts(solver):
 
 
 def test_gurobi_reaches_an_infeasibility_that_is_only_the_integrality():
-    # HiGHS computes its conflict over the relaxation and refuses this one;
-    # Gurobi's reaches the integer column, and names the row itself
+    # HiGHS computes its conflict over the relaxation and rejects this one;
+    # Gurobi's conflict covers the integer column and identifies the row
     m = odd()
     with m.session(solver="gurobi") as session:
         assert session.solve().status == "infeasible"
@@ -122,8 +122,8 @@ def test_a_gurobi_status_the_seam_does_not_name_is_refused_rather_than_folded():
 
 
 def test_a_limit_gurobi_stops_at_is_named_rather_than_raised():
-    # the vocabulary carries the limits both solvers express, and a work
-    # limit is Gurobi's alone, so a node limit is what a caller reaches here
+    # the vocabulary has the limits both solvers express; a work limit is
+    # Gurobi's alone, and a node limit is what a caller sets here
     model = commitment.definition().build(commitment.data(scale=SCALES["commitment"]))
     assert (
         model.solve(solver="gurobi", options={"node_limit": 0}).status == "node_limit"
@@ -172,7 +172,7 @@ PORTABLE = {
 
 
 def test_both_solvers_take_the_same_options_and_answer_the_same_model():
-    # what a portable vocabulary claims: one spelling, one meaning
+    # what a portable vocabulary claims: one name, one meaning
     held = MODULES["dispatch"]
     inputs = held.data(scale=SCALES["dispatch"])
     model = held.definition().build(inputs)

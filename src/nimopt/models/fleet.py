@@ -1,10 +1,9 @@
-"""One dispatch, declared as a variable per unit rather than one over a product.
+"""One dispatch, declared as a variable per unit and not over a product.
 
-`dispatch` states a single variable over snapshots crossed with generators.
-This states the same problem as one variable per unit over the snapshots
-alone, and adds their terms into one balance row. The answer is the same merit
-order; what differs is the cost of declaring it, which is the axis this model
-stresses.
+`dispatch` declares a single variable over snapshots crossed with generators.
+This model declares one variable per unit over the snapshots alone and adds
+their terms into one balance row. The optimum is the same merit order. The
+cost of declaring it differs, and that cost is what this model measures.
 """
 
 from collections.abc import Mapping
@@ -20,15 +19,15 @@ LOAD = (90.0, 140.0, 200.0, 60.0)
 
 
 def units(scale: int) -> list[str]:
-    """The unit names this model declares a variable for, at a scale."""
+    """Return the unit names this model declares a variable for, at a scale."""
     return [f"{name}_{k}" for k in range(scale) for name, _, _ in FLEET]
 
 
 def definition(scale: int = 1) -> Definition:
-    """The fleet model, with no data bound.
+    """Return the fleet model, with no data bound.
 
-    The number of variables is a property of the declaration rather than of
-    the data, so the scale is stated here as well as in `data`.
+    The number of variables is a property of the declaration, not of the data.
+    The scale is therefore given here as well as in `data`.
     """
     d = Definition("fleet", sense="min")
     T = d.set("T")
@@ -47,7 +46,7 @@ def definition(scale: int = 1) -> Definition:
 
 
 def data(scale: int = 1) -> dict[str, Any]:
-    """Inputs for `scale` copies of the fleet over `len(LOAD) * scale` hours."""
+    """Return inputs for `scale` copies of the fleet over the scaled hours."""
     hours = np.arange(len(LOAD) * scale)
     inputs = {"T": hours, "load": np.tile(np.array(LOAD), scale) * scale}
     for k in range(scale):
@@ -58,7 +57,7 @@ def data(scale: int = 1) -> dict[str, Any]:
 
 
 def reference(data: Mapping[str, Any]) -> float:
-    """What the dispatch costs, by merit order over each hour."""
+    """Return what the dispatch costs, by merit order over each hour."""
     names = [key[len("p_max_") :] for key in data if key.startswith("p_max_")]
     capacity = np.array([data[f"p_max_{name}"][0] for name in names])
     cost = np.array([data[f"cost_{name}"][0] for name in names])

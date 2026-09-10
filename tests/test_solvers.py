@@ -43,7 +43,7 @@ def test_every_adapter_declares_a_backend_and_what_it_can_do():
 
 
 def test_a_descriptor_is_readable_whether_or_not_its_backend_is_installed():
-    # the descriptor states what the adapter does as shipped, so an agent
+    # the descriptor reports what the adapter does as shipped; an agent
     # choosing a solver reads it before installing one
     for name in ADAPTERS:
         assert set(capabilities(name).support) == set(CAPABILITIES)
@@ -71,8 +71,8 @@ def test_what_is_available_is_what_is_installed():
 
 
 def test_the_status_vocabulary_has_no_catch_all_member():
-    # a caller reading a status it was never given cannot tell an answer from
-    # the absence of one, so every member names one outcome
+    # every member identifies one outcome; no member covers an outcome the
+    # vocabulary does not list
     assert len(set(STATUS)) == len(STATUS)
     assert "unknown" not in STATUS and "other" not in STATUS
     assert "optimal" in STATUS and "infeasible" in STATUS
@@ -83,29 +83,29 @@ def test_the_highs_adapter_names_only_statuses_the_seam_carries():
 
 
 def test_a_capability_the_seam_does_not_name_is_refused():
-    with pytest.raises(ValueError, match="the capabilities are"):
+    with pytest.raises(ValueError, match="declares the unknown capabilities"):
         Capabilities("x", {"warm_start": "native"}, ())
 
 
 def test_a_support_the_seam_does_not_name_is_refused():
-    with pytest.raises(ValueError, match="support is"):
+    with pytest.raises(ValueError, match="declares support 'maybe'"):
         Capabilities("x", dict.fromkeys(CAPABILITIES, "maybe"), ())
 
 
 def test_a_descriptor_states_every_capability_it_was_asked_about():
-    with pytest.raises(ValueError, match="says nothing about"):
+    with pytest.raises(ValueError, match="declares no support for"):
         Capabilities("x", {"duals": "native"}, ())
 
 
 def test_a_capability_that_is_absent_is_answered_for_rather_than_missing():
     stated = Capabilities("x", dict.fromkeys(CAPABILITIES, "absent"), ())
     assert stated.supports("conflict") is False
-    with pytest.raises(ValueError, match="the capabilities are"):
+    with pytest.raises(ValueError, match="capability is 'warm_start'"):
         stated.supports("warm_start")
 
 
 def test_a_refused_pair_names_two_capabilities_the_seam_carries():
-    with pytest.raises(ValueError, match="a rejected pair names two"):
+    with pytest.raises(ValueError, match="declares the rejected pair"):
         Capabilities("x", dict.fromkeys(CAPABILITIES, "native"), (("duals",),))
 
 
@@ -117,16 +117,15 @@ def test_a_descriptor_reads_as_what_the_adapter_does():
 
 
 def test_a_model_the_backend_refuses_is_not_solved_on():
-    """HiGHS answers a status rather than raising, so a discarded status
-    solves a model the backend never accepted."""
+    """The adapter raises where HiGHS rejects the model it is passed."""
     m = Model("short")
     S = Set("S", np.array(["a", "b"]))
     x = m.var("x", (S,), lower=0.0, upper=1.0)
     m.set_objective(Sum(S, x[S]))
     m.constraint("floor", x[S] >= 1.0)
     assembled = m.assemble()
-    # one cost short of the column count the matrix states
+    # one cost short of the column count of the matrix
     assembled.col_cost = np.asarray(assembled.col_cost, dtype=np.float64)[:-1]
 
-    with pytest.raises(RuntimeError, match="refused the model"):
+    with pytest.raises(RuntimeError, match="rejected the model"):
         highs.solve(assembled, "min")

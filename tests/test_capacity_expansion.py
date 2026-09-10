@@ -35,7 +35,7 @@ def test_a_capacity_column_is_bound_by_a_time_varying_availability():
 
 
 def test_a_link_column_reaches_the_two_buses_it_joins():
-    # l0 carries power from b0 to b1 at 90% efficiency; demand sits at b1
+    # l0 moves power from b0 to b1 at 90% efficiency; the demand is at b1
     B = Set("B", np.array(["b0", "b1"]))
     G = Set("G", np.array(["g0"]))
     L = Set("L", np.array(["l0"]))
@@ -69,7 +69,7 @@ def test_a_link_column_reaches_the_two_buses_it_joins():
     m.set_objective(Sum(B, G, T, cost[B, G, T] * gen[B, G, T]))
 
     assembled = m.assemble()
-    # every bus and hour states a row; two gen columns and two flow
+    # every bus and hour has a row; two gen columns and two flow
     assert (assembled.n_rows, assembled.n_cols) == (4, 4)
     # the generator's two entries and the link's four
     assert int(assembled.values.size) == 6

@@ -70,7 +70,7 @@ def test_a_coefficient_absent_inside_a_sum_drops_the_term_not_the_row():
         np.array([1.0, 2.0]),
     )
     block, rows = Sum(W, sparse[P, W] * x[P, W]).materialise()
-    # both rows stand; each carries one coefficient rather than two
+    # both rows are present; each has one coefficient, not two
     assert rows.size == 2
     assert block.nnz == 2
 

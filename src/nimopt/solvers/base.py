@@ -3,7 +3,7 @@
 An adapter is a module. There is no base class to inherit. Each adapter
 defines
 
-    BACKEND       the import name of the library it drives
+    BACKEND       the import name of the solver library it calls
     CAPABILITIES  a `Capabilities` describing the adapter as shipped
 
 and three functions
@@ -18,14 +18,14 @@ An adapter that declares neither a conflict nor a ray is never called for one.
 solver reports `col_value` as a primal-feasible point. Each adapter reads that
 flag from its solver. `Result.objective` is the objective value of `col_value`
 and is defined where `feasible` is True. `Result.bound` is the bound on the
-optimal objective the solver proved, a lower bound under sense `min` and an
-upper bound under sense `max`. `Result.bound` is None where the solver reports
-none. `Result.row_dual` is None for a model whose duals the adapter does not
-report. `Result.backend` is the adapter's own solver model. The session stores
-it and passes it back to the adapter that built it.
+optimal objective the solver proved. It is a lower bound under sense `min`
+and an upper bound under sense `max`. `Result.bound` is None where the solver
+reports none. `Result.row_dual` is None for a model whose duals the adapter
+does not report. `Result.backend` is the adapter's own solver model. The
+session stores it and passes it to the adapter that built it.
 
 A descriptor describes the adapter, not the library behind it. A solver
-feature the adapter does not call is `absent`. Support is two-valued here. No
+feature the adapter does not call is `absent`. Support has two values. No
 adapter reformulates a model.
 """
 
@@ -59,7 +59,7 @@ SUPPORT = ("native", "absent")
 
 @dataclass(frozen=True)
 class Result:
-    """What one adapter returns from a solve.
+    """The values one adapter returns from a solve.
 
     `status` is a member of `STATUS`. `feasible` is True where the solver
     reports `col_value` as a primal-feasible point. `objective` is the
@@ -79,7 +79,7 @@ class Result:
 
     def __post_init__(self) -> None:
         if self.status not in STATUS:
-            raise ValueError(f"the statuses are {STATUS}; got {self.status!r}")
+            raise ValueError(f"status is {self.status!r}; pass one of {STATUS}")
         if self.status == "optimal" and not self.feasible:
             raise ValueError(
                 "status is 'optimal' and feasible is False; report a feasible "
@@ -101,12 +101,10 @@ class Result:
 
 @dataclass(frozen=True)
 class Capabilities:
-    """What one adapter does, and which of its capabilities refuse each other.
+    """What one adapter does, and which pairs of capabilities it rejects.
 
-    A flat set is insufficient: a solver can hold two capabilities and refuse
-    their combination. `rejected` carries those pairs, so a caller reads what a
-    solver will not do for a given model rather than discovering it in a
-    vector that means nothing.
+    An adapter can support two capabilities and reject their combination.
+    `rejected` contains those pairs.
     """
 
     solver: str
@@ -117,27 +115,27 @@ class Capabilities:
         unknown = sorted(set(self.support) - set(CAPABILITIES))
         if unknown:
             raise ValueError(
-                f"the capabilities are {CAPABILITIES}; {self.solver!r} names {unknown}"
+                f"{self.solver!r} declares the unknown capabilities {unknown}; "
+                f"declare capabilities of {CAPABILITIES}"
             )
         missing = sorted(set(CAPABILITIES) - set(self.support))
         if missing:
             raise ValueError(
-                f"{self.solver!r} says nothing about {missing}; a descriptor "
-                f"states every capability, so `absent` is stated rather than "
-                f"left out"
+                f"{self.solver!r} declares no support for {missing}; declare "
+                f"'native' or 'absent' for every capability"
             )
         for capability, support in self.support.items():
             if support not in SUPPORT:
                 raise ValueError(
-                    f"support is one of {SUPPORT}; {self.solver!r} states "
-                    f"{support!r} for {capability!r}"
+                    f"{self.solver!r} declares support {support!r} for "
+                    f"{capability!r}; declare one of {SUPPORT}"
                 )
         for pair in self.rejected:
             unknown = sorted(set(pair) - set(CAPABILITIES))
             if len(pair) != 2 or unknown:
                 raise ValueError(
-                    f"a rejected pair names two capabilities of {CAPABILITIES}; "
-                    f"{self.solver!r} states {pair}"
+                    f"{self.solver!r} declares the rejected pair {pair}; pass "
+                    f"two capabilities of {CAPABILITIES}"
                 )
 
     def __repr__(self) -> str:
@@ -148,13 +146,18 @@ class Capabilities:
         return f"{self.solver}  {does}  rejects {rejects}"
 
     def supports(self, capability: str) -> bool:
-        """Whether this adapter answers for `capability` at all."""
+        """Return whether the adapter supports `capability`.
+
+        Raises ValueError for a capability outside `CAPABILITIES`.
+        """
         if capability not in self.support:
-            raise ValueError(f"the capabilities are {CAPABILITIES}; got {capability!r}")
+            raise ValueError(
+                f"capability is {capability!r}; pass one of {CAPABILITIES}"
+            )
         return self.support[capability] != "absent"
 
     def rejects(self, one: str, other: str) -> bool:
-        """Whether this adapter refuses two capabilities together."""
+        """Return whether the adapter rejects two capabilities together."""
         return tuple(sorted((one, other))) in tuple(
             tuple(sorted(pair)) for pair in self.rejected
         )

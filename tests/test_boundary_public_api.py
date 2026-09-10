@@ -11,12 +11,12 @@ import nimopt as no
 # is about, and neither module imports nimblend, so neither can bypass it.
 FOREIGN_BUFFERS = ("linopy_models.py", "pypsa_reference.py", "bench_pypsa.py")
 
-# a `Row` carries the solver's own row number as `index`, which is nimopt's own
-# field and not an array's buffer. The scan reads names rather than types, so
-# the modules that read one are exempted from it. `row.py` is held by
-# `test_a_row_reaches_no_array_at_all` instead, which is the stronger rule: it
-# cannot name an array to read a buffer from. The others are tests, which read
-# a `Row` a verb handed them.
+# a `Row` has the solver's own row number as `index`, a nimopt field and not
+# an array's buffer. The scan reads names rather than types, and the modules
+# that read one are exempted from it. `row.py` is held by
+# `test_a_row_reaches_no_array_at_all` instead, the stronger rule: it can read
+# no buffer off an array. The others are tests, and each reads a `Row` a
+# function returned.
 #
 # The exemption covers `index` and `data` alone. `codes` collides with nothing
 # nimopt owns, so `test_nimopt_reads_no_domains_codes` scans every source with no
@@ -46,13 +46,13 @@ def modules():
 
 
 def sources():
-    """Every place this repository writes Python, named by where it sits.
+    """Return every place this repository writes Python, by its location.
 
     The modules, and the fenced blocks of the documentation beside them. The
-    site states this boundary on `reference/nimblend-arrays.md` and on
-    `for-agents.md`, and `SKILL.md` carries it to an agent; the examples that
-    state the rule are held to it. A block is named `<page>:<line>`, which is
-    where its fence opens.
+    site documents this boundary on `reference/nimblend-arrays.md` and on
+    `for-agents.md`, and `SKILL.md` repeats it for an agent. The examples that
+    document the rule are held to it. A block is identified as
+    `<page>:<line>`, where its fence opens.
     """
     found = [(path.name, tree) for path, tree in modules()]
     for page in pages():
@@ -101,10 +101,10 @@ def test_every_nimblend_import_names_a_public_name_on_the_top_level_module():
 def internals_read(tree, names=BUFFERS):
     """Lines reading one of `names` off an object, however it is written.
 
-    A method call of the same name is not a read of a buffer --
-    `dims.index(name)` asks a tuple where a name sits -- so an attribute
-    standing as a call's function is not counted. Everything else is: a
-    subscript, an assignment, and an argument handed to another function.
+    A method call of the same name is not a read of a buffer.
+    `dims.index(name)` reads a position out of a tuple, and an attribute used
+    as a call's function is not counted. Everything else is counted: a
+    subscript, an assignment, and an argument passed to another function.
     """
     called = {
         id(node.func)
@@ -131,20 +131,20 @@ def test_nimopt_reads_no_arrays_index_or_data():
 
 def test_nimopt_reads_no_domains_codes():
     # a domain's codes are its raw ravelled members, and the site documents
-    # the readers above them; nothing nimopt owns is called `codes`, so this
-    # scan carries no exemption
+    # the readers above them; no nimopt name is `codes`, and this scan has no
+    # exemption
     offenders = []
     for name, tree in sources():
         offenders.extend(f"{name}:{where}" for where in internals_read(tree, CODES))
     assert offenders == [], offenders
 
 
-# the nimblend names nimopt's own modules need. Reading a buffer is one bypass and
-# assembling one is the other: an index matrix built in this package is array
-# work done a layer too high, and it is the seam that has to move when the
-# kernel below nimblend is replaced. Each entry below is a name that answers
-# without one -- a domain states an array over its members, and `from_long`
-# resolves label columns through the coordinates a set already holds.
+# the nimblend names nimopt's own modules need. Reading a buffer is one bypass
+# and assembling one is the other: an index matrix built in this package is
+# array work done a layer too high, and the adapter interface has to move when
+# the kernel below nimblend is replaced. Each entry below is a name that needs
+# neither: a domain returns an array over its members, and `from_long` resolves
+# label columns through the coordinates a set already has.
 PACKAGE_IMPORTS = {
     "DenseArray",
     "Domain",
@@ -180,8 +180,8 @@ def test_the_package_imports_only_the_nimblend_names_it_needs():
 
 
 def test_the_package_assembles_no_index_matrix():
-    # `SparseArray(index, ...)` and `from_canonical` are how a caller hands
-    # nimblend buffers it built itself; a domain answers with the array instead
+    # `SparseArray(index, ...)` and `from_canonical` are how a caller passes
+    # nimblend buffers it built itself; a domain returns the array instead
     offenders = []
     for path, tree in package_modules():
         for node in ast.walk(tree):
@@ -242,7 +242,7 @@ def test_the_rule_passes_a_method_call_of_the_same_name():
 
 
 def test_every_model_imports_nimopt_by_its_top_level_module():
-    # the models ship in src/ and are read and copied, so one reaching past
+    # the models ship in src/ and are read and copied; one that imports past
     # the public surface teaches the habit this file exists to prevent
     offenders = []
     for path, tree in modules():
@@ -267,7 +267,7 @@ BACKENDS = {"highspy": "highs.py", "gurobipy": "gurobi.py", "mosek": "mosek.py"}
 
 
 def _imported(tree):
-    """The top-level names every import in `tree` reaches for."""
+    """Return the top-level name of every import in `tree`."""
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -303,8 +303,8 @@ def test_each_adapter_names_its_own_backend_and_no_other():
 
 
 def test_a_backend_is_imported_where_it_is_driven_and_not_at_module_scope():
-    # `capabilities("gurobi")` answers on a machine with no Gurobi, which
-    # holds only while the import sits inside the function that needs it
+    # `capabilities("gurobi")` returns on a machine with no Gurobi; that
+    # holds only while the import stays inside the function that needs it
     root = Path(no.__file__).parent / "solvers"
     for backend, module in BACKENDS.items():
         tree = ast.parse((root / module).read_text())
@@ -314,7 +314,7 @@ def test_a_backend_is_imported_where_it_is_driven_and_not_at_module_scope():
 
 def test_nothing_a_caller_reads_carries_a_backends_type():
     # the containment: a session holds the solver's model, and everything it
-    # hands back is nimopt's, numpy's or a builtin
+    # returns is nimopt's, numpy's or a builtin
     import numpy as np
 
     from nimopt import Model, Param, Set, Sum

@@ -67,15 +67,15 @@ def test_a_dual_over_dropped_rows_stays_sparse():
     )
     one = Param.from_dense("one", (S, T), np.ones((2, 3)))
     m.set_objective(Sum(S, T, one[S, T] * level[S, T]))
-    # the lag drops t0, so the constraint states four of the six rows
+    # the lag drops t0; the constraint declares four of the six rows
     m.constraint(
         "bal",
         level[S, T] - level[S, T - 1]
         <= Param.from_dense("step", (S, T), np.ones((2, 3)))[S, T],
     )
     sol = m.solve()
-    # the sense is load-bearing: minimising this model answers 0.0 and leaves
-    # every assertion below standing, so the objective is asserted beside them
+    # the sense is load-bearing: minimizing this model returns 0.0 and every
+    # assertion below still holds, and the objective is asserted beside them
     assert sol.objective == 30.0
     duals = sol.dual("bal")
     assert isinstance(duals, SparseArray)

@@ -257,11 +257,11 @@ An `Option` has a `name`, the `kind` it takes, what it `does`, and its
 | `feasibility_tol` | float | how far a primal solution may miss a row | `primal_feasibility_tolerance` | `FeasibilityTol` | `basis_tol_x` |
 | `optimality_tol` | float | how far a dual solution may miss a bound | `dual_feasibility_tolerance` | `OptimalityTol` | `basis_tol_s` |
 | `threads` | int | threads the solver may use; 0 leaves it the choice | `threads` | `Threads` | `num_threads` |
-| `seed` | int | the seed the solver randomises from | `random_seed` | `Seed` | `mio_seed` |
+| `seed` | int | the seed the solver randomizes from | `random_seed` | `Seed` | `mio_seed` |
 | `log` | bool | whether the solver writes its own iteration log | `output_flag` | `OutputFlag` | `log` |
 | `presolve` | `off` / `choose` / `on` | how hard the solver presolves | `presolve` | `Presolve` | `presolve_use` |
 | `method` | `choose` / `simplex` / `barrier` / `hipo` / `pdlp` | the algorithm the solver runs | `solver` | `Method` | `optimizer` |
-| `newton_system` | `choose` / `augmented` / `normaleq` | the Newton system an interior point method factorises | `hipo_system` | not carried | not carried |
+| `newton_system` | `choose` / `augmented` / `normaleq` | the Newton system an interior point method factorizes | `hipo_system` | not carried | not carried |
 | `crossover` | `choose` / `off` / `on` | whether an interior point is moved to a vertex after the solve | `run_crossover` | `Crossover` | `intpnt_basis` |
 | `pdlp_tol` | float | relative tolerance at which the first-order method stops | `pdlp_optimality_tolerance` | not carried | not carried |
 <!-- /options -->

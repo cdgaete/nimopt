@@ -15,20 +15,17 @@ class Solution:
     """Primal and dual values, read back onto the sets they were declared over.
 
     Every array declares `absence="unknown"`. A coordinate the model does not
-    define has no value, and combining two instances' results does not add a
-    zero for it.
+    define has no value.
 
-    A variable over a full product has a value at every cell of its frame. The
-    solver returns those values in the order the columns are numbered, and they
-    reshape into a `DenseArray` with no index built at all. A variable over a
-    subset has a value at its members alone and stays a `SparseArray`. A dual
-    follows its constraint's row domain by the same rule.
+    A variable over a full product has a value at every cell of its frame, and
+    reshapes into a `DenseArray`. A variable over a subset has a value at its
+    members alone and is a `SparseArray`. A dual follows its constraint's row
+    domain by the same rule.
 
     `status` and `feasible` are readable after any solve. `objective` and
     `primal` raise ValueError where `feasible` is False. `dual` raises
-    ValueError where `status` is not `optimal`, and raises for a model with
-    integer columns. A mixed-integer model has no duals of its own, and the
-    adapters report none for one.
+    ValueError where `status` is not `optimal`, and for a model with integer
+    columns.
     """
 
     def __init__(

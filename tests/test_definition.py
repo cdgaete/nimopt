@@ -56,9 +56,8 @@ def test_a_set_and_a_parameter_do_not_share_a_name():
 
 
 def test_an_equation_may_carry_the_name_of_the_parameter_that_bounds_it():
-    # only a set and a parameter share a key space; an equation is in no
-    # data mapping, and naming a row for its right-hand side is the ordinary
-    # way to write one
+    # only a set and a parameter share a key space; an equation is in no data
+    # mapping, and a row named after its right-hand side is ordinary
     d = Definition("d")
     S = d.set("S")
     supply = d.param("supply", (S,))
@@ -75,8 +74,8 @@ def test_a_definition_carries_no_second_way_to_set_a_sense():
 
 
 def test_an_objective_carrying_free_dimensions_is_refused_where_it_is_set():
-    # the frame is a property of the expression, so a definition sees it as
-    # well as a model does; refusing at build names a line nobody wrote
+    # the frame is a property of the expression; a definition reads it as a
+    # model does, and raises where the objective is set
     d = Definition("d")
     S = d.set("S")
     one = d.param("one", (S,))
@@ -120,14 +119,14 @@ def test_data_that_misses_a_declaration_is_refused():
 
 
 def test_data_naming_something_undeclared_is_refused():
-    with pytest.raises(ValueError, match="names undeclared"):
+    with pytest.raises(ValueError, match="contains the undeclared"):
         dispatch().build(data() | {"wind_speed": np.zeros(6)})
 
 
 def test_a_tuple_that_does_not_state_the_long_form_is_refused():
-    # a tuple is recognised by its type, so it is the one form that can be
-    # given by accident; the refusal names the parameter and both forms
-    with pytest.raises(ValueError, match="states its coefficients the long way"):
+    # a tuple is recognized by its type, and it is the one form that can be
+    # given by accident; the message identifies the parameter and both forms
+    with pytest.raises(ValueError, match="pass one mapping of label columns"):
         dispatch().build(data() | {"cost": (1.0, 2.0)})
 
 
@@ -155,8 +154,8 @@ def test_a_model_built_from_a_definition_equals_one_built_directly():
 def transport():
     """A variable over a sparse subset of a set product, declared.
 
-    The arcs are the coefficients `cost` carries, so `flow` takes its members
-    from that parameter rather than spanning the whole product.
+    The arcs are the coefficients of `cost`. `flow` takes its members from
+    that parameter, and does not span the whole product.
     """
     d = Definition("transport", sense="min")
     P, W = d.set("P"), d.set("W")
@@ -205,8 +204,8 @@ def test_a_sparse_shape_declares_and_builds():
 
 
 def test_a_sparse_variable_takes_its_members_from_the_parameter_named():
-    # the check that this shape is masked at all: a cost carrying every cell
-    # gives the same declaration the whole product
+    # the check that this shape is masked at all: a cost with a value at
+    # every cell gives the same declaration the whole product
     dense = transport_data() | {"cost": np.ones((2, 3))}
     assert transport().build(dense).n_columns == 6
 
@@ -242,10 +241,10 @@ def test_a_temporally_coupled_shape_declares_and_builds():
 def nodal():
     """A balance whose terms each reach some of its rows, declared.
 
-    An incidence carries an entry only where a link touches a bus, so no term
-    reaches every bus-hour and the rows are stated rather than derived. `live`
-    names them: a parameter whose coefficients are the bus-hours the balance
-    is written for.
+    An incidence has an entry only where a link touches a bus, and no term
+    covers every bus-hour. The rows are declared, not derived. `live` is a
+    parameter whose coefficients are the bus-hours the balance is written
+    for.
     """
     d = Definition("nodal", sense="min")
     B, L, T = d.set("B"), d.set("L"), d.set("T")
@@ -287,7 +286,7 @@ def nodal_data():
 
 def test_a_shape_that_states_its_rows_declares_and_builds():
     m = nodal().build(nodal_data())
-    # the sets state every bus-hour; the parameter states the two it carries
+    # the sets cover every bus-hour; the parameter covers the two it defines
     assert m.constraints["balance"].n_rows == 6
     assert m.constraints["live"].n_rows == 2
     assert m.solve().status == "optimal"

@@ -107,7 +107,7 @@ loads(
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: variable 'x' carries ['bound'], which the format does not; it takes ('sets', 'subset', 'lower', 'upper', 'integer')
+ValueError: variable 'x' contains the unknown keys ['bound']; write only ('sets', 'subset', 'lower', 'upper', 'integer')
 ```
 
 </details>
@@ -142,7 +142,7 @@ loads(
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: parameter 'c' is given columns ['value', 'S']; a table states the dimensions then value: ['S', 'value']
+ValueError: parameter 'c' is given columns ['value', 'S']; a table lists the dimensions then value: ['S', 'value']
 ```
 
 </details>
@@ -173,7 +173,7 @@ m.to_yaml()
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: constraint 'cap' states where= with a domain that has no name; declare its members as a parameter and name that
+ValueError: constraint 'cap' gives where= a domain with no name; declare its members as a parameter and refer to that parameter
 ```
 
 </details>

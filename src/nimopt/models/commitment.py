@@ -1,13 +1,11 @@
 """Unit commitment: a binary on-off column per generator and snapshot.
 
-A committed unit runs between its minimum and its maximum and costs a no-load
-charge for being on at all; an uncommitted one produces nothing. That is the
-pair of rows `capacity` and `minimum`, each written against the binary column.
+A committed unit runs between its minimum and its maximum and pays a no-load
+charge for being on. An uncommitted unit produces nothing. The rows `capacity`
+and `minimum` express that pair against the binary column.
 
-Nothing couples one snapshot to the next — no ramp, no minimum up time — so the
-cheapest commitment is chosen per snapshot and `reference` finds it by
-enumerating every on-off subset. Three units make eight subsets, which is
-exact and cheap at every scale the corpus uses.
+No row couples one snapshot to the next. `reference` finds the cheapest
+commitment per snapshot by enumerating every on-off subset of three units.
 """
 
 import itertools
@@ -27,7 +25,7 @@ LOAD = (60.0, 140.0, 200.0, 95.0)
 
 
 def definition() -> Definition:
-    """The commitment model, with no data bound."""
+    """Return the commitment model, with no data bound."""
     d = Definition("commitment", sense="min")
     T, G = d.set("T"), d.set("G")
     p_max = d.param("p_max", (G,))
@@ -46,7 +44,7 @@ def definition() -> Definition:
 
 
 def data(scale: int = 1) -> dict[str, Any]:
-    """Inputs for `scale` copies of the fleet over `len(LOAD) * scale` hours."""
+    """Return inputs for `scale` copies of the fleet over the scaled hours."""
     fleet = [
         (f"{name}{k}", p_max, p_min, cost, no_load)
         for k in range(scale)
@@ -64,10 +62,10 @@ def data(scale: int = 1) -> dict[str, Any]:
 
 
 def reference(data: Mapping[str, Any]) -> float:
-    """The cheapest commitment per snapshot, over every on-off subset.
+    """Return the cheapest commitment per snapshot, over every on-off subset.
 
-    A committed unit runs at least its minimum, so the remainder of the load
-    is filled cheapest-first among the units that are on.
+    A committed unit runs at least its minimum. The remainder of the load is
+    filled cheapest first among the units that are on.
     """
     p_max, p_min = data["p_max"], data["p_min"]
     cost, no_load = data["cost"], data["no_load"]

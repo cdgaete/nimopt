@@ -74,7 +74,7 @@ INSTRUCTIONS = """\
 #             a number or a parameter indexed by the constraint's free
 #             index sets. Any term that contains a variable has been
 #             moved to the left-hand side.
-#   over      The rows, stated explicitly: a parameter name or a list
+#   over      The rows, declared explicitly: a parameter name or a list
 #             of set names. Every one of those rows exists. A term
 #             that has entries at only some of those rows contributes
 #             to the rows where it has entries. The right-hand side
@@ -82,12 +82,11 @@ INSTRUCTIONS = """\
 #             model raises an error.
 #   where     The derived rows, restricted to this domain: a parameter
 #             name or a list of set names.
-#   Stating both over and where is an error. With neither, the rows
+#   Giving both over and where is an error. With neither, the rows
 #   are derived: the coordinates at which every term has an entry,
 #   restricted to the coordinates at which the right-hand side has a
 #   value. A term whose parameter has no entry at a coordinate removes
-#   that row, because a row missing one of its terms would state a
-#   constraint that was not written.
+#   that row.
 #
 # Expression syntax, in relation and objective:
 #   Name[s, ...]           a parameter or a variable indexed by its
@@ -102,7 +101,7 @@ INSTRUCTIONS = """\
 #                          that D holds: a parameter, or a tuple of
 #                          sets such as (s, t)
 #   + - * / **, unary minus, and parentheses.
-#   One comparison operator per relation: state each side of a range
+#   One comparison operator per relation: write each side of a range
 #   as a separate constraint.
 # ------------------------------------------------------------------------
 """
@@ -121,11 +120,10 @@ _Dumper.add_representer(list, _sequence)
 
 
 def dumps(mapping: Mapping[str, Any], instructions: bool = False) -> str:
-    """`mapping` as the YAML text a file carries, keys in the order given.
+    """Return `mapping` as YAML text, its keys in the order given.
 
-    `instructions=True` prefixes the comment block that explains the format,
-    so that a reader given one file alone can interpret it without the
-    package. The block is a YAML comment, so the loader never sees it.
+    `instructions=True` prefixes the comment block that explains the format.
+    The block is a YAML comment, and the loader ignores it.
     """
     text = yaml.dump(
         mapping,
@@ -140,8 +138,8 @@ def dumps(mapping: Mapping[str, Any], instructions: bool = False) -> str:
 def _addressable(name: str, what: str) -> None:
     if not name.isidentifier() or name == "Sum":
         raise ValueError(
-            f"{what} {name!r} is not a name the spelling can address; a symbol's "
-            f"name is a Python identifier other than Sum"
+            f"{what} {name!r} is not a name an expression can address; "
+            f"declare a Python identifier other than Sum"
         )
 
 
@@ -153,8 +151,8 @@ def _domain(held: Any, owner: str, slot: str) -> Any:
     if isinstance(held, tuple):
         return [s.name for s in held]
     raise ValueError(
-        f"{owner} states {slot} with a domain that has no name; declare its "
-        f"members as a parameter and name that"
+        f"{owner} gives {slot} a domain with no name; declare its members as "
+        f"a parameter and refer to that parameter"
     )
 
 
@@ -165,7 +163,7 @@ def _bound(bound: Any, default: float) -> str | float | None:
 
 
 def _parts(held: Any) -> tuple[Any, ...]:
-    """The sets, aliases, parameters, variables, constraints and objective of `held`."""
+    """Return the sets, aliases, parameters, variables, constraints, objective."""
     if isinstance(held, Definition):
         constraints = [
             (name, relation, where, over)
@@ -193,13 +191,15 @@ def _parts(held: Any) -> tuple[Any, ...]:
             constraints,
             held.objective,
         )
-    raise TypeError(f"a file states a definition or a model; got {type(held).__name__}")
+    raise TypeError(
+        f"a file contains a definition or a model; got {type(held).__name__}"
+    )
 
 
 def _long(
     parameter: Any,
 ) -> tuple[dict[str, npt.NDArray[Any]], npt.NDArray[np.float64]]:
-    """A parameter's entries as one label column per dimension and its values."""
+    """Return a parameter's entries as label columns and values."""
     array = parameter.materialise()
     positions = array.coordinates()
     labels = {
@@ -210,10 +210,10 @@ def _long(
 
 
 def _arrays(model: Any) -> dict[str, npt.NDArray[Any]]:
-    """Every set's members and every parameter's array, keyed by name.
+    """Return every set's members and every parameter's array, keyed by name.
 
-    A parameter covering its full product is its grid; one covering less is
-    a structured table of one field per dimension and a `value` field.
+    A parameter over its full product is a dense grid. A parameter over less
+    is a structured table of one field per dimension and a `value` field.
     """
     sets, _, parameters, *_ = _parts(model)
     out = {s.name: np.asarray(s.labels) for s in sets}
@@ -233,14 +233,14 @@ def _arrays(model: Any) -> dict[str, npt.NDArray[Any]]:
     for name, array in out.items():
         if array.dtype.hasobject:
             raise ValueError(
-                f"{name!r} holds an object array, which a file cannot carry "
-                f"without pickling; give its labels one dtype"
+                f"{name!r} is an object array, and a file stores no object "
+                f"array without pickling; give its labels one dtype"
             )
     return out
 
 
 def structure(held: Any) -> dict[str, Any]:
-    """The mapping a definition's or a model's file carries, without data."""
+    """Return the mapping of a definition's or a model's file, without data."""
     sets, aliases, parameters, variables, constraints, objective = _parts(held)
     for s in sets:
         _addressable(s.name, "set")
@@ -290,18 +290,20 @@ def _only(entry: Mapping[str, Any], keys: Iterable[str], what: str) -> None:
     unknown = sorted(set(entry) - set(keys))
     if unknown:
         raise ValueError(
-            f"{what} carries {unknown}, which the format does not; it takes {keys}"
+            f"{what} contains the unknown keys {unknown}; write only {keys}"
         )
 
 
 def _named_set(definition: Any, name: str, what: str) -> Any:
     if name not in definition.sets:
-        raise ValueError(f"{what} names set {name!r}, which the file does not declare")
+        raise ValueError(
+            f"{what} refers to the undeclared set {name!r}; declare it under sets"
+        )
     return definition.sets[name]
 
 
 def _named_dimension(definition: Any, name: str, what: str) -> Any:
-    """The set or the alias `name` names, either being a dimension to declare over."""
+    """Return the set or the alias called `name`."""
     if name in definition.aliases:
         return definition.aliases[name]
     return _named_set(definition, name, what)
@@ -310,7 +312,8 @@ def _named_dimension(definition: Any, name: str, what: str) -> Any:
 def _named_parameter(definition: Any, name: str, what: str) -> Any:
     if name not in definition.parameters:
         raise ValueError(
-            f"{what} names parameter {name!r}, which the file does not declare"
+            f"{what} refers to the undeclared parameter {name!r}; declare it "
+            f"under parameters"
         )
     return definition.parameters[name]
 
@@ -336,10 +339,10 @@ def _read_bound(definition: Any, given: Any, what: str) -> Any:
 
 
 def _definition(spec: Mapping[str, Any]) -> Definition:
-    """The definition a file's structure section declares."""
+    """Return the definition a file's structure section declares."""
     for key in ("name", "sense"):
         if key not in spec:
-            raise ValueError(f"a model file states {key!r}; this one does not")
+            raise ValueError(f"the file declares no {key!r}; add it")
     d = Definition(spec["name"], sense=spec["sense"])
     for name in spec.get("sets") or []:
         d.set(name)
@@ -366,8 +369,8 @@ def _definition(spec: Mapping[str, Any]) -> Definition:
         relation = read(entry["relation"], symbols)
         if not isinstance(relation, Relation):
             raise ValueError(
-                f"{what} reads to no comparison: {entry['relation']!r} states an "
-                f"expression and no sense"
+                f"{what} reads to no comparison: {entry['relation']!r} is an "
+                f"expression with no sense; write one of <=, >= or =="
             )
         d.constraint(
             name,
@@ -379,8 +382,8 @@ def _definition(spec: Mapping[str, Any]) -> Definition:
         objective = read(spec["objective"], symbols)
         if isinstance(objective, Relation):
             raise ValueError(
-                f"the objective reads to a comparison: {spec['objective']!r}; an "
-                f"objective is an expression"
+                f"the objective reads to a comparison: {spec['objective']!r}; "
+                f"write an expression with no comparison operator"
             )
         d.set_objective(objective)
     return d
@@ -393,15 +396,14 @@ def _spec(text: str) -> dict[str, Any]:
     version = spec.get("version")
     if version != VERSION:
         raise ValueError(
-            f"the file states version {version!r}; this reader understands "
-            f"version {VERSION}"
+            f"the file declares version {version!r}; pass a file of version {VERSION}"
         )
     _only(spec, KEYS, "a model file")
     return spec
 
 
 def to_inline(model: Any) -> dict[str, Any]:
-    """A model's data as the block its file carries, in the three shapes."""
+    """Return a model's data as the block its file contains."""
     out = {}
     for name, array in _arrays(model).items():
         if array.dtype.names is None:
@@ -418,19 +420,19 @@ def to_inline(model: Any) -> dict[str, Any]:
 
 
 def _columns(name: str, dims: Sequence[str], columns: Sequence[str]) -> None:
-    """Refuse a long table whose columns are not the dimensions then `value`."""
+    """Raise where a long table's columns are not the dimensions then `value`."""
     expected = list(dims) + ["value"]
     if list(columns) != expected:
         raise ValueError(
             f"parameter {name!r} is given columns {list(columns)}; a table "
-            f"states the dimensions then value: {expected}"
+            f"lists the dimensions then value: {expected}"
         )
 
 
 def _table(
     name: str, dims: Sequence[str], columns: Sequence[str], rows: Sequence[Any]
 ) -> tuple[dict[str, npt.NDArray[Any]], npt.NDArray[np.float64]]:
-    """A long table as the pair `build` takes, checking its columns."""
+    """Return a long table as the pair `build` takes, with its columns checked."""
     _columns(name, dims, columns)
     expected = list(dims) + ["value"]
     held = list(zip(*rows)) if rows else [[] for _ in expected]
@@ -439,7 +441,7 @@ def _table(
 
 
 def from_inline(block: Mapping[str, Any], definition: Definition) -> dict[str, Any]:
-    """The mapping `build` takes, from a file's inline block."""
+    """Return the mapping `build` takes, from a file's inline block."""
     out = {}
     for name, value in block.items():
         parameter = definition.parameters.get(name)
@@ -454,12 +456,12 @@ def from_inline(block: Mapping[str, Any], definition: Definition) -> dict[str, A
 
 
 def write_npz(arrays: Mapping[str, Any], path: Any) -> None:
-    """The arrays `_arrays` gathered, as an `.npz` at `path`."""
+    """Write the arrays `_arrays` gathered as an `.npz` at `path`."""
     np.savez_compressed(path, **arrays)
 
 
 def read_npz(path: Any, definition: Definition) -> dict[str, Any]:
-    """The mapping `build` takes, from an `.npz` written beside a file."""
+    """Return the mapping `build` takes, from an `.npz` beside a file."""
     out = {}
     with np.load(path, allow_pickle=False) as held:
         for name in held.files:
@@ -479,30 +481,29 @@ def read_npz(path: Any, definition: Definition) -> dict[str, Any]:
 def _loads(text: str, data: Any, directory: Any) -> Any:
     spec = _spec(text)
     definition = _definition(spec)
-    carried = spec.get("data")
-    if carried is not None and data is not None:
+    inside = spec.get("data")
+    if inside is not None and data is not None:
         raise ValueError(
-            "the file carries data and data= is given; two sources for one "
-            "model is a choice this reader does not make"
+            "the file contains data and data= is given; pass one of the two sources"
         )
-    if isinstance(carried, str):
+    if isinstance(inside, str):
         if directory is None:
             raise ValueError(
-                f"the text names {carried!r} as its data, and text has no "
+                f"the text refers to {inside!r} as its data, and text has no "
                 f"directory to find it in; read the file with load(path)"
             )
-        if Path(carried).name != carried:
+        if Path(inside).name != inside:
             raise ValueError(
-                f"a data file is named beside the model file with no directory; "
-                f"got {carried!r}"
+                f"a data file is written beside the model file with no "
+                f"directory; got {inside!r}"
             )
-        data = directory / carried
-    elif isinstance(carried, dict):
-        return definition.build(from_inline(carried, definition))
-    elif carried is not None:
+        data = directory / inside
+    elif isinstance(inside, dict):
+        return definition.build(from_inline(inside, definition))
+    elif inside is not None:
         raise ValueError(
             f"data is an inline mapping or the name of an .npz beside the "
-            f"file; got {type(carried).__name__}"
+            f"file; got {type(inside).__name__}"
         )
     if data is None:
         return definition
@@ -512,16 +513,17 @@ def _loads(text: str, data: Any, directory: Any) -> Any:
 
 
 def loads(text: str, data: Any = None) -> Any:
-    """The definition `text` states, or the model it builds where data is given.
+    """Return the definition `text` declares, or the model it builds.
 
-    `data` is a mapping `build` takes or the path of an `.npz`. A file naming
-    a sidecar cannot be read from text, because text has no directory.
+    `data` is a mapping `build` takes or the path of an `.npz`. Text that
+    refers to a sidecar raises. Text has no directory to read the sidecar
+    from.
     """
     return _loads(text, data, None)
 
 
 def load(path: Any, data: Any = None) -> Any:
-    """The definition the file at `path` states, or the model it builds."""
+    """Return the definition the file at `path` declares, or its model."""
     path = Path(path)
     return _loads(path.read_text(), data, path.parent)
 
@@ -538,12 +540,12 @@ def save(
     path = Path(path)
     if isinstance(what, Definition):
         if inline:
-            raise ValueError("a definition carries no data to inline")
+            raise ValueError("a definition contains no data to inline")
         path.write_text(dumps(structure(what), instructions))
         return
     if not isinstance(what, Model):
         raise TypeError(
-            f"a file states a definition or a model; got {type(what).__name__}"
+            f"a file contains a definition or a model; got {type(what).__name__}"
         )
     mapping = structure(what)
     if inline:

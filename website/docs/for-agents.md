@@ -148,7 +148,7 @@ message beside it.
 | `ZeroDivisionError` | divisor holed is zero at 1 coordinate(s), first at {'G': 'base', 'T': 1}; remove the zeros or divide by another parameter | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | frames ('G',) and ('T',) share no dimension; there is nothing to align them on | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | constraint 'capacity' has free dimensions ('P',); its condition is over ('W',) | [/guides/conditions](/guides/conditions) |
-| `ValueError` | constraint 'capacity' states its rows with over= and narrows them with where=; state one | [/guides/conditions](/guides/conditions) |
+| `ValueError` | constraint 'capacity' is given over= and where= together; pass one of them | [/guides/conditions](/guides/conditions) |
 | `ValueError` | variable 'x' is read at member 't9' of dimension 'T'; read it at a member that set contains | [/guides/fixed-members](/guides/fixed-members) |
 | `ValueError` | a lag is a whole number of members; got 1.7 | [/guides/lags](/guides/lags) |
 | `ValueError` | a sum is over the members of ['T'] and takes the set, not a lag of it; write the lag at the variable's reference | [/guides/lags](/guides/lags) [/reference/expression](/reference/expression) |
@@ -161,8 +161,8 @@ message beside it.
 | `ValueError` | 3 member(s) numbered from 4 reach position 6, and dimension 'k' spans 6 | [/nimblend/domains](/nimblend/domains) |
 | `ValueError` | a domain of 3 member(s) takes one value each, as a column of that length; got shape (2,) | [/nimblend/domains](/nimblend/domains) |
 | `ValueError` | constraint 'supply' has free dimensions ('P',); its right-hand side 'demand' is over ('W',) | [/reference/constraint](/reference/constraint) [/tutorial/constraints](/tutorial/constraints) |
-| `ValueError` | data does not cover ['S'] | [/reference/definition](/reference/definition) |
-| `ValueError` | parameter 'S' is already declared as a set; a name means one symbol, in an expression and in the data | [/reference/definition](/reference/definition) |
+| `ValueError` | data does not cover ['S']; add an entry for each | [/reference/definition](/reference/definition) |
+| `ValueError` | parameter 'S' is already declared as a set; declare another name | [/reference/definition](/reference/definition) |
 | `TypeError` | a relation has no truth value; write each bound in its own equation | [/reference/expression](/reference/expression) [/tutorial/constraints](/tutorial/constraints) |
 | `TypeError` | a relation is already an equation with one bound; compare the expression again in its own equation | [/reference/expression](/reference/expression) |
 | `TypeError` | an LP has no row for a strict inequality; write `<=` or `>=`, and reduce with `Sum` in place of `min` or `max` | [/reference/expression](/reference/expression) |
@@ -171,9 +171,9 @@ message beside it.
 | `TypeError` | cannot divide by an expression: expressions are linear; declare the reciprocal as a coefficient the variable multiplies | [/reference/expression](/reference/expression) |
 | `TypeError` | cannot raise an expression to a power: expressions are linear; raise a coefficient to the power and multiply it by a variable | [/reference/expression](/reference/expression) |
 | `ValueError` | term 'x' already sums over ['T']; sum over each dimension once | [/reference/expression](/reference/expression) |
-| `ValueError` | constraint 'cap' states where= with a domain that has no name; declare its members as a parameter and name that | [/reference/files](/reference/files) |
-| `ValueError` | parameter 'c' is given columns ['value', 'S']; a table states the dimensions then value: ['S', 'value'] | [/reference/files](/reference/files) |
-| `ValueError` | variable 'x' carries ['bound'], which the format does not; it takes ('sets', 'subset', 'lower', 'upper', 'integer') | [/reference/files](/reference/files) |
+| `ValueError` | constraint 'cap' gives where= a domain with no name; declare its members as a parameter and refer to that parameter | [/reference/files](/reference/files) |
+| `ValueError` | parameter 'c' is given columns ['value', 'S']; a table lists the dimensions then value: ['S', 'value'] | [/reference/files](/reference/files) |
+| `ValueError` | variable 'x' contains the unknown keys ['bound']; write only ('sets', 'subset', 'lower', 'upper', 'integer') | [/reference/files](/reference/files) |
 | `ValueError` | constraint 'cap' has no row at {'P': 'p3'}; read `absent('cap')` for the rule that dropped it | [/reference/inspection](/reference/inspection) |
 | `ValueError` | parameter 'cost': label column 'P' has length 1 and the value column has length 2; they name the same entries | [/reference/param](/reference/param) |
 | `TypeError` | parameter 'price' is over ('G',) and expresses no coefficient until it is read; read it at its sets as price[G] | [/reference/param](/reference/param) |

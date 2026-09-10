@@ -84,7 +84,7 @@ d.param("S", (S,))
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: parameter 'S' is already declared as a set; a name means one symbol, in an expression and in the data
+ValueError: parameter 'S' is already declared as a set; declare another name
 ```
 
 </details>
@@ -234,7 +234,7 @@ d.build({})
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: data does not cover ['S']
+ValueError: data does not cover ['S']; add an entry for each
 ```
 
 </details>

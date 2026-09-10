@@ -1,8 +1,9 @@
 """What each documentation example prints, written below the fence that runs it.
 
-A page states its examples; this states what they show. The region below a
-fence is generated -- stripped and rewritten whole on every run -- so a page
-is a function of its prose and its code, and running twice changes nothing.
+A page holds its examples, and this script writes what they show. The region
+below a fence is generated: it is stripped and rewritten whole on every run.
+A page is a function of its prose and its code, and a second run changes
+nothing.
 """
 
 import contextlib
@@ -25,11 +26,10 @@ def run(block):
 
 
 def shown(block):
-    """The summary and the text a block's region carries, or None for no region.
+    """Return the summary and the text of a block's region, or None.
 
-    A block that behaves against the form its fence states is refused rather
-    than written down wrongly: the page would then state one thing and show
-    another.
+    Raises ValueError where a block behaves against the form its fence
+    declares.
     """
     if block.form == "skip":
         return None
@@ -40,11 +40,11 @@ def shown(block):
         return ("Output", printed.strip()) if printed.strip() else None
     if error is None:
         raise ValueError(
-            f"line {block.line}: a block stating raises={block.detail} did not"
+            f"line {block.line}: a block declaring raises={block.detail} did not"
         )
     if not error.startswith(f"{block.detail}:"):
         raise ValueError(
-            f"line {block.line}: states raises={block.detail}, raised {error}"
+            f"line {block.line}: declares raises={block.detail}, raised {error}"
         )
     body = f"{printed.strip()}\n{error}" if printed.strip() else error
     return f"Raises {block.detail}", body

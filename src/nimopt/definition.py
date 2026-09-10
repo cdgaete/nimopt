@@ -31,12 +31,12 @@ from nimopt.variable import Variable
 
 
 class Definition:
-    """The symbols and constraints a model is stated from, without its data.
+    """The symbols and constraints a model is declared from, without its data.
 
-    A definition declares its sets and parameters by name and states its
-    constraints in the expression syntax a model uses. An expression holds
-    handles rather than arrays, so an equation's free dimensions and its
-    sense are read from the relation rather than declared beside it.
+    A definition declares its sets and parameters by name. It declares its
+    constraints in the expression syntax a model uses. An expression contains
+    handles, not arrays. A constraint's free dimensions and its sense are read
+    from the relation.
     """
 
     def __init__(self, name: str = "definition", sense: str = "min") -> None:
@@ -53,7 +53,7 @@ class Definition:
 
     @property
     def sense(self) -> str:
-        """The direction this definition's objective is optimised in."""
+        """Return the direction this definition's objective is optimized in."""
         return self._sense
 
     def __repr__(self) -> str:
@@ -70,8 +70,8 @@ class Definition:
             return name
         if not name.isidentifier() or name == "Sum":
             raise ValueError(
-                f"{what} {name!r} is not a name an expression can address; a "
-                f"symbol's name is a Python identifier other than Sum"
+                f"{what} {name!r} is not a name an expression can address; "
+                f"declare a Python identifier other than Sum"
             )
         held = (
             ("set", self.sets),
@@ -82,8 +82,8 @@ class Definition:
         for kind, other in held:
             if other is not registry and name in other:
                 raise ValueError(
-                    f"{what} {name!r} is already declared as a {kind}; a name "
-                    f"means one symbol, in an expression and in the data"
+                    f"{what} {name!r} is already declared as a {kind}; "
+                    f"declare another name"
                 )
         return name
 
@@ -96,14 +96,14 @@ class Definition:
     def alias(self, name: str, base: Any) -> Alias:
         """Declare a second name for `base`, over the members it binds.
 
-        An alias carries no data of its own: it reads the labels and the
-        coordinate its base set builds, so it binds when that set does. A
-        model relating a set to itself is declared over the set and its alias.
+        An alias has no data of its own. It reads the labels and the
+        coordinate of its base set, and binds when that set binds. A model
+        relating a set to itself is declared over the set and its alias.
         """
         if base not in self.sets.values():
             raise ValueError(
-                f"alias {name!r} names base {getattr(base, 'name', base)!r}, "
-                f"which is not a set of definition {self.name!r}"
+                f"base {getattr(base, 'name', base)!r} of alias {name!r} is "
+                f"not a set of definition {self.name!r}; pass a set of it"
             )
         name = self._fresh(name, self.aliases, "alias")
         self.aliases[name] = Alias(name, base)
@@ -136,8 +136,8 @@ class Definition:
     ) -> None:
         """Declare an equation from a comparison of an expression.
 
-        `where=` narrows the rows and `over=` states them, each as a tuple of
-        this definition's sets or as one of its parameters, whose coefficients
+        `where=` narrows the rows and `over=` declares them. Each is a tuple
+        of this definition's sets, or one of its parameters whose coefficients
         are the coordinates. Both resolve when the declaration binds.
         """
         if not isinstance(relation, Relation):
@@ -150,7 +150,7 @@ class Definition:
         self.constraints[name] = (relation, where, over)
 
     def explain(self) -> Explanation:
-        """What this definition declares, with nothing bound."""
+        """Return what this definition declares, with nothing bound."""
         return Explanation(
             name=self.name,
             sense=self.sense,
@@ -180,7 +180,7 @@ class Definition:
         )
 
     def to_yaml(self, instructions: bool = False) -> str:
-        """This definition as the text of its file: its structure and no data.
+        """Return this definition as file text, its structure and no data.
 
         `instructions=True` prefixes the comment block that explains the
         format.
@@ -190,25 +190,26 @@ class Definition:
         return dumps(structure(self), instructions)
 
     def build(self, data: Mapping[str, Any], progress: Any = False) -> "Model":
-        """A model over this definition's declarations, bound to `data`.
+        """Return a model over this definition's declarations, bound to `data`.
 
         `data` maps a declared set's name to its members and a declared
         parameter's name to its values. A set and a parameter never share a
-        name, so the two registries merge into one key set here. The
-        declarations are copied before they are bound, so a definition builds
-        as many models as it is given data for and is unchanged by any of them.
+        name, and the two registries merge into one key set. The declarations
+        are copied before they are bound, and the definition is unchanged.
 
-        `progress=` reports each constraint as it is measured. This pass is
-        what computes the nonzeros, so it counts the constraints it declares
-        rather than the coefficients it does not yet know.
+        `progress=` reports each constraint as it is measured. The count is
+        the number of constraints.
         """
         declared = {**self.sets, **self.parameters}
         missing = [name for name in declared if name not in data]
         if missing:
-            raise ValueError(f"data does not cover {missing}")
+            raise ValueError(f"data does not cover {missing}; add an entry for each")
         undeclared = [name for name in data if name not in declared]
         if undeclared:
-            raise ValueError(f"data names undeclared {undeclared}")
+            raise ValueError(
+                f"data contains the undeclared {undeclared}; declare them or "
+                f"remove them"
+            )
 
         bound = copy.deepcopy(self)
         for name, dimension in bound.sets.items():
@@ -237,36 +238,34 @@ class Definition:
         return model
 
     def set_objective(self, expression: Any) -> None:
-        """Set the objective the definition's sense optimises."""
+        """Set the objective the definition's sense optimizes."""
         expression = read_at_its_sets(expression)
         if not isinstance(expression, Expression):
             raise TypeError(
-                f"an objective is an expression over the model's columns; a "
-                f"constant alone states none, so {type(expression).__name__} "
-                f"is not one"
+                f"an objective is an expression over the model's columns; got "
+                f"{type(expression).__name__}"
             )
         if expression.frame:
             raise ValueError(
-                f"an objective is over the column space alone; this "
-                f"expression still carries free dimensions {expression.frame}"
+                f"objective expression has free dimensions {expression.frame}; "
+                f"sum the expression over them"
             )
         self.objective = expression
 
 
 def _values(name: str, sets: Any, given: Any) -> Param:
-    """A parameter over `given`, dense over the product or long over entries.
+    """Return a parameter over `given`, dense over the product or long.
 
-    A pair is one label column per set and a value column, which is how a
-    parameter carrying a coefficient at some coordinates of its product and
-    none at the rest is stated. Anything else is values over every cell.
+    A pair is one mapping of label columns and one value column. It defines a
+    coefficient at some coordinates of the product and none at the rest. Any
+    other value is read as values over every cell.
     """
     if isinstance(given, tuple):
         if len(given) != 2 or not hasattr(given[0], "keys"):
             raise ValueError(
-                f"parameter {name!r} is given a tuple, which states its "
-                f"coefficients the long way as one mapping of label columns "
-                f"and one value column; got {len(given)} item(s). Values over "
-                f"every cell of the product are given as an array"
+                f"parameter {name!r} is given a tuple of {len(given)} item(s); "
+                f"pass one mapping of label columns and one value column, or "
+                f"pass an array over every cell of the product"
             )
         columns, values = given
         return Param.from_long(name, sets, columns, values)
@@ -274,7 +273,7 @@ def _values(name: str, sets: Any, given: Any) -> Param:
 
 
 def _readings(coefficient: Any) -> Iterator[tuple[str, Any, Mapping[str, Any]]]:
-    """Every reading of a parameter or a combination inside a coefficient tree."""
+    """Yield every reading of a parameter or a combination in a coefficient."""
     if isinstance(coefficient, ParamRef):
         yield (
             f"parameter {coefficient.param.name!r}",
@@ -297,10 +296,9 @@ def _readings(coefficient: Any) -> Iterator[tuple[str, Any, Mapping[str, Any]]]:
 def _fixed_members(
     definition: "Definition",
 ) -> Iterator[tuple[str, Any, Mapping[str, Any]]]:
-    """Each fixed member a definition's terms and coefficients read, with its sets.
+    """Yield each fixed member a definition reads, with the sets it is over.
 
-    A reading with nothing fixed is skipped, so what is yielded is exactly what
-    `check_members` has to look at once the sets are bound.
+    A reading with nothing fixed is skipped.
     """
     expressions = [
         relation.expression for relation, _, _ in definition.constraints.values()

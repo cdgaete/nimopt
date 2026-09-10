@@ -201,7 +201,7 @@ def test_a_gap_over_a_zero_objective_is_zero_or_infinite():
 
 def test_a_result_validates_what_an_adapter_reports():
     values = np.zeros(1)
-    with pytest.raises(ValueError, match="the statuses are"):
+    with pytest.raises(ValueError, match="status is 'solved'"):
         Result("solved", True, 1.0, None, values, None, None)
     with pytest.raises(ValueError, match="status is 'optimal' and feasible is False"):
         Result("optimal", False, 1.0, None, values, None, None)

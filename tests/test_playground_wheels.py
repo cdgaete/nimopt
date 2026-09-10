@@ -54,7 +54,7 @@ def modules(package):
 
 
 def packed(package):
-    """Every module the shipped wheel carries, by its path inside it."""
+    """Return every module in the shipped wheel, by its path inside it."""
     whl = WHEELS / f"{package}-{SHIPPED[package].__version__}-py3-none-any.whl"
     with zipfile.ZipFile(whl) as held:
         return {n: held.read(n) for n in held.namelist() if n.endswith(".py")}

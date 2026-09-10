@@ -1,22 +1,18 @@
 """The Mosek adapter.
 
-Mosek's task interface takes a row-wise matrix as the three arrays `Assembled`
-carries, with the row pointer split into where each row starts and where it
-ends. A bound crosses as a key beside its two numbers, derived from the bound
-arrays, so an infinite bound is stated as the absence of one rather than as a
-number the solver would read.
+Mosek's task interface reads a row-wise matrix as the three arrays `Assembled`
+contains. The row pointer is split into where each row starts and where it
+ends. A bound is passed as a key beside its two numbers, derived from the
+bound arrays. An infinite bound is passed as the absence of a bound.
 
-A solve reports through three signals. The termination code names a limit the
-optimizer stopped at; the solution status names an optimum; the problem
-status names infeasibility and unboundedness. Each is mapped into the seam's
-`STATUS` through `LIMITS`, `OPTIMAL` and `OUTCOME`, or listed in `FAILED` and
-raised. A signal the adapter does not know is refused rather than folded into
-a catch-all, because a caller reading a status it was never given cannot tell
-an answer from the absence of one.
+A solve reports through three signals. The termination code identifies a limit
+the optimizer stopped at. The solution status identifies an optimum. The
+problem status identifies infeasibility and unboundedness. `LIMITS`, `OPTIMAL`
+and `OUTCOME` map each into `STATUS`. `FAILED` lists the termination codes this
+adapter raises on. A signal in none of them raises.
 
-Mosek runs only its mixed-integer optimizer on a model with integer columns
-and refuses another; the adapter names that cause rather than passing the
-solver's code through.
+Mosek runs only its mixed-integer optimizer on a model with integer columns.
+The adapter raises on the error code `err_inv_optimizer`.
 """
 
 import sys
@@ -111,14 +107,14 @@ ENUMS = {
 
 
 def _name(member: Any) -> str:
-    """What Mosek calls an enum member, without its enum."""
+    """Return the name of an enum member, without its enum."""
     return str(member).split(".")[-1]
 
 
 def _keys(
     lower: npt.NDArray[np.float64], upper: npt.NDArray[np.float64], keys: Any
 ) -> npt.NDArray[np.int32]:
-    """Mosek's bound key per pair, from which of its two bounds are finite."""
+    """Return Mosek's bound key per pair, from which bounds are finite."""
     below = np.isneginf(lower)
     above = np.isposinf(upper)
     held = np.full(lower.shape, int(keys.ra), dtype=np.int32)
@@ -130,7 +126,7 @@ def _keys(
 
 
 def _configured(mosek: Any, settings: dict[str, Any]) -> Any:
-    """A task carrying `settings`, each under the enum Mosek reads it from."""
+    """Return a task with `settings` applied under Mosek's parameter names."""
     task = mosek.Task()
     if settings.pop("log", False):
         task.set_Stream(mosek.streamtype.log, sys.stdout.write)
@@ -145,7 +141,7 @@ def _configured(mosek: Any, settings: dict[str, Any]) -> Any:
 
 
 def _loaded(mosek: Any, task: Any, assembled: "Assembled", sense: str) -> Any:
-    """`task` holding the assembled model, with the matrix passed row-wise."""
+    """Return `task` with the assembled model loaded, the matrix row-wise."""
     keys = mosek.boundkey
     task.appendvars(assembled.n_cols)
     task.appendcons(assembled.n_rows)
@@ -181,12 +177,11 @@ def _loaded(mosek: Any, task: Any, assembled: "Assembled", sense: str) -> Any:
 
 
 def _defined(mosek: Any, task: Any, integer: Any) -> Any:
-    """The solution the task holds for this model, or None where it holds none.
+    """Return the solution type the task defines for this model, or None.
 
-    A mixed-integer model answers through its integer solution. A continuous
-    one answers through the basic solution where the optimizer built one and
-    through the interior solution otherwise, which is what an interior point
-    method without a basis identification leaves.
+    A model with integer columns defines the integer solution. A model without
+    them defines the basic solution where the optimizer built one, and the
+    interior solution otherwise.
     """
     which = (mosek.soltype.itg,) if integer else (mosek.soltype.bas, mosek.soltype.itr)
     for candidate in which:
@@ -203,8 +198,8 @@ def _bound(
     For a model with integer columns the bound is `mio_obj_bound`. Mosek
     defines that item after it solves a relaxation, and `mio_num_relax` counts
     the relaxations it solved. The bound is None where Mosek reports an
-    infinite value. Where Mosek defines no dual bound, at a relaxation count of
-    zero or for a model without integer columns, the bound is the objective at
+    infinite value. Mosek defines no dual bound at a relaxation count of zero
+    or for a model without integer columns. The bound is then the objective at
     status `optimal` and None at any other status.
     """
     if not integer or task.getintinf(mosek.iinfitem.mio_num_relax) == 0:
@@ -218,10 +213,9 @@ def solve(
 ) -> Result:
     """Solve an assembled model and return its status, its values and its bound.
 
-    The task Mosek built is returned in `Result.backend`. A session holding it
-    reads a ray from the same solved instance. A model with integer columns is
-    returned with no duals. Mosek defines none for an integer solution, and
-    this adapter does not report that pair.
+    `Result.backend` is the task Mosek built. A session reads a ray from that
+    solved instance. `Result.row_dual` is None for a model with integer
+    columns.
     """
     import mosek
 
@@ -235,19 +229,18 @@ def solve(
         if error.errno == mosek.rescode.err_inv_optimizer:
             raise RuntimeError(
                 "Mosek runs only its mixed-integer optimizer on a model with "
-                "integer columns and refuses another rather than solving the "
-                "relaxation; leave `method` at 'choose' for this model"
+                "integer columns; leave `method` at 'choose' for this model"
             ) from error
         raise
     if reported in FAILED:
         raise RuntimeError(
-            f"Mosek stopped without solving the model: {reported}. The model "
-            f"was passed to the solver but no outcome was reached."
+            f"Mosek stopped at termination code {reported} without solving the "
+            f"model; check the model and the options"
         )
     if reported != "ok" and reported not in LIMITS:
         raise RuntimeError(
-            f"Mosek reported termination code {reported!r}, which this "
-            f"adapter does not read; nimopt names an outcome or refuses it"
+            f"Mosek reported the termination code {reported!r}; this adapter "
+            f"maps no outcome to it, report it as a defect"
         )
     integer = bool(assembled.integrality.any())
     duals = None
@@ -266,8 +259,7 @@ def solve(
                 task,
             )
         raise RuntimeError(
-            "Mosek reported no solution and no limit; the model was passed "
-            "to the solver but no outcome was reached"
+            "Mosek reported no solution and no limit; check the model and the options"
         )
     solution = _name(task.getsolsta(which))
     problem = _name(task.getprosta(which))
@@ -279,9 +271,9 @@ def solve(
         status = OUTCOME[problem]
     else:
         raise RuntimeError(
-            f"Mosek reported solution status {solution!r} and problem status "
-            f"{problem!r}, which this adapter does not read; nimopt names an "
-            f"outcome or refuses it"
+            f"Mosek reported the solution status {solution!r} and the problem "
+            f"status {problem!r}; this adapter maps no outcome to them, report "
+            f"them as a defect"
         )
     col_value = np.zeros(assembled.n_cols, dtype=np.float64)
     objective = 0.0
@@ -303,11 +295,11 @@ def solve(
 
 
 def ray(backend: Any) -> npt.NDArray[np.float64] | None:
-    """The direction an unbounded model runs off in, or None where there is none.
+    """Return the primal ray of an unbounded model, or None where none exists.
 
     Mosek's certificate of dual infeasibility is a primal direction along
-    which the objective falls without bound, and the solution holding it
-    reports that status.
+    which the objective falls without bound. The solution with the status
+    `dual_infeas_cer` contains it.
     """
     import mosek
 

@@ -76,8 +76,8 @@ def test_a_definition_and_the_model_it_builds_explain_the_same_declarations():
     assert [(q.name, q.free, q.sense) for q in before.constraints] == [
         (q.name, q.free, q.sense) for q in after.constraints
     ]
-    spelled = "Sum(snapshot, generator, cost[generator] * p[snapshot, generator])"
-    assert before.objective == after.objective == spelled
+    written = "Sum(snapshot, generator, cost[generator] * p[snapshot, generator])"
+    assert before.objective == after.objective == written
 
 
 def test_a_model_declared_directly_explains_without_a_definition():

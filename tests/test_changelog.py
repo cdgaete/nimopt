@@ -17,7 +17,7 @@ def sections():
             unreleased, version, day = match.groups()
             found.append([unreleased or version, day, []])
         elif line.startswith("## "):
-            raise AssertionError(f"a heading the format does not state: {line!r}")
+            raise AssertionError(f"a heading the format does not define: {line!r}")
         elif found:
             found[-1][2].append(line)
     return [(v, d, "\n".join(b).strip()) for v, d, b in found]

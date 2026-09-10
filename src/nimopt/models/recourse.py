@@ -1,20 +1,18 @@
 """A commitment fixed before the scenario is known, dispatched once it is.
 
 `commitment` decides which units are on against one demand. Here the demand
-and the fuel price are a scenario, and the on-off decision is taken before
-either is revealed: `on` is indexed by hour and unit alone, while `p` and
-`shed` carry the scenario. One commitment therefore has to serve every
-scenario, which is what makes the binary a hedge rather than a schedule.
+and the fuel price are a scenario, and the on-off decision is taken first.
+`on` is indexed by hour and unit alone, and `p` and `shed` are indexed by the
+scenario as well. One commitment serves every scenario.
 
-A committed unit runs between its minimum and its maximum, and there is
-nowhere to put unwanted energy. A unit whose minimum exceeds the demand of
-the mildest scenario therefore cannot be committed at all, however cheap it
-is to run in the others: the row it would break is that scenario's balance.
+A committed unit runs between its minimum and its maximum, and unwanted energy
+has nowhere to go. A unit whose minimum exceeds the demand of the mildest
+scenario cannot be committed at all. The row it breaks is that scenario's
+balance.
 
-Nothing couples one hour to the next, so the commitment is chosen hour by
-hour and `reference` enumerates every on-off subset of the fleet, scoring
-each by its expected recourse across the scenarios. Three units make eight
-subsets, which is exact and cheap at every scale the corpus uses.
+No row couples one hour to the next. `reference` enumerates every on-off
+subset of the fleet per hour and scores each by its expected recourse across
+the scenarios. Three units make eight subsets.
 """
 
 import itertools
@@ -38,7 +36,7 @@ VOLL = 300.0
 
 
 def definition() -> Definition:
-    """The recourse model, with no data bound."""
+    """Return the recourse model, with no data bound."""
     d = Definition("recourse", sense="min")
     S, G, T = d.set("S"), d.set("G"), d.set("T")
     p_max = d.param("p_max", (G,))
@@ -67,11 +65,11 @@ def definition() -> Definition:
 def _scenarios(
     scale: int,
 ) -> tuple[list[str], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    """The scenario names, their level and their probability, at a scale.
+    """Return the scenario names, their level and their probability.
 
     Each of `SCENARIO` splits into `scale` draws spread by `SPREAD` about its
-    level and sharing its probability, so the probabilities sum to one at
-    every scale and scale 1 is the three the module names.
+    level, each with an equal share of its probability. The probabilities sum
+    to one at every scale.
     """
     names, level, weight = [], [], []
     for name, centre, share in SCENARIO:
@@ -83,13 +81,13 @@ def _scenarios(
 
 
 def data(scale: int = 1) -> dict[str, Any]:
-    """Inputs for `3 * scale` scenarios over `len(DEMAND) * scale` hours.
+    """Return inputs for `3 * scale` scenarios over the scaled hours.
 
-    A scenario's level moves its demand and its fuel price together, so the
+    A scenario's level moves its demand and its fuel price together, and the
     merit order is the same one in every scenario. The first hour is 45.0
-    before the level is applied, so the mildest scenario asks for 38.25 there
+    before the level is applied. The mildest scenario requires 38.25 there,
     and the base unit, whose minimum is 40.0, cannot be committed in it. The
-    fleet carries 260.0 against a coldest third hour of 268.75, so that hour
+    fleet totals 260.0 against a coldest third hour of 268.75, and that hour
     sheds whatever is committed.
     """
     names, level, weight = _scenarios(scale)
@@ -115,10 +113,10 @@ def _serve(
     cost: npt.NDArray[np.float64],
     voll: float,
 ) -> float:
-    """What a committed subset costs to meet `want`, cheapest headroom first.
+    """Return what a committed subset costs to meet `want`, cheapest first.
 
-    Every committed unit runs at least its minimum; the remainder is filled
-    from the cheapest headroom and what no unit reaches is shed at `voll`.
+    Every committed unit runs at least its minimum. The remainder is filled
+    from the cheapest headroom, and what no unit covers is shed at `voll`.
     """
     spend = sum(p_min[g] * cost[g] for g in up)
     left = want - sum(p_min[g] for g in up)
@@ -130,12 +128,11 @@ def _serve(
 
 
 def reference(data: Mapping[str, Any]) -> float:
-    """The cheapest commitment per hour, over every on-off subset.
+    """Return the cheapest commitment per hour, over every on-off subset.
 
-    A subset whose minimum output exceeds the mildest scenario's demand
-    breaks that scenario's balance and is not a commitment at all, so it is
-    passed over. Committing nothing always serves, by shedding, so every hour
-    has a subset to compare against.
+    A subset whose minimum output exceeds the mildest scenario's demand breaks
+    that scenario's balance, and it is skipped. Committing nothing serves by
+    shedding, and every hour has a subset to compare against.
     """
     weight, voll = data["weight"], data["voll"]
     p_max, p_min, no_load = data["p_max"], data["p_min"], data["no_load"]

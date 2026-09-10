@@ -18,22 +18,17 @@ SENSES = ("<=", ">=", "==")
 class Constraint:
     """Rows over an expression's frame, bounded by a right-hand side.
 
-    A row derived from the terms exists where every term reaches and the
-    right-hand side carries a value. A coefficient absent inside a sum
-    removes a term and leaves the row standing; a term absent along a free
-    dimension removes the row, because a row missing one of its terms states
-    something that was not written. `over=` states the rows outright instead,
-    so a term reaching some of them contributes where it reaches.
+    A row derived from the terms exists where every term is present and the
+    right-hand side has a value. A coefficient absent inside a sum removes a
+    term and keeps the row. A term absent along a free dimension removes the
+    row. `over=` declares the rows instead. A condition intersects the row
+    domain, and a row the condition omits is not a row of the constraint.
 
-    A condition intersects the row domain, so a row the condition omits is a
-    row the constraint does not state.
+    A constant in the expression folds into the right-hand side. `x + 1 <= 5`
+    declares the row `x <= 4` and adds nothing to the matrix.
 
-    A constant the expression carries folds into the right-hand side, so
-    `x + 1 <= 5` states the row `x <= 4` and the matrix gains nothing.
-
-    The expression is symbolic, so the constraint holds the recipe rather
-    than a block: it materialises once to measure its shape and once to
-    write it, and holds nothing between.
+    The expression is symbolic. The constraint materialises it once to measure
+    its shape and once to write it, and stores no block between.
     """
 
     def __init__(
@@ -56,8 +51,8 @@ class Constraint:
         self.over = over
         if over is not None and where is not None:
             raise ValueError(
-                f"constraint {self.name!r} states its rows with over= and "
-                f"narrows them with where=; state one"
+                f"constraint {self.name!r} is given over= and where= together; "
+                f"pass one of them"
             )
         self.rows, self._rhs_values, self._nnz = narrow(self)
 
@@ -69,17 +64,17 @@ class Constraint:
 
     @property
     def n_rows(self) -> int:
-        """Number of rows this constraint contributes."""
+        """Return the number of rows this constraint contributes."""
         return self.rows.size
 
     @property
     def nnz(self) -> int:
-        """Number of coefficients this constraint contributes."""
+        """Return the number of coefficients this constraint contributes."""
         return self._nnz
 
     @property
     def relation(self) -> Relation:
-        """The comparison this constraint was declared from."""
+        """Return the comparison this constraint was declared from."""
         return Relation(self.expression, self.sense, self.rhs)
 
     def write_bounds(
@@ -87,7 +82,7 @@ class Constraint:
     ) -> None:
         """Write this constraint's rows of `lower` and `upper` in place.
 
-        The vectors are the model's, so nothing is allocated per constraint.
+        The vectors are the model's. No vector is allocated per constraint.
         """
         values = self._rhs_values
         if self.sense == "<=":
@@ -103,20 +98,20 @@ class Constraint:
     def write_into(
         self, buffer: EntryBuffer, row_start: int, progress: Any = None
     ) -> SparseArray:
-        """The block over `(ROW, COLUMN)`, its entries written into `buffer`.
+        """Return the block over `(ROW, COLUMN)`, its entries written to `buffer`.
 
-        The block is grouped straight into the slice the buffer reserves, so
-        it never exists as a second object. The frame precedes the column
-        dimension in canonical order, so the grouping reads a leading prefix
-        and the result is canonical as written.
+        The block is grouped into the slice the buffer reserves, and exists as
+        no second object. The frame precedes the column dimension in canonical
+        order. The grouping reads a leading prefix, and the result is canonical
+        as written.
         """
         block, _ = self.expression.materialise(progress=progress)
         n = int((self.rows.positions_of(block) >= 0).sum())
         if n != self._nnz:
             raise ValueError(
                 f"constraint {self.name!r} measured {self._nnz} coefficients "
-                f"and built {n}; the data its parameters read changed between "
-                f"the two"
+                f"and built {n}; keep the parameter data unchanged between "
+                f"measuring and writing"
             )
         return block.group(
             self.frame,
@@ -130,12 +125,11 @@ class Constraint:
 def narrow(
     constraint: "Constraint", record: Any = None
 ) -> tuple[Domain, npt.NDArray[np.float64], int]:
-    """The rows a constraint states, its right-hand side values and its nonzeros.
+    """Return a constraint's rows, its right-hand side values and its nonzeros.
 
-    The rows a constraint's terms reach, narrowed by its condition and by the
-    coverage of its right-hand side, or stated outright by its `over=`. A
-    recorder given here is told what each narrowing dropped, which is how a
-    dropped row — leaving no trace in the matrix — is attributed at all.
+    The rows are the coordinates at which every term is present, narrowed by
+    the condition and by the coverage of the right-hand side, or declared by
+    `over=`. A recorder passed here records what each narrowing dropped.
     """
     frame = constraint.frame
     block, rows = constraint.expression.materialise(record)
@@ -174,10 +168,10 @@ def narrow(
             if missing.size:
                 first = {d: v[0] for d, v in missing.labels().items()}
                 raise ValueError(
-                    f"constraint {constraint.name!r} states {rows.size} rows "
+                    f"constraint {constraint.name!r} declares {rows.size} rows "
                     f"and right-hand side {rhs.name!r} misses {missing.size} "
-                    f"of them, the first at {first}; a right-hand side covers "
-                    f"every row the constraint states"
+                    f"of them, the first at {first}; give the right-hand side "
+                    f"a value at every row"
                 )
         rhs_values = values.restrict(rows).values()
     elif isinstance(rhs, (int, float, np.number)):
@@ -194,7 +188,7 @@ def narrow(
 
 
 def _named(given: Any) -> str:
-    """What a row domain was given as, for a report to name."""
+    """Return the name of the object a row domain was given as."""
     if isinstance(given, Param):
         return given.name
     if isinstance(given, tuple):

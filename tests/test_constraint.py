@@ -139,7 +139,7 @@ def test_rows_derived_from_the_terms_drop_a_bus_a_term_misses():
     m, B, T, expression, _ = _two_bus_model()
     load = Param.from_dense("load", (B, T), np.zeros((2, 2)))
     constraint = m.constraint("balance", expression == load[B, T])
-    # the link reaches both buses but the generator reaches b0 only, so the
+    # the link has an entry at both buses and the generator at b0 only; the
     # intersection keeps b0's two hours and drops b1 entirely
     assert constraint.n_rows == 2
 
@@ -157,7 +157,7 @@ def test_stating_rows_and_narrowing_them_together_is_refused():
     m, B, T, expression, _ = _two_bus_model()
     load = Param.from_dense("load", (B, T), np.zeros((2, 2)))
     rows = product((B, T))
-    with pytest.raises(ValueError, match="state one"):
+    with pytest.raises(ValueError, match="pass one of them"):
         m.constraint("balance", expression == load[B, T], where=rows, over=rows)
 
 
@@ -177,7 +177,7 @@ def test_a_right_hand_side_missing_a_stated_row_is_refused():
         {"B": np.array(["b0", "b0"]), "T": np.array([0, 1])},
         np.zeros(2),
     )
-    with pytest.raises(ValueError, match="covers every row"):
+    with pytest.raises(ValueError, match="a value at every row"):
         m.constraint("balance", expression == partial[B, T], over=product((B, T)))
 
 

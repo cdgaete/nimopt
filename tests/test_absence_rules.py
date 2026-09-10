@@ -23,7 +23,7 @@ def test_a_coefficient_absent_inside_a_sum_drops_the_term_not_the_row():
         np.ones(5),
     )
     con = Constraint("supply", Sum(W, cost[P, W] * x[P, W]) <= 1.0)
-    # both rows stand; p1 carries two terms rather than three
+    # both rows are present; p1 has two terms, not three
     assert con.n_rows == 2
     assert con.nnz == 5
 

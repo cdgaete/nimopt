@@ -5,7 +5,7 @@ from nimopt import Model, Param, Set, Sum
 
 
 def test_a_constant_in_a_row_moves_to_the_right_hand_side():
-    # x + 1 <= 5 states the row x <= 4
+    # x + 1 <= 5 declares the row x <= 4
     P = Set("P", np.array(["a"]))
     m = Model("m", sense="max")
     x = m.var("x", (P,), upper=100.0)

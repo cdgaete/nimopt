@@ -18,7 +18,7 @@ def transport_parts(n_plants=200, n_warehouses=100, density=1.0, seed=0):
     The data is built here rather than inside the model so that attributing
     a build's allocations measures the build alone. The sets fix the rows and
     the columns, and the coefficient's density alone sets the nonzeros, so
-    two densities vary what the matrix carries and nothing else.
+    two densities vary the matrix content and nothing else.
     """
     P = Set("P", np.array([f"p{i}" for i in range(n_plants)]))
     W = Set("W", np.array([f"w{i}" for i in range(n_warehouses)]))
@@ -101,12 +101,12 @@ def test_the_peak_grows_only_with_what_the_matrix_costs():
 
 
 def network_parts(n_buses=200, n_links=400, n_hours=24, density=1.0, seed=0):
-    """The sets and the incidence a network balance is stated over.
+    """Return the sets and the incidence a network balance is declared over.
 
-    The rows are every bus and hour because the balance states them, and the
-    columns are every link and hour, so neither moves with the incidence.
-    How many link-hours the incidence carries alone sets the nonzeros, and
-    each one it carries places the link's flow in the two buses it joins.
+    The rows are every bus and hour, and the columns are every link and hour.
+    Neither count moves with the incidence. The number of link-hours in the
+    incidence sets the nonzeros. Each one places the link's flow in the two
+    buses it joins.
     """
     B = Set("B", np.array([f"b{i}" for i in range(n_buses)]))
     L = Set("L", np.array([f"l{i}" for i in range(n_links)]))

@@ -68,7 +68,7 @@ def cases():
 
 @pytest.mark.parametrize("block", cases())
 def test_every_example_behaves_as_the_page_states(block):
-    # shown() runs the block and refuses one that defies its fence, so the
+    # shown() runs the block and rejects one that contradicts its fence; the
     # form and the text the page shows are asserted in the same pass
     shows = shown(block)
     assert block.output == (shows[1] if shows is not None else None)
@@ -88,5 +88,5 @@ def test_a_fence_naming_the_wrong_error_is_refused():
     # the name on the fence is matched against what the block actually raises,
     # so a typo in it fails that block rather than passing unnoticed
     wrong = Block(1, 'raise ValueError("no")', "raises", "ValuError", None)
-    with pytest.raises(ValueError, match="states raises=ValuError"):
+    with pytest.raises(ValueError, match="declares raises=ValuError"):
         shown(wrong)

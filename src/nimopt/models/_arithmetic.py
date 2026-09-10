@@ -1,4 +1,4 @@
-"""The arithmetic a model's reference is computed with, naming nothing in nimopt."""
+"""The arithmetic a model's reference is computed with, independent of nimopt."""
 
 import numpy as np
 import numpy.typing as npt
@@ -7,14 +7,13 @@ import numpy.typing as npt
 def merit_order(
     capacity: npt.ArrayLike, cost: npt.ArrayLike, load: npt.ArrayLike
 ) -> float:
-    """What meeting each load costs, cheapest capacity first.
+    """Return what meeting each load costs, cheapest capacity first.
 
-    `capacity` and `cost` carry one entry per unit and `load` one per period.
-    Each period is met independently, so this is the optimum of a dispatch
+    `capacity` and `cost` have one entry per unit and `load` one per period.
+    Each period is met independently. The result is the optimum of a dispatch
     whose only constraint is that generation meets the load.
 
-    A load the capacity cannot meet raises: an optimum that does not exist is
-    not zero, and returning a number for it would state one.
+    Raises ValueError for a load the capacity cannot meet.
     """
     capacity = np.asarray(capacity, dtype=np.float64)
     cost = np.asarray(cost, dtype=np.float64)
@@ -30,6 +29,7 @@ def merit_order(
                 break
         if left > 1e-9:
             raise ValueError(
-                f"the units carry {capacity.sum()} against a load of {want}"
+                f"the units total {capacity.sum()} against a load of {want}; "
+                f"pass a load the capacity meets"
             )
     return total

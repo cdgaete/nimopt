@@ -1,14 +1,12 @@
-"""The options a caller sets, in nimopt's own words.
+"""The options a caller sets, under one name per option.
 
-An option is named once here and translated by the adapter driving each
-solver, so a model states a time limit one way whatever solves it. A name the
-vocabulary does not carry is refused rather than passed on, because a solver
-that ignores what it was asked answers a question the caller did not write.
+`OPTIONS` defines every option. Each adapter translates a name into the one
+its solver uses. A model therefore sets a time limit under one name for every
+solver. A name outside `OPTIONS` raises.
 
-Not every solver carries every option, and a solver carries some choices and
-not others: an adapter names what it lacks, and asking a solver for an option
-or a choice it lacks is refused by name rather than answered by a different
-algorithm.
+An adapter supports a subset of the options and a subset of each option's
+choices. An option or a choice its solver lacks raises, and the message
+identifies it.
 """
 
 from collections.abc import Mapping
@@ -18,10 +16,10 @@ from typing import Any
 
 @dataclass(frozen=True)
 class Option:
-    """One option a caller sets, what it takes, and what it means.
+    """One option a caller sets, the type it takes, and what it does.
 
-    `native` and `native_choices` are empty until the option is read for a
-    named solver, which is what fills them with that solver's own spelling.
+    `native` and `native_choices` are empty until `options(solver)` reads the
+    option for one solver. That call fills them with the solver's own names.
     """
 
     name: str
@@ -41,7 +39,7 @@ OPTIONS = (
     Option("feasibility_tol", "float", "how far a primal solution may miss a row"),
     Option("optimality_tol", "float", "how far a dual solution may miss a bound"),
     Option("threads", "int", "threads the solver may use; 0 leaves it the choice"),
-    Option("seed", "int", "the seed the solver randomises from"),
+    Option("seed", "int", "the seed the solver randomizes from"),
     Option("log", "bool", "whether the solver writes its own iteration log"),
     Option(
         "presolve", "choice", "how hard the solver presolves", ("off", "choose", "on")
@@ -55,7 +53,7 @@ OPTIONS = (
     Option(
         "newton_system",
         "choice",
-        "the Newton system an interior point method factorises",
+        "the Newton system an interior point method factorizes",
         ("choose", "augmented", "normaleq"),
     ),
     Option(
@@ -73,11 +71,11 @@ BY_NAME = {option.name: option for option in OPTIONS}
 
 
 def checked(options: Mapping[str, Any] | None) -> dict[str, Any]:
-    """`options` as a plain mapping, refusing anything the vocabulary lacks.
+    """Return `options` as a plain dict, validated against `OPTIONS`.
 
-    A name outside the vocabulary, a value of the wrong kind, and a value
-    outside a choice's set are each refused naming what is accepted, so a
-    caller reads the correction rather than a solve that ignored the option.
+    Raises ValueError for a name outside `OPTIONS` and for a value outside a
+    choice's set. Raises TypeError for a value of the wrong type. Each message
+    reports what the option accepts.
     """
     if not options:
         return {}
@@ -114,22 +112,26 @@ def translated(
     values: Mapping[str, Mapping[str, Any]],
     solver: str = "the solver",
 ) -> dict[str, Any]:
-    """`options` under a solver's own names, and its own values where they differ.
+    """Return `options` under a solver's own names and its own values.
 
-    `names` maps every name in the vocabulary to the solver's, or to `None`
-    where the solver carries no such option; `values` maps the choices of an
-    option whose values the solver states differently, and a choice missing
-    from that map is one the solver lacks. Either is refused by name.
+    `names` maps every option to the solver's name for it, or to None where
+    the solver has no such option. `values` maps the choices of an option whose
+    values the solver writes differently. A choice absent from that map is one
+    the solver lacks. Either raises ValueError.
     """
     held = {}
     for name, value in checked(options).items():
         native = names[name]
         if native is None:
-            raise ValueError(f"{solver} carries no option {name!r}")
+            raise ValueError(
+                f"{solver} has no option {name!r}; remove it or solve with "
+                f"another solver"
+            )
         own = values.get(name)
         if own is not None and value not in own:
             raise ValueError(
-                f"{solver} has no {value!r} for option {name!r}; it takes {tuple(own)}"
+                f"{solver} has no {value!r} for option {name!r}; pass one of "
+                f"{tuple(own)}"
             )
         held[native] = value if own is None else own[value]
     return held

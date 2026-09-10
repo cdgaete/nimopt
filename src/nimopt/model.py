@@ -35,11 +35,11 @@ if TYPE_CHECKING:
 
 
 class _Written:
-    """The nonzeros a pass has written, told to a reporter as they land.
+    """The nonzeros a pass has written, reported to a progress reporter.
 
-    A term's own count is known only once its constraint finishes, so a term
-    moves the report by nothing and a constraint moves it by its own
-    coefficients. Naming the term keeps the line moving while a large
+    A term's own count is known only once its constraint finishes. A term
+    advances the report by nothing, and a constraint advances it by its own
+    coefficients. Reporting the term keeps the line moving while a large
     constraint is built.
     """
 
@@ -51,19 +51,19 @@ class _Written:
             held.start(total, what)
 
     def term(self, term: Any) -> None:
-        """A term of the constraint being written is built."""
+        """Report that a term of the constraint being written is built."""
         if self.held is not None:
             self.what = term.variable.name
             self.held.step(self.done, self.what)
 
     def constraint(self, name: str, nnz: int) -> None:
-        """A constraint is written, carrying `nnz` coefficients."""
+        """Report that a constraint of `nnz` coefficients is written."""
         self.done += nnz
         if self.held is not None:
             self.held.step(self.done, name)
 
     def close(self) -> None:
-        """The pass is finished."""
+        """Report that the pass is finished."""
         if self.held is not None:
             self.held.done()
 
@@ -71,9 +71,9 @@ class _Written:
 class Model:
     """Variables numbered into one column space, constraints into one matrix.
 
-    A variable's columns are a contiguous range of that space and are computed
-    from its multi-index, so declaring a variable costs its bounds and nothing
-    per column.
+    A variable's columns are a contiguous range of that space, computed from
+    its multi-index. Declaring a variable allocates its bounds and nothing per
+    column.
     """
 
     def __init__(self, name: str = "model", sense: str = "min") -> None:
@@ -89,17 +89,17 @@ class Model:
 
     @property
     def sense(self) -> str:
-        """The direction this model's objective is optimised in."""
+        """Return the direction this model's objective is optimized in."""
         return self._sense
 
     @property
     def objective_constant(self) -> float:
-        """The fixed cost the objective states, zero where it states none."""
+        """Return the objective's fixed cost, zero where the objective has none."""
         return 0.0 if self._objective is None else self._objective.constant
 
     @property
     def objective(self) -> Any:
-        """The expression the model's sense optimises, or None where none is set."""
+        """Return the expression the model's sense optimizes, or None."""
         return self._objective
 
     def __repr__(self) -> str:
@@ -110,17 +110,17 @@ class Model:
 
     @property
     def n_columns(self) -> int:
-        """Number of columns declared."""
+        """Return the number of columns declared."""
         return self._n_columns
 
     @property
     def n_rows(self) -> int:
-        """Number of rows declared."""
+        """Return the number of rows declared."""
         return self._n_rows
 
     @property
     def nnz(self) -> int:
-        """Number of coefficients the assembled matrix carries."""
+        """Return the number of coefficients the assembled matrix contains."""
         return sum(c.nnz for c in self.constraints.values())
 
     def var(
@@ -159,7 +159,7 @@ class Model:
         self._renumber()
 
     def _renumber(self) -> None:
-        """Tell every variable the column space's current size."""
+        """Set the column space's current size on every variable."""
         for variable in self.variables.values():
             variable.total_columns = self._n_columns
 
@@ -168,12 +168,9 @@ class Model:
     ) -> Constraint:
         """Declare an equation from a comparison of an expression.
 
-        The relation is symbolic, so the constraint holds the recipe rather
-        than a block: declaring a hundred constraints costs a hundred shapes,
-        not a hundred blocks. `where=` takes a domain over the constraint's
-        free dimensions and narrows the rows it carries. `over=` takes one
-        and states them outright, for a constraint whose terms each reach
-        some of them.
+        The relation is symbolic. The constraint stores the term list, not a
+        block. `where=` takes a domain over the constraint's free dimensions
+        and narrows its rows. `over=` takes one and declares the rows.
         """
         if name in self.constraints:
             raise ValueError(f"constraint {name!r} is already declared")
@@ -183,32 +180,30 @@ class Model:
         return constraint
 
     def set_objective(self, expression: Any) -> None:
-        """Set the objective the model's sense optimises.
+        """Set the objective the model's sense optimizes.
 
-        A constant the expression carries is a fixed cost: it states no
-        column, and the solved objective reports it beside the solver's
-        value.
+        A constant in the expression is a fixed cost. It adds no column, and
+        the solved objective reports it beside the solver's value.
         """
         expression = read_at_its_sets(expression)
         if not isinstance(expression, Expression):
             raise TypeError(
-                f"an objective is an expression over the model's columns; a "
-                f"constant alone states none, so {type(expression).__name__} "
-                f"is not one"
+                f"an objective is an expression over the model's columns; got "
+                f"{type(expression).__name__}"
             )
         if expression.frame:
             raise ValueError(
-                f"an objective is over the column space alone; this "
-                f"expression still carries free dimensions {expression.frame}"
+                f"objective expression has free dimensions {expression.frame}; "
+                f"sum the expression over them"
             )
         self._objective = expression
 
     def objective_coefficients(self) -> npt.NDArray[np.float64]:
-        """One cost per column, zero where the objective carries no term.
+        """Return one cost per column, zero where the objective has no term.
 
-        The objective materialises here rather than where it is set, so its
-        column dimension spans every column the model declares, including
-        those declared after it.
+        The objective materialises here, not where it is set. Its column
+        dimension spans every column the model declares, including those
+        declared after it.
         """
         if self._objective is None:
             return np.zeros(self._n_columns, dtype=np.float64)
@@ -219,7 +214,7 @@ class Model:
     def column_bounds(
         self,
     ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-        """The `(lower, upper)` bound of every column."""
+        """Return the `(lower, upper)` bound of every column."""
         lower = np.empty(self._n_columns, dtype=np.float64)
         upper = np.empty(self._n_columns, dtype=np.float64)
         for variable in self.variables.values():
@@ -227,7 +222,7 @@ class Model:
         return lower, upper
 
     def integrality(self) -> npt.NDArray[np.int32]:
-        """One flag per column: 1 where the column's variable is integer."""
+        """Return one flag per column, 1 where its variable is integer."""
         flags = np.zeros(self._n_columns, dtype=np.int32)
         for variable in self.variables.values():
             if variable.integer:
@@ -236,11 +231,10 @@ class Model:
         return flags
 
     def explain(self) -> Explanation:
-        """What this model built: its declarations, each with its count.
+        """Return what this model built, its declarations each with its count.
 
-        A model holds variables and constraints, so its sets and parameters
-        are walked out of them and reported in order of first appearance: a
-        model does not carry the order they were declared in.
+        A model contains variables and constraints. Its sets and parameters
+        are read out of them and reported in order of first appearance.
         """
         parameters = self._parameters()
         dimensions, aliases = self._dimensions(parameters)
@@ -269,11 +263,11 @@ class Model:
         )
 
     def to_yaml(self, inline: bool = False, instructions: bool = False) -> str:
-        """This model as the text of its file, with its data inline where asked.
+        """Return this model as file text, with its data inline where asked.
 
-        The text states the structure alone, or the structure and an inline
-        block. Only `save` writes a sidecar and the line that names it, so
-        this never states a file. `instructions=True` prefixes the comment
+        The text contains the structure alone, or the structure and an inline
+        data block. `save` writes a sidecar and the line that refers to it.
+        This method writes no file. `instructions=True` prefixes the comment
         block that explains the format.
         """
         from nimopt.files import dumps, structure, to_inline
@@ -284,11 +278,11 @@ class Model:
         return dumps(mapping, instructions)
 
     def row(self, name: str, **coords: Any) -> "Row":
-        """One row of this model's matrix, at the coordinate named.
+        """Return one row of this model's matrix, at the coordinate given.
 
-        The row is read from the assembled matrix, so what it shows is what
-        the solver is given. A coordinate the constraint states no row at is
-        refused, naming `absent` as the verb that says why.
+        The row is read from the assembled matrix, and is the row the solver
+        is given. A coordinate the constraint has no row at raises, and the
+        message refers to `absent`.
         """
         from nimopt.row import position_of, read
 
@@ -298,11 +292,11 @@ class Model:
         return read(self, assembled, at)
 
     def absent(self, name: str) -> "Absence":
-        """Which coordinates fell out of the named constraint, and by which rule.
+        """Return which coordinates fell out of the named constraint, and why.
 
-        A dropped row leaves no trace in the matrix, so this re-runs that one
-        constraint's shape pass with a recorder attached. Nothing the model
-        carries moves: the re-run answers about the rows already built.
+        A dropped row leaves no trace in the matrix. This runs that one
+        constraint's shape pass again with a recorder attached. The model and
+        the rows already built are unchanged.
         """
         from nimopt.absence import Recorder
         from nimopt.constraint import narrow
@@ -313,11 +307,10 @@ class Model:
         return record.absence(name)
 
     def _parameters(self) -> tuple[Param, ...]:
-        """Every parameter this model reads, in order of first appearance.
+        """Return every parameter this model reads, in order of first appearance.
 
-        A derived coefficient is walked into, so a model whose objective
-        reads an arithmetic of two parameters reports both of them and the
-        sets they introduce.
+        A derived coefficient is walked into. An objective over an arithmetic
+        of two parameters reports both, with the sets they introduce.
         """
         found = {}
 
@@ -330,7 +323,7 @@ class Model:
                 if found.setdefault(parameter.name, parameter) is not parameter:
                     raise ValueError(
                         f"model {self.name!r} reads two parameters named "
-                        f"{parameter.name!r}; a name means one parameter"
+                        f"{parameter.name!r}; declare one parameter per name"
                     )
 
         for variable in self.variables.values():
@@ -352,13 +345,13 @@ class Model:
     def _dimensions(
         self, parameters: Iterable[Param]
     ) -> tuple[tuple[Any, ...], tuple[Alias, ...]]:
-        """The sets and the aliases this model is declared over, each in order.
+        """Return the sets and the aliases this model is declared over, in order.
 
-        A dimension a coefficient introduces is carried by no variable, so the
-        parameters are walked beside them. An alias reads a set's members and
-        carries none of its own, so the two are reported apart: only a set
-        names data a file states. The set an alias names is taken with it,
-        because a model may carry the alias and never the set itself.
+        A dimension a coefficient introduces belongs to no variable, and the
+        parameters are walked beside the variables. An alias reads a set's
+        members and has none of its own. The two are reported apart, and a
+        file holds data for a set alone. The base set of an alias is taken
+        with the alias.
         """
         found = {}
 
@@ -368,7 +361,7 @@ class Model:
             if found.setdefault(dimension.name, dimension) is not dimension:
                 raise ValueError(
                     f"model {self.name!r} is declared over two sets named "
-                    f"{dimension.name!r}; a name means one set"
+                    f"{dimension.name!r}; declare one set per name"
                 )
 
         for variable in self.variables.values():
@@ -384,20 +377,12 @@ class Model:
         )
 
     def assemble(self, progress: Any = False) -> "Assembled":
-        """The model's matrix, built into one buffer and handed over as CSR.
+        """Return the model's matrix and its row and column data, in CSR form.
 
-        Each constraint rebuilds its expression, writes it into its slice of a
-        single buffer and releases it, so the matrix exists once and one
-        expression stands beside it. A constraint's row bounds are written
-        into the model's own vectors by the same rule, as a variable writes
-        its column bounds, so no row is copied twice. They are written once
-        the matrix is built, because the largest expression is alive while it
-        is, and a vector held across that costs its whole length at the peak.
-
-        Building each expression twice — once to measure its shape at
-        declaration, once to write it — is what buys that: the merge
-        dominates the cost either way, and build time is the cheaper of the
-        two things being spent.
+        Each constraint rebuilds its expression, writes it into its slice of
+        one buffer and releases it. One expression is live at a time. The row
+        bounds are written into the model's own vectors after the matrix is
+        built, and no row is copied twice.
         """
         report = _Written(reporter(progress), self.nnz, f"assembling {self.name}")
         buffer = EntryBuffer(2, self.nnz)
@@ -443,11 +428,10 @@ class Model:
         options: Mapping[str, Any] | None = None,
         progress: Any = False,
     ) -> "Session":
-        """A live backend holding this model, across a solve and what follows.
+        """Return an open session on this model, for a solve and what follows.
 
-        The matrix is assembled when the session opens, and the solver's model
-        is held afterwards, so a conflict is a question about the instance
-        that was solved.
+        The matrix is assembled when the session opens. The solver's model is
+        kept afterwards, and a conflict is read from the instance that solved.
         """
         from nimopt.session import Session
 
@@ -459,12 +443,12 @@ class Model:
         options: Mapping[str, Any] | None = None,
         progress: Any = False,
     ) -> "Solution":
-        """Assemble the model, solve it, and read the answer back onto its sets.
+        """Assemble the model, solve it, and read the values back onto its sets.
 
-        `options` states the solver's settings in the vocabulary `options()`
-        names, and `log=True` among them has the solver write its own
-        iteration log. `progress=` reports the assembly, which finishes
-        before a solver starts, so the two never interleave.
+        `options` gives the solver's settings under the names `options()`
+        reports. `log=True` among them has the solver write its own iteration
+        log. `progress=` reports the assembly. The assembly finishes before
+        the solver starts.
         """
         with self.session(solver, options, progress) as session:
             return session.solve()
@@ -473,10 +457,9 @@ class Model:
 class Assembled:
     """A model's matrix over `(ROW, COLUMN)`, with its row and column data.
 
-    `matrix` is the labeled array the model built; `indices` and `values` are
-    views of the one buffer behind it and only `indptr` is built, so holding
-    the array beside them costs a reference and no bytes. The extents come
-    from it rather than being carried a second time.
+    `matrix` is the labeled array the model built. `indices` and `values` are
+    views of the one buffer behind it, and only `indptr` is built. The extents
+    are read from `matrix`.
     """
 
     def __init__(
@@ -513,18 +496,18 @@ class Assembled:
 
     @property
     def n_rows(self) -> int:
-        """Number of rows the matrix carries."""
+        """Return the number of rows of the matrix."""
         return self.matrix.shape[0]
 
     @property
     def n_cols(self) -> int:
-        """Number of columns the matrix carries."""
+        """Return the number of columns of the matrix."""
         return self.matrix.shape[1]
 
     def row_of(self, name: str) -> slice:
-        """The range of rows the named constraint occupies."""
+        """Return the range of rows the named constraint occupies."""
         return self._rows_of[name]
 
     def to_dense(self) -> npt.NDArray[np.float64]:
-        """The matrix as a dense ndarray."""
+        """Return the matrix as a dense ndarray."""
         return self.matrix.to_dense()

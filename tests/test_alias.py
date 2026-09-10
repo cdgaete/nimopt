@@ -32,7 +32,7 @@ def test_a_constraint_sums_over_the_alias():
     assembled = m.assemble()
     assert m.n_rows == 3
     assert m.n_columns == 9
-    # row 0 carries the first row of d, one coefficient per member of NP
+    # row 0 holds the first row of d, one coefficient per member of NP
     row0 = assembled.values[assembled.indptr[0] : assembled.indptr[1]]
     assert np.array_equal(row0, np.array([0.0, 1.0, 2.0]))
 
@@ -77,7 +77,7 @@ def test_a_definition_declares_an_alias_over_one_of_its_sets():
 def test_an_alias_names_a_base_the_definition_declares():
     d = Definition("network")
     other = Set("Q")
-    with pytest.raises(ValueError, match="which is not a set of definition"):
+    with pytest.raises(ValueError, match="is not a set of definition"):
         d.alias("QP", other)
 
 
@@ -135,14 +135,14 @@ def test_an_alias_takes_no_data_of_its_own():
     N = d.set("N")
     NP = d.alias("NP", N)
     d.var("flow", (N, NP), lower=0.0)
-    with pytest.raises(ValueError, match=r"data names undeclared \['NP'\]"):
+    with pytest.raises(ValueError, match=r"data contains the undeclared \['NP'\]"):
         d.build({"N": np.array(["a", "b"]), "NP": np.array(["a", "b"])})
 
 
 def test_a_file_naming_an_alias_base_it_does_not_declare_is_refused():
     from nimopt import loads
 
-    with pytest.raises(ValueError, match="names set 'Q', which the file does not"):
+    with pytest.raises(ValueError, match="refers to the undeclared set 'Q'"):
         loads("version: 2\nname: d\nsense: min\nsets: [N]\naliases:\n  NP: Q\n")
 
 

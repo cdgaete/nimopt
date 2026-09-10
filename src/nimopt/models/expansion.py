@@ -1,22 +1,17 @@
 """Capacity built before the scenario is known, dispatched once it is.
 
-The first stage is `cap`, a capacity per technology carrying no scenario
-dimension. The second stage is `p` and `shed`, which carry one. A decision
-that cannot depend on the outcome is stated by leaving the scenario dimension
-off the variable, so the model is non-anticipative by the shape of `cap`
-rather than by a row tying copies of it together.
+The first stage is `cap`, a capacity per technology with no scenario
+dimension. The second stage is `p` and `shed`, which have one. Leaving the
+scenario dimension off `cap` makes the model non-anticipative by shape.
 
-A scenario states a demand and a fuel price, so `cost` carries the scenario
-as well as the technology. The objective is the capital the first stage
-commits to plus the second stage weighted by `weight`: the expected cost of
-the recourse.
+`cost` is over the scenario and the technology. The objective is the capital
+of the first stage plus the second stage weighted by `weight`, the expected
+cost of the recourse.
 
-A technology is available in full wherever it is built and nothing couples
-one hour to the next, so the recourse is the merit order of the built
-capacity against that hour's demand, with the remainder unserved at `voll`.
-Written as bands of cumulative capacity, the total separates into one term
-per technology, each convex in that band's level, and `reference` minimises
-them one at a time.
+A technology is available in full wherever it is built, and no row couples one
+hour to the next. The recourse is the merit order of the built capacity
+against each hour's demand, with the remainder unserved at `voll`. `reference`
+writes the total as bands of cumulative capacity and minimizes each band.
 """
 
 from collections.abc import Mapping
@@ -35,7 +30,7 @@ VOLL = 200.0
 
 
 def definition() -> Definition:
-    """The expansion model, with no data bound."""
+    """Return the expansion model, with no data bound."""
     d = Definition("expansion", sense="min")
     S, G, T = d.set("S"), d.set("G"), d.set("T")
     capital = d.param("capital", (G,))
@@ -61,11 +56,11 @@ def definition() -> Definition:
 def _scenarios(
     scale: int,
 ) -> tuple[list[str], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    """The scenario names, their level and their probability, at a scale.
+    """Return the scenario names, their level and their probability.
 
     Each of `SCENARIO` splits into `scale` draws spread by `SPREAD` about its
-    level and sharing its probability, so the probabilities sum to one at
-    every scale and scale 1 is the three the module names.
+    level, each with an equal share of its probability. The probabilities sum
+    to one at every scale.
     """
     names, level, weight = [], [], []
     for name, centre, share in SCENARIO:
@@ -77,11 +72,10 @@ def _scenarios(
 
 
 def data(scale: int = 1) -> dict[str, Any]:
-    """Inputs for `3 * scale` scenarios over `len(DEMAND) * scale` hours.
+    """Return inputs for `3 * scale` scenarios over the scaled hours.
 
-    A scenario's level moves its demand and its fuel price together, so a
-    cold draw is dear as well as long, and the merit order is the same one in
-    every scenario.
+    A scenario's level moves its demand and its fuel price together. The merit
+    order is the same one in every scenario.
     """
     names, level, weight = _scenarios(scale)
     return {
@@ -101,11 +95,11 @@ def _band(
     weight: npt.NDArray[np.float64],
     a: float,
 ) -> tuple[float, float]:
-    """The level of a cumulative capacity band and what that band costs.
+    """Return the level of a cumulative capacity band and what it costs.
 
-    The band's cost is `a * X` less the fuel it displaces, whose weight per
-    scenario is already folded into `weight`. That is convex in `X` and turns
-    at a demand, so a demand level or nothing built is where it is least.
+    The band's cost is `a * X` less the fuel it displaces, and `weight`
+    already contains the weight per scenario. The cost is convex in `X` and
+    turns at a demand level. Its minimum is at a demand level or at zero.
     """
     order = np.argsort(demand.ravel(), kind="stable")
     level = demand.ravel()[order]
@@ -120,13 +114,12 @@ def _band(
 
 
 def reference(data: Mapping[str, Any]) -> float:
-    """What the expansion costs, one band of cumulative capacity at a time.
+    """Return what the expansion costs, one band of capacity at a time.
 
-    Each band sits between two technologies, or between the dearest one and
-    lost load, and the merit order writes the total as a sum over bands that
-    share no variable. Data whose technologies are not a cost frontier, or
-    whose bands do not stack, is refused: the separation is what makes this
-    the optimum, and neither holds without it.
+    Each band lies between two technologies, or between the dearest one and
+    lost load. The merit order writes the total as a sum over bands that share
+    no variable. Data whose technologies are not a cost frontier, or whose
+    bands do not stack, raises ValueError.
     """
     weight, voll = data["weight"], data["voll"]
     capital, cost, demand = data["capital"], data["cost"], data["demand"]

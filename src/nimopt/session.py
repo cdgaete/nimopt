@@ -1,4 +1,4 @@
-"""A live backend holding one model, across a solve and the questions after it."""
+"""One open solver model, across a solve and the conflict or ray after it."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -18,7 +18,7 @@ from nimopt.solvers import adapter
 
 @dataclass(frozen=True)
 class ColumnBound:
-    """One column of a conflict: what it stands for, and the bounds it carries."""
+    """One column of a conflict: its variable, coordinate and two bounds."""
 
     variable: str
     coordinate: dict
@@ -28,7 +28,7 @@ class ColumnBound:
 
 @dataclass(frozen=True)
 class RayTerm:
-    """One column of a ray: what it stands for, and the direction it moves in."""
+    """One column of a ray: its variable, coordinate and direction."""
 
     variable: str
     coordinate: dict
@@ -37,16 +37,15 @@ class RayTerm:
 
 @dataclass(frozen=True)
 class Diagnosis:
-    """Why a model did not solve, as the rows and columns that say so.
+    """Why a model did not solve, as the rows and columns that report it.
 
-    `conflict` holds `Row` objects, so a conflicting row renders exactly as
-    `Model.row` renders it. `method` states who computed the conflict:
-    `"native"` means the solver did, `"computed"` that nimopt did, so a caller
-    is never handed a minimal-looking conflict nothing proved minimal.
+    `conflict` contains `Row` objects, and a conflicting row renders as
+    `Model.row` renders it. `method` is `"native"` where the solver computed
+    the conflict and `"computed"` where nimopt computed it.
 
-    `conflict` is `None` where the model is not infeasible and `ray` is `None`
-    where it is not unbounded, so an empty tuple means the solver named
-    nothing rather than that nothing was asked.
+    `conflict` is None where the model is not infeasible. `ray` is None where
+    the model is not unbounded. An empty tuple reports that the solver
+    returned nothing.
     """
 
     status: str
@@ -72,15 +71,14 @@ class Diagnosis:
 
 
 class Session:
-    """One solver's model, opened on one assembled model and held.
+    """One solver's model, opened on one assembled model and kept open.
 
-    A solve hands the matrix across and reads an answer back; a question asked
-    afterwards is asked of the same solved instance rather than of a second
-    one. The matrix is assembled when the session opens, so a session that
-    solves twice assembles once.
+    A solve passes the matrix to the solver and reads the values back. A
+    conflict or a ray is read from that same solved instance. The matrix is
+    assembled when the session opens, and a session that solves twice
+    assembles once.
 
-    The solver's own model is the adapter's, and is handed back to the adapter
-    that made it. Nothing above the seam reads it.
+    The solver's own model is passed only to the adapter that built it.
     """
 
     def __init__(
@@ -116,17 +114,17 @@ class Session:
 
     @property
     def capabilities(self) -> "Capabilities":
-        """What this session's adapter does, as shipped."""
+        """Return what this session's adapter does, as shipped."""
         return self._adapter.CAPABILITIES
 
     @property
     def status(self) -> str | None:
-        """What the last solve reached, or None before one."""
+        """Return the status of the last solve, or None before one."""
         return self._status
 
     @property
     def backend_open(self) -> bool:
-        """Whether this session still holds the solver's model."""
+        """Return whether this session still holds the solver's model."""
         return self._backend is not None
 
     def close(self) -> None:
@@ -134,7 +132,7 @@ class Session:
         self._backend = None
 
     def solve(self) -> Solution:
-        """Solve this session's matrix and read the answer back onto its sets."""
+        """Solve this session's matrix and read the values back onto its sets."""
         result = self._adapter.solve(self.assembled, self.model.sense, self.options)
         self._backend = result.backend
         self._status = result.status
@@ -153,17 +151,17 @@ class Session:
         )
 
     def diagnose(self) -> Diagnosis:
-        """Why this session's last solve did not reach an answer.
+        """Return why this session's last solve returned no optimal point.
 
-        A conflict and a ray are questions asked of the backend that solved,
-        so nothing is solved a second time and the rows named are the rows it
-        was given.
+        The conflict and the ray are read from the backend that solved. No
+        model is solved a second time.
+
+        Raises ValueError before the first solve.
         """
         if self._status is None:
             raise ValueError(
-                f"session on {self.model.name!r} has not solved; solve before "
-                f"diagnosing, because a conflict is a question about a solved "
-                f"model"
+                f"session on {self.model.name!r} has not solved; call `solve` "
+                f"before `diagnose`"
             )
         conflict, columns, ray = None, (), None
         if self._status == "infeasible":
@@ -180,11 +178,11 @@ class Session:
         )
 
     def _conflict(self) -> tuple[tuple[Row, ...], tuple[ColumnBound, ...]]:
-        """The rows that cannot hold together, and the columns they bind."""
+        """Return the rows that cannot hold together and the columns they bind."""
         if not self.capabilities.supports("conflict"):
             raise ValueError(
-                f"{self.solver!r} computes no conflict, so there is none to "
-                f"read; `capabilities({self.solver!r})` states what it does"
+                f"{self.solver!r} computes no conflict; read "
+                f"`capabilities({self.solver!r})` for what this adapter does"
             )
         rows, columns = self._adapter.conflict(self._backend)
         return (
@@ -201,11 +199,11 @@ class Session:
         )
 
     def _ray(self) -> tuple[RayTerm, ...] | None:
-        """The columns an unbounded model runs off along, and how far each moves."""
+        """Return the columns of the ray and how far each one moves."""
         if not self.capabilities.supports("ray"):
             raise ValueError(
-                f"{self.solver!r} computes no ray, so there is none to read; "
-                f"`capabilities({self.solver!r})` states what it does"
+                f"{self.solver!r} computes no ray; read "
+                f"`capabilities({self.solver!r})` for what this adapter does"
             )
         direction = self._adapter.ray(self._backend)
         if direction is None:

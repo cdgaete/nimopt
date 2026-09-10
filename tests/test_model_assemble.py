@@ -38,7 +38,7 @@ def test_the_assembled_matrix_is_the_labeled_array_the_model_built():
     got = m.assemble()
     assert isinstance(got.matrix, nb.Array)
     assert got.matrix.dims == (ROW, COLUMN)
-    # the extents are read from the matrix rather than carried a second time
+    # the extents are read from the matrix and are not stored a second time
     assert got.matrix.shape == (got.n_rows, got.n_cols)
     assert np.array_equal(got.to_dense(), got.matrix.to_dense())
 
@@ -142,7 +142,7 @@ def _assembly_peak(n_constraints):
 def test_assembly_does_not_hold_a_block_per_constraint():
     three = _assembly_peak(3)
     nine = _assembly_peak(9)
-    # the matrix triples; what sits beside it is one constraint's expression
+    # the matrix triples; the memory beside it is one constraint's expression
     # and does not grow with the number of constraints
     assert nine["matrix_mb"] > three["matrix_mb"] * 2.5, (three, nine)
     assert nine["excess_mb"] < three["excess_mb"] * 1.5, (three, nine)

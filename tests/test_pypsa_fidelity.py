@@ -18,8 +18,8 @@ def test_the_column_space_matches_but_for_the_objective_constant(reference):
     from pypsa_network import build
 
     model = build(NETWORK)
-    # linopy carries the objective's constant as a column of its own, which
-    # holds no matrix entry; nimopt states the constant as a number
+    # linopy adds the objective's constant as a column of its own, with no
+    # matrix entry; nimopt reports the constant as a number
     assert model.n_columns == reference["cols"] - 1
 
 
@@ -48,8 +48,8 @@ def test_the_nominal_bound_rows_match(reference):
 
     model = build(NETWORK)
     _check(model, reference, NOMINAL_BOUNDS)
-    # lines, links and stores carry an infinite nominal maximum, so PyPSA
-    # states no upper row for them and neither does this
+    # lines, links and stores have an infinite nominal maximum; PyPSA builds
+    # no upper row for them and neither does this
     assert "Line-ext-s_nom-upper" not in model.constraints
     assert "Link-ext-p_nom-upper" not in model.constraints
     assert "Store-ext-e_nom-upper" not in model.constraints
@@ -122,8 +122,8 @@ def test_every_bus_and_hour_states_a_balance_row(reference):
     from pypsa_network import build
 
     model = build(NETWORK)
-    # no bus carries every component, so the rows are stated rather than
-    # derived from the terms that happen to reach them
+    # no bus has every component; the rows are declared, not derived from
+    # the terms that happen to cover them
     assert model.constraints["Bus-nodal_balance"].n_rows == 30 * 36
 
 
@@ -141,8 +141,8 @@ def test_a_zero_store_efficiency_states_no_charging_term(reference):
     from pypsa_network import build
 
     model = build(NETWORK)
-    # a storage unit stores at zero efficiency here, so its charging term
-    # carries no coefficient and the row holds four terms rather than five
+    # a storage unit stores at zero efficiency here; its charging term has
+    # no coefficient and the row holds four terms, not five
     assert model.constraints["StorageUnit-energy_balance"].nnz == 4 * 2 * 36
 
 
@@ -244,9 +244,9 @@ def test_a_unit_no_inflow_reaches_states_no_spill(large_reference):
     from pypsa_network import build
 
     balance = build(LARGE).constraints["StorageUnit-energy_balance"]
-    # every one of the 56 units states its charge at this hour and the last,
-    # and its dispatch; only the 30 that water reaches state a spill, and
-    # only the 26 that store at a nonzero efficiency state a charging term
+    # every one of the 56 units contributes its charge at this hour and the
+    # last, and its dispatch; only the 30 with an inflow contribute a spill,
+    # and only the 26 that store at a nonzero efficiency a charging term
     hours = 24
     assert balance.nnz == (56 * 2 + 56 + 30 + 26) * hours
 
@@ -258,7 +258,7 @@ def test_a_store_that_does_not_cycle_states_no_predecessor_at_the_first_hour(
     from pypsa_network import build
 
     balance = build(LARGE).constraints["Store-energy_balance"]
-    # two of the 278 stores do not cycle, so each states one term fewer
+    # two of the 278 stores do not cycle, and each contributes one term fewer
     assert balance.nnz == 278 * 24 * 3 - 2
 
 
@@ -284,8 +284,8 @@ def test_the_operational_limit_row_matches(large_reference):
 def test_a_carbon_limit_modelled_as_a_store_states_no_row(large_reference):
     from pypsa_network import build
 
-    # this network caps carbon through a co2_atmosphere store rather than a
-    # row, so PyPSA states no CO2Limit family and neither does this
+    # this network caps carbon through a co2_atmosphere store and not a row;
+    # PyPSA builds no CO2Limit family and neither does this
     assert "GlobalConstraint-CO2Limit" not in build(LARGE).constraints
     assert "GlobalConstraint-CO2Limit" not in large_reference["families"]
 

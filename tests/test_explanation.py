@@ -62,7 +62,7 @@ def test_an_explanation_spells_the_objective():
 
 
 def test_an_explanation_spells_each_constraint():
-    spelled = "Sum(generator, p[snapshot, generator]) == load[snapshot]"
+    written = "Sum(generator, p[snapshot, generator]) == load[snapshot]"
     balance = dispatch().explain().constraints[0]
-    assert balance.relation == spelled
-    assert spelled in repr(dispatch().explain())
+    assert balance.relation == written
+    assert written in repr(dispatch().explain())

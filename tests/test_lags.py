@@ -20,7 +20,7 @@ def test_subtracting_from_a_set_answers_a_lagged_reference():
     lagged = T - 1
     assert isinstance(lagged, LaggedSet)
     assert lagged.name == "T"
-    # the entry written at t-1 lands on row t, so [T-1] is a shift of +1
+    # the entry written at t-1 is placed on row t; [T-1] is a shift of +1
     assert lagged.shift == 1
     assert lagged.mode == "drop"
 
@@ -53,7 +53,7 @@ def test_an_unlagged_reference_records_no_shift():
 def test_a_lagged_term_puts_the_previous_columns_value_on_each_row():
     _, T, x, _ = model()
     block, rows = x[T - 1].materialise()
-    # row t carries the column of t-1; the first period's row is not stated
+    # row t holds the column of t-1; the first period has no row
     assert list(rows.labels()["T"]) == [2031, 2032]
     assert block.to_dense().tolist() == [
         [0.0, 0.0, 0.0],
@@ -92,7 +92,7 @@ def test_a_coefficient_multiplies_the_lagged_term_at_the_rows_own_coordinate():
     x = m.var("x", (T,))
     a = Param.from_dense("a", (T,), np.array([10.0, 20.0, 30.0]))
     block, _ = (a[T] * x[T - 1]).materialise()
-    # row 2031 carries a's value at 2031, on the column of 2030
+    # row 2031 holds a's value at 2031, on the column of 2030
     assert block.to_dense().tolist() == [
         [0.0, 0.0, 0.0],
         [20.0, 0.0, 0.0],

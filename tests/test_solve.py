@@ -92,7 +92,7 @@ def test_a_dual_is_labelled_by_the_sets_its_constraint_is_over():
     solution = m.solve()
     dual = solution.dual("supply")
     assert dual.dims == ("P",)
-    # the dual carries the set's own coordinate, not a positional stand-in
+    # the dual has the set's own coordinate, not a positional index
     assert dual.coords["P"] == P.coord
 
 

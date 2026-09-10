@@ -11,8 +11,8 @@ from test_session import dispatch as small  # noqa: E402
 from test_session import infeasible, odd, unbounded  # noqa: E402
 from test_solution_limit import knapsack  # noqa: E402
 
-# Mosek's licence carries no size limit, so each corpus model is taken at a
-# scale beyond the 2000 rows and columns Gurobi's size-limited licence allows
+# Mosek's licence has no size limit; each corpus model is taken at a scale
+# beyond the 2000 rows and columns Gurobi's size-limited licence allows
 SCALES = {"dispatch": 200, "nodal": 8, "transport": 40, "commitment": 6}
 
 MODULES = {
@@ -65,7 +65,7 @@ def test_mosek_is_available_where_its_backend_is():
 
 
 def test_mosek_computes_no_conflict():
-    # the descriptor states what the adapter calls, and the adapter calls no
+    # the descriptor reports what the adapter calls; the adapter calls no
     # irreducible set out of Mosek
     assert not capabilities("mosek").supports("conflict")
 
@@ -97,8 +97,8 @@ def test_the_two_adapters_read_the_same_primals_and_duals():
 
 @licensed
 def test_the_duals_carry_one_sign_under_maximisation_too():
-    # a dual's sign is a convention each solver states; what the seam
-    # promises is that both adapters read the same number for the same row
+    # a dual's sign is a convention each solver defines; both adapters read
+    # the same number for the same row
     got = {s: revenue().solve(solver=s) for s in ("highs", "mosek")}
     assert got["mosek"].objective == pytest.approx(got["highs"].objective)
     assert got["mosek"].dual("market").values() == pytest.approx(
@@ -130,8 +130,9 @@ def test_a_model_infeasible_only_through_its_integrality_is_infeasible():
 
 @licensed
 def test_mosek_names_the_direction_an_unbounded_model_runs_off_in():
-    # the ray is Mosek's certificate of dual infeasibility, which is a
-    # direction the primal runs off in; what holds is that it names a column
+    # the ray is Mosek's certificate of dual infeasibility, a direction along
+    # which the primal is unbounded; the assertion is that it identifies a
+    # column
     with unbounded().session(solver="mosek") as session:
         assert session.solve().status == "unbounded"
         found = session.diagnose()
@@ -168,8 +169,8 @@ def test_a_limit_mosek_stops_at_is_named_rather_than_raised():
 
 @licensed
 def test_a_mixed_integer_model_runs_only_mosek_s_mixed_integer_optimizer():
-    # Mosek refuses a continuous optimizer on a model with integer columns
-    # rather than solving the relaxation; the adapter names the cause
+    # Mosek rejects a continuous optimizer on a model with integer columns;
+    # the adapter reports that cause
     model = commitment.definition().build(commitment.data(scale=2))
     with pytest.raises(RuntimeError, match="integer columns"):
         model.solve(solver="mosek", options={"method": "simplex"})
@@ -186,7 +187,7 @@ def test_an_option_the_vocabulary_does_not_carry_is_refused():
 
 
 def test_an_option_mosek_does_not_carry_is_refused_by_name():
-    with pytest.raises(ValueError, match="mosek carries no option 'pdlp_tol'"):
+    with pytest.raises(ValueError, match="mosek has no option 'pdlp_tol'"):
         small().solve(solver="mosek", options={"pdlp_tol": 1e-6})
 
 
@@ -222,8 +223,8 @@ def test_the_log_is_silent_unless_asked_for(capsys):
 
 @licensed
 def test_the_matrix_crosses_as_the_arrays_the_model_assembled(recwarn):
-    # Mosek warns when it copies an array it was handed in the wrong form;
-    # the handoff passes the pointer in the width Mosek reads
+    # Mosek warns when it copies an array passed in the wrong form; the
+    # adapter passes the pointer in the width Mosek reads
     small().solve(solver="mosek")
     assert [str(w.message) for w in recwarn] == []
 

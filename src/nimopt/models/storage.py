@@ -1,20 +1,16 @@
 """A fleet and a battery meeting an hourly load, the hours coupled by the store.
 
-The state-of-charge row reads the previous hour through `T.cyclic - 1`, so the
-row at the first hour reaches the last and every hour is stated. The ramp row
-reads `T - 1`, which the first hour has no predecessor for, so that row is not
-stated at all: one model carrying both lag rules.
+The `state_of_charge` row reads the previous hour through `T.cyclic - 1`,
+and the row at the first hour reads the last. The ramp row reads `T - 1`. The
+first hour has no predecessor, and that row is absent. One model uses both lag
+rules. Every limit is a row, not a bound, and a row has a dual.
 
-Every limit is a row rather than a bound, because a limit an agent wants a dual
-for has to be one.
-
-`data` states a fleet whose costs span 50.0 to 55.0 and a store whose round
+`data` gives a fleet whose costs span 50.0 to 55.0 and a store whose round
 trip returns `0.95 * 0.93` of what it takes. A megawatt-hour bought at 50.0
-comes back as 0.8835 of one and displaces at most 48.59, so shifting energy
-never pays, the store stays idle, and the optimum is the hourly merit order —
-which is what `reference` computes. Its ramp limit is the whole capacity, so
-that row never binds either. A caller wanting a store that works gives the
-definition data of its own with a wider spread; the benchmarks do.
+comes back as 0.8835 of one and displaces at most 48.59. Shifting energy never
+pays, the store stays idle, and the optimum is the hourly merit order. The
+ramp limit is the whole capacity, and that row never binds. Data with a wider
+spread gives a store that moves energy.
 """
 
 from collections.abc import Mapping
@@ -36,7 +32,7 @@ STORE_MWH = 200.0
 
 
 def definition() -> Definition:
-    """The storage model, with no data bound."""
+    """Return the storage model, with no data bound."""
     d = Definition("storage", sense="min")
     T, G, S = d.set("T"), d.set("G"), d.set("S")
     cost = d.param("cost", (G, T))
@@ -75,10 +71,10 @@ def definition() -> Definition:
 
 
 def data(scale: int = 1) -> dict[str, Any]:
-    """Inputs for `scale` copies of the fleet over `HOURS * scale` hours.
+    """Return inputs for `scale` copies of the fleet over the scaled hours.
 
-    The ramp limit is a generator's whole capacity, so the ramp rows stand
-    without ever binding and the optimum stays the hourly merit order.
+    The ramp limit is a generator's whole capacity. The ramp rows never bind,
+    and the optimum is the hourly merit order.
     """
     hours = np.arange(HOURS * scale)
     fleet = [f"{name}{k}" for k in range(scale) for name in FLEET]
@@ -101,9 +97,9 @@ def data(scale: int = 1) -> dict[str, Any]:
 
 
 def reference(data: Mapping[str, Any]) -> float:
-    """What the dispatch costs, hour by hour against that hour's capacities.
+    """Return what the dispatch costs, hour by hour against each capacity.
 
-    The store is idle at the optimum, so it moves no energy and adds no cost.
+    The store is idle at the optimum. It moves no energy and adds no cost.
     """
     capacity, cost, load = data["capacity"], data["cost"], data["load"]
     return float(

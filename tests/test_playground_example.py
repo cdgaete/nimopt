@@ -17,7 +17,7 @@ START = re.compile(r"const START = `(?P<body>.*?)\n`;", re.DOTALL)
 def seed():
     """The example the playground page is served with."""
     found = START.search(PLAYGROUND.read_text())
-    assert found, f"{PLAYGROUND.name} states no START template"
+    assert found, f"{PLAYGROUND.name} has no START template"
     return found.group("body")
 
 

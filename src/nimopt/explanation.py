@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class SetShape:
-    """A dimension, and how many members it carries."""
+    """A dimension and its number of members."""
 
     name: str
     size: int | None
@@ -20,7 +20,7 @@ class SetShape:
 
 @dataclass(frozen=True)
 class ParamShape:
-    """A parameter, its dimensions, and how many coefficients it carries."""
+    """A parameter, its dimensions and its number of coefficients."""
 
     name: str
     dims: tuple[str, ...]
@@ -42,7 +42,7 @@ class VariableShape:
 
 @dataclass(frozen=True)
 class ConstraintShape:
-    """A constraint, the dimensions it is free over, its relation, and what it built."""
+    """A constraint, its free dimensions, its relation and what it built."""
 
     name: str
     free: tuple[str, ...]
@@ -54,11 +54,10 @@ class ConstraintShape:
 
 @dataclass(frozen=True)
 class Explanation:
-    """What is declared, and where it is built, what was built from it.
+    """What is declared, and for a built model what was built from it.
 
-    A count is `None` where nothing is bound. It is never zero: a count of
-    zero is a fact a caller acts on, and reporting one for a declaration
-    would state something false.
+    A count is None where nothing is bound. A count of zero reports that
+    nothing was built from a bound declaration.
     """
 
     name: str
@@ -128,19 +127,19 @@ def _constraint(shape: ConstraintShape) -> str:
 
 
 def set_shape(dimension: Any, size: int | None) -> SetShape:
-    """The shape of a dimension, with `size` where its members are known."""
+    """Return the shape of a dimension, with `size` for a bound dimension."""
     return SetShape(dimension.name, size)
 
 
 def param_shape(parameter: Param, entries: int | None) -> ParamShape:
-    """The shape of a parameter, with `entries` where its values are known."""
+    """Return the shape of a parameter, with `entries` for bound values."""
     return ParamShape(parameter.name, parameter.dims, entries)
 
 
 def variable_shape(
     name: str, variable: "Variable", columns: int | None
 ) -> VariableShape:
-    """The shape of a variable, with `columns` where its numbering is known."""
+    """Return the shape of a variable, with `columns` for a numbered one."""
     return VariableShape(
         name,
         variable.dims,
@@ -153,12 +152,12 @@ def variable_shape(
 
 
 def objective_constant(expression: Any) -> float:
-    """The fixed cost the objective states, zero where it states none."""
+    """Return the objective's fixed cost, zero where the objective has none."""
     return 0.0 if expression is None else expression.constant
 
 
 def objective_text(expression: Any) -> str | None:
-    """The objective's spelling, or None for no objective."""
+    """Return the objective as text, or None where no objective is set."""
     return None if expression is None else render(expression)
 
 

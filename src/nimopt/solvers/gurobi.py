@@ -1,21 +1,17 @@
 """The Gurobi adapter.
 
-Gurobi's matrix interface takes a constraint matrix as a dense array or a
-SciPy sparse matrix. The three arrays `Assembled` carries are CSR already, so
-the handoff wraps them in a `csr_matrix` that shares their buffers and states
-every row in one call, copying no part of the matrix.
+Gurobi's matrix interface reads a constraint matrix as a dense array or a
+SciPy sparse matrix. The three arrays `Assembled` contains are CSR already.
+The adapter wraps them in a `csr_matrix` over the same buffers and adds every
+row in one call. No part of the matrix is copied.
 
-`InfUnbdInfo` is set because this adapter declares a native ray, and without
-it Gurobi reports `INF_OR_UNBD` for an unbounded model and refuses the ray.
-Nothing else about the solve is chosen here: `DualReductions` is left as
-Gurobi sets it, so a model it cannot separate is reported as
-`unbounded_or_infeasible` rather than made separable behind the caller.
+The adapter sets `InfUnbdInfo` to 1, and declares a native ray. Without that
+parameter Gurobi reports `INF_OR_UNBD` for an unbounded model and computes no
+ray. `DualReductions` keeps the value Gurobi sets. A model Gurobi does not
+separate is reported as `unbounded_or_infeasible`.
 
-Every model status Gurobi can report is either named in `OUTCOME`, which maps
-into the seam's `STATUS`, or listed in `FAILED` and raised. A status the
-adapter does not know is refused rather than folded into a catch-all, because
-a caller reading a status it was never given cannot tell an answer from the
-absence of one.
+`OUTCOME` maps a Gurobi model status into `STATUS`. `FAILED` lists the Gurobi
+statuses this adapter raises on. A status in neither raises.
 """
 
 from collections.abc import Mapping
@@ -100,11 +96,10 @@ OPTION_VALUES = {
 
 
 def _matrix(assembled: "Assembled") -> Any:
-    """The assembled matrix in the CSR form Gurobi's matrix interface takes.
+    """Return the assembled matrix as the `csr_matrix` Gurobi reads.
 
-    `Assembled` carries the column indices, the values and the row pointer of
-    a row-wise matrix, which is what a `csr_matrix` is made of, so the wrapper
-    shares those buffers rather than reading them into another form.
+    `Assembled` contains the column indices, the values and the row pointer of
+    a row-wise matrix. The wrapper shares those buffers and copies nothing.
     """
     from scipy.sparse import csr_matrix
 
@@ -115,7 +110,7 @@ def _matrix(assembled: "Assembled") -> Any:
 
 
 def _sense(relations: npt.NDArray[Any]) -> npt.NDArray[Any]:
-    """Each row's relation as the character Gurobi names it by."""
+    """Return each row's relation as the character Gurobi uses for it."""
     named = np.empty(relations.shape, dtype="<U1")
     for relation, character in RELATIONS.items():
         named[relations == relation] = character
@@ -123,7 +118,7 @@ def _sense(relations: npt.NDArray[Any]) -> npt.NDArray[Any]:
 
 
 def _named(statuses: Any, code: Any) -> str:
-    """What Gurobi calls the status code it reported."""
+    """Return the name Gurobi defines for a status code."""
     for name in dir(statuses):
         if name.isupper() and getattr(statuses, name) == code:
             return name
@@ -149,10 +144,9 @@ def solve(
 ) -> Result:
     """Solve an assembled model and return its status, its values and its bound.
 
-    The model Gurobi built is returned in `Result.backend`. A session holding
-    it reads a conflict or a ray from the same solved instance. A model with
-    integer columns is returned with no duals. Gurobi defines none for one, and
-    this adapter does not report that pair.
+    `Result.backend` is the model Gurobi built. A session reads a conflict or a
+    ray from that solved instance. `Result.row_dual` is None for a model with
+    integer columns.
     """
     import gurobipy as gp
     from gurobipy import GRB
@@ -184,13 +178,13 @@ def solve(
     reported = _named(GRB.Status, model.Status)
     if reported in FAILED:
         raise RuntimeError(
-            f"Gurobi stopped without solving the model: {reported}. The model "
-            f"was passed to the solver but no outcome was reached."
+            f"Gurobi stopped at model status {reported} without solving the "
+            f"model; check the model and the options"
         )
     if reported not in OUTCOME:
         raise RuntimeError(
-            f"Gurobi reported model status {reported!r}, which this adapter "
-            f"does not read; nimopt names an outcome or refuses it"
+            f"Gurobi reported the model status {reported!r}; this adapter maps "
+            f"no outcome to it, report it as a defect"
         )
     integer = bool(assembled.integrality.any())
     status = OUTCOME[reported]
@@ -222,12 +216,11 @@ def solve(
 
 
 def conflict(backend: Any) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]:
-    """The rows and columns of an irreducible infeasible subsystem.
+    """Return the rows and columns of an irreducible infeasible subsystem.
 
-    Computed here rather than at the solve, so a solve nobody asks a question
-    of pays nothing for one. Gurobi's set reaches a model's integrality, so a
-    model feasible as a relaxation and infeasible as a mixed-integer program
-    is named rather than refused.
+    The subsystem is computed here, not at the solve. Gurobi computes it over
+    the model with its integrality. A model feasible as a relaxation and
+    infeasible as a mixed-integer program yields a subsystem.
     """
     backend.computeIIS()
     rows = [at for at, row in enumerate(backend.getConstrs()) if row.IISConstr]
@@ -240,7 +233,7 @@ def conflict(backend: Any) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]
 
 
 def ray(backend: Any) -> npt.NDArray[np.float64] | None:
-    """The direction an unbounded model runs off in, or None where there is none."""
+    """Return the primal ray of an unbounded model, or None where none exists."""
     from gurobipy import GurobiError
 
     try:
