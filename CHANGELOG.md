@@ -38,6 +38,7 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - The package supports Python 3.12, 3.13 and 3.14, and numpy from 2.3.
 - `Model.constraint` and `Definition.constraint` replace the method `eq`;
   every relation goes through them.
+- The install section of the documentation opens on the PyPI install.
 
 ## 0.1.2 - 2026-09-09
 

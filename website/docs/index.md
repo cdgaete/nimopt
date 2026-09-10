@@ -24,14 +24,20 @@ description: An LP/MILP builder in which a variable is a dimension. Models are d
 
 ## Install
 
-Neither package is published yet, so both are installed from a checkout. `nimblend` is a dependency and is installed first, from wherever it is cloned; `nimopt` then installs from its own root:
+```bash
+pip install "nimopt[highs]"
+```
+
+The extra installs `nimopt` and its dependency `nimblend` from PyPI, with HiGHS as the solver backend.
+
+HiGHS is the default solver, and `[highs]` installs it. `[gurobi]` and `[mosek]` add those adapters instead, `[bench]` adds the comparison suite and `[dev]` the test and lint tooling. `available()` reports the solvers whose backend can be imported in the current environment, and `capabilities(name)` answers for an adapter whether or not its backend is installed.
+
+Working on the package installs from a checkout instead. `nimblend` is a dependency and installs first, from wherever it is cloned; `nimopt` then installs from its own root:
 
 ```bash
 pip install /path/to/nimblend
 pip install ".[highs]"
 ```
-
-HiGHS is the default solver, and `[highs]` installs it. `[gurobi]` and `[mosek]` add those adapters instead, `[bench]` adds the comparison suite and `[dev]` the test and lint tooling. `available()` reports the solvers whose backend can be imported in the current environment, and `capabilities(name)` answers for an adapter whether or not its backend is installed.
 
 ## A first model
 
