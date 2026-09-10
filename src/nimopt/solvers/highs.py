@@ -256,9 +256,9 @@ def conflict(backend: Any) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]
     reported, iis = backend.getIis()
     if not iis.valid_:
         raise RuntimeError(
-            f"HiGHS computed no conflict and reported "
-            f"{str(reported).split('.')[-1]}; HiGHS computes a conflict over "
-            f"the linear relaxation alone, and this relaxation is feasible"
+            f"HiGHS computed no conflict over the feasible linear relaxation "
+            f"and reported {str(reported).split('.')[-1]}; use a solver whose "
+            f"conflict covers the integrality"
         )
     return (
         np.asarray(iis.row_index_, dtype=np.int64),

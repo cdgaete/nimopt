@@ -128,8 +128,9 @@ def narrow(
     """Return a constraint's rows, its right-hand side values and its nonzeros.
 
     The rows are the coordinates at which every term is present, narrowed by
-    the condition and by the coverage of the right-hand side, or declared by
-    `over=`. A recorder passed here records what each narrowing dropped.
+    the condition and by the coverage of the right-hand side. `over=` declares
+    the rows instead. A recorder passed here records what each narrowing
+    dropped.
     """
     frame = constraint.frame
     block, rows = constraint.expression.materialise(record)

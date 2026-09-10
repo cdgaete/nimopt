@@ -117,7 +117,8 @@ def translated(
     `names` maps every option to the solver's name for it, or to None where
     the solver has no such option. `values` maps the choices of an option whose
     values the solver writes differently. A choice absent from that map is one
-    the solver lacks. Either raises ValueError.
+    the solver lacks. An option whose name is None raises ValueError. A choice
+    absent from `values` raises ValueError.
     """
     held = {}
     for name, value in checked(options).items():

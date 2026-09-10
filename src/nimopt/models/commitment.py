@@ -1,6 +1,6 @@
 """Unit commitment: a binary on-off column per generator and snapshot.
 
-A committed unit runs between its minimum and its maximum and pays a no-load
+A committed unit runs between its minimum and its maximum and adds a no-load
 charge for being on. An uncommitted unit produces nothing. The rows `capacity`
 and `minimum` express that pair against the binary column.
 
@@ -88,6 +88,9 @@ def reference(data: Mapping[str, Any]) -> float:
                 left -= taken
             best = min(best, spend)
         if not np.isfinite(best):
-            raise ValueError(f"no commitment of this fleet meets a load of {want}")
+            raise ValueError(
+                f"no commitment of this fleet meets a load of {want}; pass a load "
+                f"the fleet meets"
+            )
         total += best
     return float(total)

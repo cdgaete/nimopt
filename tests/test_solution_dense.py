@@ -75,7 +75,7 @@ def test_a_dual_over_dropped_rows_stays_sparse():
     )
     sol = m.solve()
     # the sense is load-bearing: minimizing this model returns 0.0 and every
-    # assertion below still holds, and the objective is asserted beside them
+    # assertion below still passes; the objective is asserted beside them
     assert sol.objective == 30.0
     duals = sol.dual("bal")
     assert isinstance(duals, SparseArray)

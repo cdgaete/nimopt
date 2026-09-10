@@ -124,7 +124,7 @@ class Session:
 
     @property
     def backend_open(self) -> bool:
-        """Return whether this session still holds the solver's model."""
+        """Return whether this session still stores the solver's model."""
         return self._backend is not None
 
     def close(self) -> None:
@@ -153,7 +153,7 @@ class Session:
     def diagnose(self) -> Diagnosis:
         """Return why this session's last solve returned no optimal point.
 
-        The conflict and the ray are read from the backend that solved. No
+        The conflict and the ray are read from the solved backend. No
         model is solved a second time.
 
         Raises ValueError before the first solve.
@@ -178,7 +178,7 @@ class Session:
         )
 
     def _conflict(self) -> tuple[tuple[Row, ...], tuple[ColumnBound, ...]]:
-        """Return the rows that cannot hold together and the columns they bind."""
+        """Return the rows that cannot all be satisfied and the columns they bind."""
         if not self.capabilities.supports("conflict"):
             raise ValueError(
                 f"{self.solver!r} computes no conflict; read "

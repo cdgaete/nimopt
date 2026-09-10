@@ -65,7 +65,9 @@ class Definition:
     def _fresh(self, name: str, registry: Mapping[str, Any], what: str) -> str:
         name = str(name)
         if name in registry:
-            raise ValueError(f"{what} {name!r} is already declared")
+            raise ValueError(
+                f"{what} {name!r} is already declared; declare another name"
+            )
         if registry is self.constraints:
             return name
         if not name.isidentifier() or name == "Sum":

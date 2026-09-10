@@ -49,12 +49,12 @@ INSTRUCTIONS = """\
 #             cost: it is reported with the solver's objective value
 #             and is not passed to the solver.
 # data        The file name of an .npz archive in the same directory
-#             as this file, or an inline mapping. It holds one entry
+#             as this file, or an inline mapping. It contains one entry
 #             per set (its members) and one entry per parameter (its
 #             values), in one of two forms: a dense array over the
 #             full product of the parameter's index sets, or a table
 #             with one column per index set followed by 'value'. A
-#             table holds only the entries it lists. A coordinate
+#             table contains only the entries it lists. A coordinate
 #             that is not listed is not a zero; it is a coefficient
 #             that does not exist. The constraint row rules below
 #             depend on that difference.
@@ -98,8 +98,8 @@ INSTRUCTIONS = """\
 #   Sum(s, ..., body)      body summed over the named sets; the sets
 #                          that remain are the constraint's free sets
 #   Sum(s, body, where=D)  the same, restricted to the coordinates
-#                          that D holds: a parameter, or a tuple of
-#                          sets such as (s, t)
+#                          of D: a parameter, or a tuple of sets
+#                          such as (s, t)
 #   + - * / **, unary minus, and parentheses.
 #   One comparison operator per relation: write each side of a range
 #   as a separate constraint.
@@ -540,7 +540,10 @@ def save(
     path = Path(path)
     if isinstance(what, Definition):
         if inline:
-            raise ValueError("a definition contains no data to inline")
+            raise ValueError(
+                "a definition contains no data to inline; save a model, or save "
+                "with inline=False"
+            )
         path.write_text(dumps(structure(what), instructions))
         return
     if not isinstance(what, Model):

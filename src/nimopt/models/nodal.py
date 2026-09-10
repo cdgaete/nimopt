@@ -2,10 +2,9 @@
 
 The grouping is a lookup. `at[G, B]` has an entry where generator `g` is sited
 at bus `b`. Multiplying the generation by it turns a row over generators into
-a row over buses. The coefficient introduces `B`, which no variable is
-declared over, and the balance is free over the dimensions of the lookup. Each
-bus meets its own demand, and `reference` computes a merit order per bus and
-hour.
+a row over buses. The coefficient introduces `B`. No variable is declared over
+`B`. The balance is free over the dimensions of the lookup. Each bus meets its
+own demand, and `reference` computes a merit order per bus and hour.
 """
 
 from collections.abc import Mapping

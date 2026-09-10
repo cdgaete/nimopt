@@ -134,7 +134,9 @@ class Model:
     ) -> Variable:
         """Declare a variable over `sets`, or over `subset` of them."""
         if name in self.variables:
-            raise ValueError(f"variable {name!r} is already declared")
+            raise ValueError(
+                f"variable {name!r} is already declared; declare another name"
+            )
         variable = Variable(
             name,
             sets,
@@ -152,7 +154,9 @@ class Model:
 
     def _adopt(self, variable: Variable) -> None:
         if variable.name in self.variables:
-            raise ValueError(f"variable {variable.name!r} is already declared")
+            raise ValueError(
+                f"variable {variable.name!r} is already declared; declare another name"
+            )
         variable._bind(self._n_columns, self._n_columns)
         self.variables[variable.name] = variable
         self._n_columns += variable.n_columns
@@ -173,7 +177,9 @@ class Model:
         and narrows its rows. `over=` takes one and declares the rows.
         """
         if name in self.constraints:
-            raise ValueError(f"constraint {name!r} is already declared")
+            raise ValueError(
+                f"constraint {name!r} is already declared; declare another name"
+            )
         constraint = Constraint(name, relation, where, over)
         self.constraints[name] = constraint
         self._n_rows += constraint.n_rows
@@ -350,7 +356,7 @@ class Model:
         A dimension a coefficient introduces belongs to no variable, and the
         parameters are walked beside the variables. An alias reads a set's
         members and has none of its own. The two are reported apart, and a
-        file holds data for a set alone. The base set of an alias is taken
+        file contains data for a set alone. The base set of an alias is taken
         with the alias.
         """
         found = {}
@@ -431,7 +437,7 @@ class Model:
         """Return an open session on this model, for a solve and what follows.
 
         The matrix is assembled when the session opens. The solver's model is
-        kept afterwards, and a conflict is read from the instance that solved.
+        kept afterwards, and a conflict is read from the solved instance.
         """
         from nimopt.session import Session
 

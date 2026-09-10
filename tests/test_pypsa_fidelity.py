@@ -142,7 +142,7 @@ def test_a_zero_store_efficiency_states_no_charging_term(reference):
 
     model = build(NETWORK)
     # a storage unit stores at zero efficiency here; its charging term has
-    # no coefficient and the row holds four terms, not five
+    # no coefficient and the row has four terms, not five
     assert model.constraints["StorageUnit-energy_balance"].nnz == 4 * 2 * 36
 
 

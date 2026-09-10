@@ -9,9 +9,9 @@ description: What each solver adapter can do, the options a caller can set, and 
 
 `available()` lists every adapter whose backend can be imported in the
 current environment, with what each declares. `capabilities(name)` reports
-for an adapter whether or not its backend is installed, because a
-descriptor describes what the adapter does as shipped, and reading one is
-how a caller decides what to install.
+for an adapter whether or not its backend is installed. A descriptor
+describes what the adapter does as shipped. A caller reads one to choose
+what to install.
 
 A descriptor describes the adapter, not the library behind it: a solver
 feature the adapter does not call is `absent`.
@@ -48,15 +48,15 @@ mosek  integrality native · duals native · conflict absent · ray native  reje
 | --- | --- |
 | `solver` | the adapter's name |
 | `support` | one of `"native"` or `"absent"` per capability |
-| `rejected` | the pairs this adapter refuses together |
+| `rejected` | the pairs this adapter rejects together |
 | `supports(capability)` | whether the adapter handles it at all |
-| `rejects(one, other)` | whether it refuses the two together |
+| `rejects(one, other)` | whether it rejects the two together |
 
 The capabilities are `integrality`, `duals`, `conflict` and `ray`. A flat
-set is insufficient: a solver can support two and refuse their
-combination. Every adapter refuses `integrality` with `duals`, because a
-mixed-integer model's duals are not the relaxation's, so a model with
-integer columns has no duals at all and `Solution.dual` raises.
+set is insufficient: a solver can support two and reject their
+combination. Every adapter rejects `integrality` with `duals`. A
+mixed-integer model's duals are not the relaxation's. A model with integer
+columns has no duals at all, and `Solution.dual` raises.
 
 ```python raises=ValueError
 import numpy as np
@@ -99,8 +99,8 @@ instance.
 | `solve()` | a `Solution` |
 | `close()` | releases the solver's model |
 
-`Model.solve()` opens a session, solves and closes it, so a caller who
-wants only a solution needs no session.
+`Model.solve()` opens a session, solves and closes it. A caller who needs
+only a solution needs no session.
 
 ```python
 import numpy as np
@@ -148,13 +148,13 @@ and columns that explain it.
 | `columns` | one `ColumnBound` per column of the conflict, with the bounds the model declares |
 | `ray` | one `RayTerm` per column the ray moves, or `None` where the model is not unbounded |
 
-`conflict` holds the same `Row` that `Model.row` returns, so a conflicting
-row reads in one format. Two solvers may return different irreducible
-sets: what holds of each is that removing it makes the model feasible, not
-that the two agree.
+`conflict` contains the same `Row` that `Model.row` returns, and a
+conflicting row reads in one format. Two solvers may return different
+irreducible sets. Removing either set makes the model feasible. The two
+sets need not be equal.
 
-A conflict is a question asked of the backend that solved, so the session
-is what keeps it available.
+A conflict is computed on the solved backend, and the session keeps that
+backend available.
 
 ```python
 import numpy as np
@@ -194,16 +194,16 @@ balance[snapshot=1]  row 1
 
 HiGHS computes its conflict over the model's linear relaxation. A model
 that is feasible as an LP and infeasible only through its integrality
-therefore yields no conflict, and the adapter raises rather than naming
-rows it did not prove. Gurobi's conflict covers the integrality. Mosek's
-adapter computes no conflict, so a session on it refuses the question and
-names `capabilities("mosek")` as what states so.
+therefore yields no conflict, and the adapter raises. It reports no row it
+did not prove. Gurobi's conflict covers the integrality. Mosek's adapter
+computes no conflict. A session on it raises, and the message refers to
+`capabilities("mosek")`.
 
 ## `options` and `Option`
 
-`options()` lists every option a caller can set, in `nimopt`'s own names. An
-option outside the list raises rather than being passed to a solver that
-would ignore it, so a misspelled name stops a solve instead of running a
+`options()` lists every option a caller can set, under `nimopt`'s own
+names. An option outside the list raises. It is not passed to a solver that
+would ignore it, and a misspelled name stops a solve instead of running a
 different one.
 
 `options(solver)` lists the same options with that solver's own name and
@@ -261,21 +261,21 @@ An `Option` has a `name`, the `kind` it takes, what it `does`, and its
 | `log` | bool | whether the solver writes its own iteration log | `output_flag` | `OutputFlag` | `log` |
 | `presolve` | `off` / `choose` / `on` | how hard the solver presolves | `presolve` | `Presolve` | `presolve_use` |
 | `method` | `choose` / `simplex` / `barrier` / `hipo` / `pdlp` | the algorithm the solver runs | `solver` | `Method` | `optimizer` |
-| `newton_system` | `choose` / `augmented` / `normaleq` | the Newton system an interior point method factorizes | `hipo_system` | not carried | not carried |
+| `newton_system` | `choose` / `augmented` / `normaleq` | the Newton system an interior point method factorizes | `hipo_system` | not supported | not supported |
 | `crossover` | `choose` / `off` / `on` | whether an interior point is moved to a vertex after the solve | `run_crossover` | `Crossover` | `intpnt_basis` |
-| `pdlp_tol` | float | relative tolerance at which the first-order method stops | `pdlp_optimality_tolerance` | not carried | not carried |
+| `pdlp_tol` | float | relative tolerance at which the first-order method stops | `pdlp_optimality_tolerance` | not supported | not supported |
 <!-- /options -->
 
-A choice each solver spells differently is written once and translated, so
-the value a caller writes means one thing whichever solver reads it. Not
-every solver carries every option or every choice: `newton_system` and
-`pdlp_tol` are HiGHS's, as are `hipo` and `pdlp` under `method`, and asking
-Gurobi or Mosek for one of them is refused by name rather than answered by
-a different algorithm. Mosek runs only its mixed-integer optimizer on a
-model with integer columns, so `method` stays at `choose` there and any
-other choice is refused naming that cause. What each method holds in
-memory, and how to install a HiGHS that carries HiPO and a GPU, is in the
-guide on [interior point and first-order methods](/guides/highs-methods).
+A choice each solver writes differently is given once and translated. The
+value a caller writes means one thing whichever solver reads it. No solver
+supports every option or every choice: `newton_system` and `pdlp_tol` are
+HiGHS's, as are `hipo` and `pdlp` under `method`. Asking Gurobi or Mosek
+for one of them raises, and the message identifies it. No solver runs a
+different algorithm in its place. Mosek runs only its mixed-integer
+optimizer on a model with integer columns. `method` is `choose` there, and
+any other choice raises with that cause. What each method stores in
+memory, and how to install a HiGHS with HiPO and a GPU, is in the guide on
+[interior point and first-order methods](/guides/highs-methods).
 
 ## Progress reporting
 

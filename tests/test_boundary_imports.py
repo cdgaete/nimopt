@@ -46,7 +46,7 @@ def test_the_adapter_that_names_scipy_drives_a_solver_that_takes_it():
 
 def test_reading_the_adapter_does_not_import_scipy():
     # scipy is a cost of passing a model to Gurobi, not of reading what the
-    # adapter declares; that holds only while the import stays inside the
+    # adapter declares; that is true only while the import is inside the
     # function that needs it
     code = (
         "from nimopt.solvers import adapter; adapter('gurobi'); "

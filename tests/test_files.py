@@ -475,8 +475,8 @@ def test_the_block_names_every_key_of_the_format():
 
 
 def test_the_block_is_ascii_comment_lines():
-    # every line is a YAML comment, so the loader never sees it, and the
-    # text stays ASCII so the file is written the same under any locale
+    # every line is a YAML comment, and the loader ignores it; the text is
+    # ASCII and the file is written the same under any locale
     lines = INSTRUCTIONS.splitlines()
     assert lines and all(line.startswith("#") for line in lines)
     assert INSTRUCTIONS.endswith("\n")

@@ -1,8 +1,8 @@
 """Capacity built before the scenario is known, dispatched once it is.
 
 The first stage is `cap`, a capacity per technology with no scenario
-dimension. The second stage is `p` and `shed`, which have one. Leaving the
-scenario dimension off `cap` makes the model non-anticipative by shape.
+dimension. The second stage is `p` and `shed`. Both have a scenario dimension.
+Leaving that dimension off `cap` makes the model non-anticipative by shape.
 
 `cost` is over the scenario and the technology. The objective is the capital
 of the first stage plus the second stage weighted by `weight`, the expected
@@ -125,7 +125,10 @@ def reference(data: Mapping[str, Any]) -> float:
     capital, cost, demand = data["capital"], data["cost"], data["demand"]
     order = np.argsort(cost[0], kind="stable")
     if any(np.argsort(row, kind="stable").tolist() != order.tolist() for row in cost):
-        raise ValueError("the merit order is not the same in every scenario")
+        raise ValueError(
+            "the merit order is not the same in every scenario; pass costs with "
+            "one order"
+        )
     capital, cost = capital[order], cost[:, order]
 
     total = float((weight * voll * demand.sum(axis=1)).sum())
@@ -135,12 +138,21 @@ def reference(data: Mapping[str, Any]) -> float:
         step = capital[k] - (capital[k + 1] if k + 1 < len(capital) else 0.0)
         displaced = weight * (dearer - cost[:, k])
         if step <= 0.0:
-            raise ValueError(f"capital does not fall from {name} to what follows it")
+            raise ValueError(
+                f"capital does not fall from {name} to what follows it; pass a "
+                f"capital cost that falls across the merit order"
+            )
         if displaced.sum() <= 0.0:
-            raise ValueError(f"running cost does not rise from {name} to what follows")
+            raise ValueError(
+                f"running cost does not rise from {name} to what follows; pass a "
+                f"running cost that rises across the merit order"
+            )
         level, spend = _band(demand, displaced, step)
         built.append(level)
         total += spend
     if built != sorted(built):
-        raise ValueError(f"the cumulative capacity does not stack: {built}")
+        raise ValueError(
+            f"the cumulative capacity does not stack: {built}; pass data whose "
+            f"bands stack"
+        )
     return total

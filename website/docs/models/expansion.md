@@ -155,7 +155,7 @@ print(expansion.reference(inputs))
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: capital does not fall from base to what follows it
+ValueError: capital does not fall from base to what follows it; pass a capital cost that falls across the merit order
 ```
 
 </details>

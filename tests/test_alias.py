@@ -32,7 +32,7 @@ def test_a_constraint_sums_over_the_alias():
     assembled = m.assemble()
     assert m.n_rows == 3
     assert m.n_columns == 9
-    # row 0 holds the first row of d, one coefficient per member of NP
+    # row 0 is the first row of d, one coefficient per member of NP
     row0 = assembled.values[assembled.indptr[0] : assembled.indptr[1]]
     assert np.array_equal(row0, np.array([0.0, 1.0, 2.0]))
 

@@ -156,7 +156,7 @@ def test_a_cyclic_state_of_charge_states_every_hour():
 
 def test_a_lossy_store_with_no_spread_to_work_on_stays_idle():
     # the reference is the hourly merit order, which is the optimum only
-    # while shifting energy never pays. The premise is checked, not assumed:
+    # where the optimal charge is zero. The premise is checked, not assumed:
     # a round trip returns 0.8835 of what it takes, and the fleet's dearest
     # unit at 55.0 saves 48.59 against the 50.0 the cheapest charges.
     held = module("storage")

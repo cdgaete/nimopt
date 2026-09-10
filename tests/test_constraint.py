@@ -58,7 +58,7 @@ def test_write_bounds_fills_the_caller_s_vectors_and_allocates_nothing():
     lower = np.zeros(c.n_rows + 2)
     upper = np.zeros(c.n_rows + 2)
     c.write_bounds(lower[1:-1], upper[1:-1])
-    # the rows outside the slice are the caller's and stay untouched
+    # the rows outside the slice are the caller's and are not written
     assert lower[0] == 0.0 and lower[-1] == 0.0
     assert list(upper[1:-1]) == [100.0, 200.0]
 

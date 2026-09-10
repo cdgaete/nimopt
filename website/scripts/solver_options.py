@@ -1,8 +1,7 @@
 """The option table, written into the solvers reference page.
 
-The page states what an option means; which name each solver gives it is read
-from the adapters, so an option entering the vocabulary reaches the page by
-running this.
+The page documents what an option means. The name each solver gives it is read
+from the adapters. Running this script writes a new option into the page.
 """
 
 import re
@@ -20,12 +19,12 @@ SOLVERS = ("highs", "gurobi", "mosek")
 
 
 def cell(text):
-    """`text` as one cell of a markdown table, its pipes escaped."""
+    """Return `text` as one cell of a markdown table, with its pipes escaped."""
     return str(text).replace("|", r"\|")
 
 
 def table():
-    """Every option, what it takes, and the name each solver gives it."""
+    """Return every option, what it takes, and the name each solver gives it."""
     rows = [
         "| Option | Takes | Does | " + " | ".join(f"`{s}`" for s in SOLVERS) + " |",
         "| --- | --- | --- | " + " | ".join("---" for _ in SOLVERS) + " |",
@@ -37,25 +36,23 @@ def table():
             if option.choices
             else option.kind
         )
-        spellings = " | ".join(
+        written = " | ".join(
             f"`{native[s][option.name]}`"
             if native[s][option.name] is not None
-            else "not carried"
+            else "not supported"
             for s in SOLVERS
         )
-        rows.append(
-            f"| `{option.name}` | {takes} | {cell(option.does)} | {spellings} |"
-        )
+        rows.append(f"| `{option.name}` | {takes} | {cell(option.does)} | {written} |")
     return "\n".join(rows)
 
 
 def rendered(text):
-    """`text` with the option region written again from the vocabulary."""
+    """Return `text` with the option region written again from `OPTIONS`."""
     return REGION.sub(lambda _: f"<!-- options -->\n{table()}\n<!-- /options -->", text)
 
 
 def main():
-    """Rewrite the solvers page, reporting what its region carries."""
+    """Rewrite the solvers page and report how many options it lists."""
     text = PAGE.read_text()
     fresh = rendered(text)
     if fresh != text:

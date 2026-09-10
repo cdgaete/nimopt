@@ -2,7 +2,7 @@
 
 Mixed density: the region-technology map is sparse, and every sited pair runs
 in every hour. The generation variable takes its columns from a parameter
-holding the sparse pairs crossed with the whole horizon.
+containing the sparse pairs crossed with the whole horizon.
 
 Each region meets its own demand from the technologies sited in it, and
 `reference` computes a merit order per region and hour.

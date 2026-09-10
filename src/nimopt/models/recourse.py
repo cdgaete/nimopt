@@ -1,14 +1,13 @@
 """A commitment fixed before the scenario is known, dispatched once it is.
 
-`commitment` decides which units are on against one demand. Here the demand
+`commitment` declares which units are on against one demand. Here the demand
 and the fuel price are a scenario, and the on-off decision is taken first.
 `on` is indexed by hour and unit alone, and `p` and `shed` are indexed by the
 scenario as well. One commitment serves every scenario.
 
-A committed unit runs between its minimum and its maximum, and unwanted energy
-has nowhere to go. A unit whose minimum exceeds the demand of the mildest
-scenario cannot be committed at all. The row it breaks is that scenario's
-balance.
+A committed unit produces at least its minimum, and the balance row absorbs no
+surplus. A unit whose minimum exceeds the demand of the mildest scenario
+cannot be committed at all. The infeasible row is that scenario's balance.
 
 No row couples one hour to the next. `reference` enumerates every on-off
 subset of the fleet per hour and scores each by its expected recourse across
@@ -130,8 +129,8 @@ def _serve(
 def reference(data: Mapping[str, Any]) -> float:
     """Return the cheapest commitment per hour, over every on-off subset.
 
-    A subset whose minimum output exceeds the mildest scenario's demand breaks
-    that scenario's balance, and it is skipped. Committing nothing serves by
+    A subset whose minimum output exceeds the mildest scenario's demand makes
+    that scenario's balance infeasible, and it is skipped. Committing nothing serves by
     shedding, and every hour has a subset to compare against.
     """
     weight, voll = data["weight"], data["voll"]

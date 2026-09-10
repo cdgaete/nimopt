@@ -12,11 +12,10 @@ import nimopt as no
 FOREIGN_BUFFERS = ("linopy_models.py", "pypsa_reference.py", "bench_pypsa.py")
 
 # a `Row` has the solver's own row number as `index`, a nimopt field and not
-# an array's buffer. The scan reads names rather than types, and the modules
-# that read one are exempted from it. `row.py` is held by
-# `test_a_row_reaches_no_array_at_all` instead, the stronger rule: it can read
-# no buffer off an array. The others are tests, and each reads a `Row` a
-# function returned.
+# an array's buffer. The scan reads names, not types, and the modules that
+# read one are exempted from it. `test_a_row_reaches_no_array_at_all` covers
+# `row.py` instead, the stronger rule: it can read no buffer off an array. The
+# others are tests, and each reads a `Row` a function returned.
 #
 # The exemption covers `index` and `data` alone. `codes` collides with nothing
 # nimopt owns, so `test_nimopt_reads_no_domains_codes` scans every source with no
@@ -51,7 +50,7 @@ def sources():
     The modules, and the fenced blocks of the documentation beside them. The
     site documents this boundary on `reference/nimblend-arrays.md` and on
     `for-agents.md`, and `SKILL.md` repeats it for an agent. The examples that
-    document the rule are held to it. A block is identified as
+    document the rule are checked against it. A block is identified as
     `<page>:<line>`, where its fence opens.
     """
     found = [(path.name, tree) for path, tree in modules()]
@@ -303,8 +302,8 @@ def test_each_adapter_names_its_own_backend_and_no_other():
 
 
 def test_a_backend_is_imported_where_it_is_driven_and_not_at_module_scope():
-    # `capabilities("gurobi")` returns on a machine with no Gurobi; that
-    # holds only while the import stays inside the function that needs it
+    # `capabilities("gurobi")` returns on a machine with no Gurobi; that is
+    # true only while the import is inside the function that needs it
     root = Path(no.__file__).parent / "solvers"
     for backend, module in BACKENDS.items():
         tree = ast.parse((root / module).read_text())

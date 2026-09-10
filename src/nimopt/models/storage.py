@@ -6,11 +6,11 @@ first hour has no predecessor, and that row is absent. One model uses both lag
 rules. Every limit is a row, not a bound, and a row has a dual.
 
 `data` gives a fleet whose costs span 50.0 to 55.0 and a store whose round
-trip returns `0.95 * 0.93` of what it takes. A megawatt-hour bought at 50.0
-comes back as 0.8835 of one and displaces at most 48.59. Shifting energy never
-pays, the store stays idle, and the optimum is the hourly merit order. The
+trip efficiency is `0.95 * 0.93`, or 0.8835. A megawatt-hour charged at 50.0
+discharges 0.8835 of one and displaces at most 48.59. The optimal charge is
+therefore zero at every hour, and the optimum is the hourly merit order. The
 ramp limit is the whole capacity, and that row never binds. Data with a wider
-spread gives a store that moves energy.
+cost spread gives a store with a nonzero optimal charge.
 """
 
 from collections.abc import Mapping

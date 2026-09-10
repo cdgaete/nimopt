@@ -34,7 +34,7 @@ def test_a_parameter_at_a_member_supplies_the_coefficient():
     x = m.var("x", (S, T))
     m.constraint("pin", inflow[S, "t1"] * x[S, "t1"] == 0.0)
     assembled = m.assemble()
-    # column 1 holds inflow[s1,t1] = 1.0 and column 4 holds inflow[s2,t1] = 4.0
+    # column 1 has inflow[s1,t1] = 1.0 and column 4 has inflow[s2,t1] = 4.0
     assert np.array_equal(assembled.values, np.array([1.0, 4.0]))
     assert np.array_equal(assembled.indices, np.array([1, 4], dtype=np.int32))
 
