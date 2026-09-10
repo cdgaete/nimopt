@@ -112,7 +112,7 @@ def test_a_solved_models_values_become_another_models_coefficients():
 def test_a_parameter_declares_without_values():
     p = Param("cost", (Set("G"),))
     assert p.declared
-    # dims come from the sets, so they answer with nothing bound
+    # dims come from the sets; they are readable with nothing bound
     assert p.dims == ("G",)
 
 

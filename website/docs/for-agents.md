@@ -167,7 +167,7 @@ message beside it.
 | `TypeError` | a relation is already an equation with one bound; compare the expression again in its own equation | [/reference/expression](/reference/expression) |
 | `TypeError` | an LP has no row for a strict inequality; write `<=` or `>=`, and reduce with `Sum` in place of `min` or `max` | [/reference/expression](/reference/expression) |
 | `TypeError` | an expression has no absolute value: expressions are linear; bound the expression with two rows, or reduce it with `Sum` over its sets | [/reference/expression](/reference/expression) |
-| `TypeError` | an expression is reduced over the sets it is summed across; name them with `Sum(I, J, expression)` | [/reference/expression](/reference/expression) |
+| `TypeError` | an expression is reduced over the sets it is summed across; specify them with `Sum(I, J, expression)` | [/reference/expression](/reference/expression) |
 | `TypeError` | cannot divide by an expression: expressions are linear; declare the reciprocal as a coefficient the variable multiplies | [/reference/expression](/reference/expression) |
 | `TypeError` | cannot raise an expression to a power: expressions are linear; raise a coefficient to the power and multiply it by a variable | [/reference/expression](/reference/expression) |
 | `ValueError` | term 'x' already sums over ['T']; sum over each dimension once | [/reference/expression](/reference/expression) |

@@ -420,7 +420,7 @@ class Expression:
         """
         raise TypeError(
             "an expression is reduced over the sets it is summed across; "
-            "name them with `Sum(I, J, expression)`"
+            "specify them with `Sum(I, J, expression)`"
         )
 
     @property

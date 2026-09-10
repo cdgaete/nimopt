@@ -314,7 +314,7 @@ x[T].sum()
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: an expression is reduced over the sets it is summed across; name them with `Sum(I, J, expression)`
+TypeError: an expression is reduced over the sets it is summed across; specify them with `Sum(I, J, expression)`
 ```
 
 </details>

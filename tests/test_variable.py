@@ -91,7 +91,7 @@ def test_a_variable_declares_over_declared_sets():
     S, G = Set("S"), Set("G")
     v = Variable("x", (S, G))
     assert v.declared
-    # dims are the set names, so they answer with nothing bound
+    # dims are the set names; they are readable with nothing bound
     assert v.dims == ("S", "G")
 
 
@@ -112,8 +112,8 @@ def test_binding_builds_the_column_rule_from_the_bound_sets():
 
 
 def test_a_bound_variable_still_names_the_parameter_it_took_its_members_from():
-    # binding resolves the members; it does not forget where they came from,
-    # because an explanation names the parameter and not the domain
+    # binding resolves the members and keeps the parameter it read them from;
+    # an explanation reports the parameter and not the domain
     P, W = Set("P"), Set("W")
     cost = Param("cost", (P, W))
     v = Variable("flow", (P, W), subset=cost)
