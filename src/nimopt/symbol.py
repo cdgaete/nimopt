@@ -1,4 +1,4 @@
-"""A declared name over a set product, and what it answers before it is read."""
+"""A declared name over a set product, and its operators before it is read."""
 
 from collections.abc import Callable
 from typing import Any
@@ -7,20 +7,17 @@ from nimopt.sets import reading
 
 
 class Symbol:
-    """A name declared over dimensions, whose bracket lists the ones it carries.
+    """A name declared over dimensions, read at its sets through a bracket.
 
-    A symbol over no dimension carries no bracket: it is already read, and
-    answers arithmetic and comparison by delegating to that reading. One over
-    dimensions states nothing until it is read, and every operator refuses
-    alike, naming the reading it wants.
-
-    `kind` and `states` are what the refusal calls this symbol and what it
-    would state once read, so one sentence serves both a parameter and a
-    variable in whatever slot they stand in.
+    A symbol over no dimension requires no bracket. Its arithmetic and
+    comparison operators delegate to the reading at the empty tuple. A symbol
+    over one or more dimensions raises TypeError from every operator until it
+    is read. `kind` names the class of symbol. `expresses` names what a
+    reading of it produces. The error message contains both.
     """
 
     kind: str | None = None
-    states: str | None = None
+    expresses: str | None = None
     dims: tuple[str, ...]
     name: str
     __getitem__: Callable[..., Any]
@@ -29,11 +26,14 @@ class Symbol:
     __hash__ = object.__hash__
 
     def _read(self) -> Any:
-        """This symbol as the reading it is, where it carries no dimension."""
+        """Return this symbol read at the empty tuple.
+
+        Raises TypeError for a symbol declared over one or more dimensions.
+        """
         if self.dims:
             raise TypeError(
-                f"{self.kind} {self.name!r} carries {self.dims} and states no "
-                f"{self.states} until it is read; read it at its sets as "
+                f"{self.kind} {self.name!r} is over {self.dims} and expresses "
+                f"no {self.expresses} until it is read; read it at its sets as "
                 f"{reading(self.name, self.dims)}"
             )
         return self[()]
@@ -94,10 +94,11 @@ class Symbol:
 
 
 def read_bare(held: Any) -> Any:
-    """A symbol over no dimension, read; anything else as it was given.
+    """Return a symbol over no dimension read at the empty tuple.
 
-    A symbol over dimensions is left alone so that its own operator states
-    which reading it wants, rather than a message from here naming neither.
+    Any other value is returned unchanged, including a symbol over one or
+    more dimensions. Such a symbol raises from its own operator, and the
+    message then names it.
     """
     if isinstance(held, Symbol) and not held.dims:
         return held[()]
@@ -105,5 +106,8 @@ def read_bare(held: Any) -> Any:
 
 
 def read_at_its_sets(held: Any) -> Any:
-    """A symbol read at its sets, refusing one whose dimensions are unread."""
+    """Return a symbol read at its sets, and any other value unchanged.
+
+    Raises TypeError for a symbol declared over one or more dimensions.
+    """
     return held._read() if isinstance(held, Symbol) else held

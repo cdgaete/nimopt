@@ -130,7 +130,7 @@ x[G, "t9"]
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: variable 'x' is read at member 't9' of dimension 'T', which that set does not carry
+ValueError: variable 'x' is read at member 't9' of dimension 'T'; read it at a member that set contains
 ```
 
 </details>

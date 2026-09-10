@@ -1,4 +1,4 @@
-"""A linear expression as the terms that were typed, holding no array."""
+"""A linear expression as the terms that were written, with no array."""
 
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
@@ -17,31 +17,27 @@ def _names(sets: Any) -> tuple[str, ...]:
     lagged = [s.name for s in given if isinstance(s, LaggedSet)]
     if lagged:
         raise ValueError(
-            f"a sum is over the members of {lagged}, so it takes the set and "
-            f"not a lag of it; state the lag at the variable's reference"
+            f"a sum is over the members of {lagged} and takes the set, not a "
+            f"lag of it; write the lag at the variable's reference"
         )
     return tuple(s.name for s in given)
 
 
 def _dims_of(given: Any) -> tuple[str, ...]:
-    """The dimensions a condition names, however it is spelled."""
+    """Return the dimensions a condition is over."""
     if isinstance(given, tuple):
         return tuple(s.name for s in given)
     return given.dims
 
 
-_CHAINED = (
-    "a chained comparison such as 0 <= expr <= 10 reads as two comparisons "
-    "joined by `and` and keeps only the second, so state each bound separately"
-)
+_EACH_BOUND = "write each bound in its own equation"
 
 
 class Term:
     """One variable, an optional coefficient, the dimensions summed, a scale.
 
-    The term is the recipe for a block of coefficients and holds handles
-    rather than arrays, so writing it costs what was typed: an expression
-    over a million columns costs the same as one over ten.
+    The term stores handles, not arrays. Building it costs the size of what
+    was written, not the size of the block it produces.
     """
 
     def __init__(
@@ -64,10 +60,10 @@ class Term:
 
     @property
     def carried_dims(self) -> tuple[str, ...]:
-        """Every dimension the term reads, before the reductions.
+        """Return every dimension the term reads, before the reductions.
 
-        A coefficient introducing a dimension leads, because that is the
-        order the product of the two arrays returns.
+        A dimension introduced by the coefficient comes first, the order the
+        product of the two arrays returns.
         """
         dims = self.variable.dims
         coefficient = self.coefficient
@@ -79,7 +75,7 @@ class Term:
 
     @property
     def free_dims(self) -> tuple[str, ...]:
-        """The dimensions surviving the reductions and the members fixed."""
+        """Return the dimensions left after the reductions and the fixed members."""
         return tuple(
             d for d in self.carried_dims if d not in self.summed and d not in self.fixed
         )
@@ -93,13 +89,11 @@ class Term:
         )
 
     def with_coefficient(self, coefficient: Any) -> "Term":
-        """The term reading `coefficient` as its coefficient.
+        """Return the term with `coefficient` as its coefficient.
 
-        A coefficient carrying dimensions the variable does not states which
-        rows read the variable's column, so its support is the pairing of
-        rows to columns and those dimensions are free dimensions of the term.
-        A term already reading one multiplies the two, because a linear term
-        carries a single coefficient and a product of coefficients is one.
+        A coefficient over dimensions the variable is not over pairs rows to
+        columns, and those dimensions are free dimensions of the term. A term
+        that already has a coefficient multiplies the two into one `Derived`.
         """
         if self.coefficient is not None:
             coefficient = Derived(coefficient, self.coefficient, "*")
@@ -114,19 +108,18 @@ class Term:
         )
 
     def summing(self, dims: Iterable[str]) -> "Term":
-        """The term with `dims` added to the dimensions summed away."""
+        """Return the term with `dims` added to the dimensions summed away."""
         repeated = [d for d in dims if d in self.summed]
         if repeated:
             raise ValueError(
-                f"term {self.variable.name!r} already sums over {repeated}; a "
-                f"dimension is reduced once, and a second reduction has "
-                f"nothing left to reduce"
+                f"term {self.variable.name!r} already sums over {repeated}; "
+                f"sum over each dimension once"
             )
         lacking = [d for d in dims if d not in self.free_dims]
         if lacking:
             raise ValueError(
                 f"term {self.variable.name!r} is free over {self.free_dims} "
-                f"and does not carry {lacking}"
+                f"and is not over {lacking}; sum over its free dimensions"
             )
         return Term(
             self.variable,
@@ -139,7 +132,7 @@ class Term:
         )
 
     def scaled(self, by: float) -> "Term":
-        """The term with its scale multiplied by `by`."""
+        """Return the term with its scale multiplied by `by`."""
         return Term(
             self.variable,
             self.coefficient,
@@ -151,20 +144,20 @@ class Term:
         )
 
     def restricted_to(self, domain: Any) -> "Term":
-        """The term reading only the coordinates `domain` carries."""
+        """Return the term restricted to the coordinates of `domain`."""
         if self.where is not None:
             raise ValueError(
                 f"term {self.variable.name!r} already reads a condition over "
-                f"{_dims_of(self.where)}; a term carries one condition"
+                f"{_dims_of(self.where)}; a term takes one condition"
             )
         given = _dims_of(domain)
         lacking = [d for d in given if d not in self.carried_dims]
         if lacking:
             raise ValueError(
                 f"the condition is over {given} and term "
-                f"{self.variable.name!r} reads {self.carried_dims} and does "
-                f"not carry {lacking}; a condition names the coordinates of "
-                f"the term it restricts"
+                f"{self.variable.name!r} reads {self.carried_dims} and is not "
+                f"over {lacking}; restrict the term with a condition over its "
+                f"own coordinates"
             )
         return Term(
             self.variable,
@@ -179,22 +172,14 @@ class Term:
     def materialise(
         self, frame: Sequence[str], coords: Mapping[str, Any], record: Any = None
     ) -> SparseArray:
-        """The term's coefficients over `(*frame, COLUMN)`.
+        """Return the term's coefficients over `(*frame, COLUMN)`.
 
-        The variable's columns carry the value 1.0; the coefficient
-        multiplies them by broadcasting over the column dimension only the
-        variable carries; each summed dimension is reduced away. A frame
-        wider than the term's own dimensions is reached by replication,
-        which is what a coefficient over fewer dimensions than the rows
-        means.
-
-        A lag moves the variable's columns onto the rows that read them
-        before the coefficient multiplies, so the coefficient is read at the
-        row's own coordinate rather than at the lagged one. A condition
-        restricts the entries once the coefficient has placed them, so it
-        names any coordinate the term reads, including one only the
-        coefficient carries. A fixed member is read first, because it names
-        the entries the rest applies to.
+        The variable's columns have the value 1.0. The operations run in this
+        order: the fixed members are selected, the lag moves the columns onto
+        the rows that read them, the coefficient multiplies, the condition
+        restricts, the scale multiplies, and each summed dimension is
+        reduced. A frame wider than the term's own dimensions is filled by
+        replication.
         """
         array = self.variable.terms()
         for dim, (amount, mode) in self.shifts.items():
@@ -229,12 +214,12 @@ class ParamRef(Coefficient):
 
     @property
     def name(self) -> str:
-        """The parameter's name."""
+        """Return the parameter's name."""
         return self.param.name
 
     @property
     def dims(self) -> tuple[str, ...]:
-        """The dimensions the reference carries, without those it fixes."""
+        """Return the dimensions of this reference, without those it fixes."""
         return tuple(d for d in self.param.dims if d not in self.fixed)
 
     def __repr__(self) -> str:
@@ -242,19 +227,19 @@ class ParamRef(Coefficient):
 
     @property
     def sets(self) -> tuple[Any, ...]:
-        """The sets this reference's parameter is declared over."""
+        """Return the sets this reference's parameter is declared over."""
         return self.param.sets
 
     def parameters(self) -> tuple[Any, ...]:
-        """The parameter this reference reads."""
+        """Return the parameter this reference reads."""
         return (self.param,)
 
     def held(self) -> Any:
-        """The parameter's array, or None while it is declared and carries none."""
+        """Return the parameter's array, or None where the parameter is declared."""
         return None if self.param.declared else self.materialise()
 
     def materialise(self) -> Any:
-        """The coefficient array, read at the members this reference fixes."""
+        """Return the coefficient array, read at the members this fixes."""
         array = self.param.materialise()
         if not self.fixed:
             return array
@@ -265,12 +250,10 @@ class Expression:
     """A list of terms, a constant, and the frame the terms agree on.
 
     The frame is the union of the terms' free dimensions, ordered by the term
-    that introduces each. A term narrower than the frame reaches it by
-    replication when the expression materialises.
-
-    The constant carries no dimension and no column: it folds into the
-    right-hand side where a constraint is built, and into the reported
-    objective as a fixed cost.
+    that introduces each. A term over fewer dimensions than the frame is
+    replicated when the expression materialises. The constant is over no
+    dimension and no column. It folds into the right-hand side of a
+    constraint, and into the reported objective as a fixed cost.
     """
 
     __array_ufunc__ = None
@@ -281,7 +264,7 @@ class Expression:
 
     @property
     def frame(self) -> tuple[str, ...]:
-        """The dimensions the terms are free over, in order of introduction."""
+        """Return the dimensions the terms are free over, in order of introduction."""
         seen = []
         for t in self.terms:
             for d in t.free_dims:
@@ -295,11 +278,10 @@ class Expression:
         return render(self)
 
     def __add__(self, other: Any) -> Any:
-        """The expression with `other` added, a symbol read first.
+        """Return the expression with `other` added, a symbol read first.
 
-        A symbol still carrying dimensions declines rather than refusing, so
-        the operand on the right is offered its turn and names its own
-        reading.
+        Returns `NotImplemented` for a symbol over one or more dimensions.
+        That symbol then raises from its own reflected operator.
         """
         other = read_bare(other)
         if isinstance(other, (int, float, np.number)):
@@ -308,9 +290,9 @@ class Expression:
             return NotImplemented
         if not isinstance(other, Expression):
             raise TypeError(
-                f"an expression adds an expression or a number; a coefficient "
-                f"states no row until a variable multiplies it, so "
-                f"{type(other).__name__} does not add to one"
+                f"an expression adds an expression or a number and got "
+                f"{type(other).__name__}; multiply a coefficient by a "
+                f"variable first"
             )
         return Expression(self.terms + other.terms, self.constant + other.constant)
 
@@ -328,10 +310,11 @@ class Expression:
         return (-self).__add__(other)
 
     def __mul__(self, other: Any) -> Any:
-        """The expression scaled by a number, or read by a coefficient.
+        """Return the expression scaled by a number.
 
-        A coefficient answers the product itself, so this declines rather
-        than refusing and the operand on the right is offered its turn.
+        Returns `NotImplemented` for a coefficient or a symbol. The
+        coefficient then multiplies the expression's terms through its own
+        operator.
         """
         other = read_bare(other)
         if isinstance(other, (Coefficient, Symbol)):
@@ -344,12 +327,11 @@ class Expression:
     __rmul__ = __mul__
 
     def __truediv__(self, other: Any) -> Any:
-        """The expression scaled by the reciprocal of a number or coefficient.
+        """Return the expression divided by a number or a Coefficient.
 
-        A divisor of zero raises `ZeroDivisionError` however it is spelled,
-        because a numpy scalar divides to infinity where a Python number
-        raises and a column reaching a solver with an infinite cost is a
-        model nobody wrote.
+        Raises ZeroDivisionError for a divisor of zero, including a numpy
+        zero. Raises TypeError for a divisor that is not a number or a
+        Coefficient.
         """
         other = read_bare(other)
         if isinstance(other, Coefficient):
@@ -358,23 +340,20 @@ class Expression:
             return NotImplemented
         if not isinstance(other, (int, float, np.number)):
             raise TypeError(
-                "an expression divides by a number or by a coefficient; "
-                "nimopt expresses a linear term, so a variable in a "
-                "denominator is not one"
+                "cannot divide an expression by a variable: expressions are "
+                "linear; divide by a number or a Coefficient"
             )
         if float(other) == 0.0:
             raise ZeroDivisionError(
-                "an expression is divided by zero; a column scaled by "
-                "infinity states a model no solver can read"
+                "expression divided by zero; divide by a non-zero number"
             )
         by = 1.0 / float(other)
         return Expression([t.scaled(by) for t in self.terms], self.constant * by)
 
     def __rtruediv__(self, other: Any) -> Any:
         raise TypeError(
-            "nimopt expresses a linear term, so a variable in a denominator "
-            "is not one; state the reciprocal as a coefficient the variable "
-            "multiplies"
+            "cannot divide by an expression: expressions are linear; declare "
+            "the reciprocal as a coefficient the variable multiplies"
         )
 
     def _relate(self, other: Any, sense: str) -> "Relation":
@@ -382,8 +361,7 @@ class Expression:
 
     def __ne__(self, other: Any) -> Any:
         raise TypeError(
-            "an equation states one bound, with `<=`, `>=` or `==`; an LP has "
-            "no row for `!=`"
+            "an LP has no row for `!=`; write one bound with `<=`, `>=` or `==`"
         )
 
     def __le__(self, other: Any) -> Any:
@@ -398,54 +376,52 @@ class Expression:
     __hash__ = None
 
     def __bool__(self) -> bool:
-        raise TypeError(f"an expression has no truth value; {_CHAINED}")
+        raise TypeError(f"an expression has no truth value; {_EACH_BOUND}")
 
     def __len__(self) -> int:
         raise TypeError(
-            "an expression has no length; the terms it carries are `terms` "
-            "and the dimensions it is free over are `frame`"
+            "an expression has no length; read `terms` for its terms and "
+            "`frame` for the dimensions it is free over"
         )
 
     def __pow__(self, other: Any) -> Any:
         raise TypeError(
-            "nimopt expresses a linear term, so a variable raised to a power "
-            "is not one; a coefficient takes the power instead, and a "
-            "variable multiplies it"
+            "cannot raise an expression to a power: expressions are linear; "
+            "raise a coefficient to the power and multiply it by a variable"
         )
 
     __rpow__ = __pow__
 
     def __abs__(self) -> Any:
         raise TypeError(
-            "nimopt expresses a linear term, so the absolute value of one is "
-            "not linear; reduce with `Sum` over its sets, or state the "
-            "magnitude with two rows bounding the expression"
+            "an expression has no absolute value: expressions are linear; "
+            "bound the expression with two rows, or reduce it with `Sum` "
+            "over its sets"
         )
 
     def _no_strict(self, other: Any) -> Any:
         raise TypeError(
-            "an LP has no row for a strict inequality; state `<=` or `>=`. "
-            "`min` and `max` compare two expressions this way and are not "
-            "linear either, so reduce with `Sum` over the sets instead"
+            "an LP has no row for a strict inequality; write `<=` or `>=`, "
+            "and reduce with `Sum` in place of `min` or `max`"
         )
 
     __lt__ = _no_strict
     __gt__ = _no_strict
 
     def sum(self, *args: Any, **kwargs: Any) -> Any:
-        """Refuse a reduction that states no set.
+        """Raise TypeError for a reduction that names no set.
 
-        `numpy.sum` reaches this, and without it returns the expression
-        unchanged, having reduced nothing.
+        `numpy.sum` calls this method. Without it, `numpy.sum` returns the
+        expression unchanged and reduces nothing.
         """
         raise TypeError(
             "an expression is reduced over the sets it is summed across; "
-            "state them with `Sum(I, J, expression)`"
+            "name them with `Sum(I, J, expression)`"
         )
 
     @property
     def coords(self) -> dict[str, Any]:
-        """Each dimension's coordinate, from the sets its variable is over."""
+        """Return each dimension's coordinate, from the sets its variable is over."""
         found = {}
         for t in self.terms:
             for s in t.variable.sets:
@@ -455,16 +431,12 @@ class Expression:
     def materialise(
         self, record: Any = None, progress: Any = None
     ) -> tuple[SparseArray, Domain]:
-        """The block over `(*frame, COLUMN)`, and the rows it states.
+        """Return the block over `(*frame, COLUMN)` and the rows it spans.
 
-        Every entry is produced by a `nimblend` operation. The row domain is the
-        intersection of the terms' domains over the frame: a row one term
-        does not reach is a row the expression does not state, because a row
-        missing one of its terms says something that was not written.
-
-        A reporter is told as each term is built, which is the finest the
-        frame divides into: a term is one `nimblend` operation chain, and
-        nothing above it can say how far through one it is.
+        Every entry is produced by a `nimblend` operation. The row domain is
+        the intersection of the terms' domains over the frame. A row absent
+        from one term is absent from the expression. `progress` is called
+        once per term, the finest division of the work available.
         """
         frame = self.frame
         coords = self.coords
@@ -478,29 +450,28 @@ class Expression:
         if record is not None:
             record.term_rows(self.terms[0], rows)
         for term, block in zip(self.terms[1:], blocks[1:]):
-            reaches = block.domain(frame)
+            spanned = block.domain(frame)
             if record is not None:
-                record.term_rows(term, reaches)
-            rows = rows.intersect(reaches)
+                record.term_rows(term, spanned)
+            rows = rows.intersect(spanned)
             total = total + block
         return total, rows
 
 
 def Sum(*args: Any, where: Any = None) -> "Expression":
-    """`Sum(I, J, expression)` — the expression reduced over the named sets.
+    """Return the expression reduced over the named sets.
 
-    `where=` takes a domain and restricts each term's entries before the
-    reduction, so a sum states the coordinates it runs over rather than every
-    coordinate of the product.
+    `Sum(I, J, expression)` sums over `I` and `J`. `where=` takes a domain
+    and restricts each term's entries before the reduction.
     """
     if len(args) < 2:
         raise ValueError("Sum takes one or more sets and then an expression")
     *sets, expression = args
     if not isinstance(expression, Expression):
         raise TypeError(
-            f"Sum reduces an expression over its sets, and a coefficient "
-            f"states no row until a variable multiplies it; got "
-            f"{type(expression).__name__} last"
+            f"Sum takes an expression last and got "
+            f"{type(expression).__name__}; multiply a coefficient by a "
+            f"variable to form an expression"
         )
     dims = _names(tuple(sets))
     terms = [t.summing(dims) for t in expression.terms]
@@ -515,12 +486,11 @@ class Relation:
     __array_ufunc__ = None
 
     def __init__(self, expression: "Expression", sense: str, rhs: Any) -> None:
-        """An expression bounded by `rhs`, which is read and then folded.
+        """Store an expression bounded by `rhs`, read at its sets and folded.
 
-        A right-hand side carrying columns states no bound of its own, so it
-        moves left against zero. Both happen here rather than at the
-        comparison, so a relation assembled directly reads as one written
-        with `<=`.
+        A right-hand side that contains columns is subtracted from the
+        expression and the bound becomes zero. A relation built directly is
+        identical to one written with `<=`.
         """
         rhs = read_at_its_sets(rhs)
         if isinstance(rhs, Expression):
@@ -535,13 +505,12 @@ class Relation:
         return render(self)
 
     def __bool__(self) -> bool:
-        raise TypeError(f"a relation has no truth value; {_CHAINED}")
+        raise TypeError(f"a relation has no truth value; {_EACH_BOUND}")
 
     def _one_bound(self, other: Any) -> Any:
         raise TypeError(
-            "a relation is already an equation and states one bound; compare "
-            "the expression a second time in its own equation rather than "
-            "comparing the relation"
+            "a relation is already an equation with one bound; compare the "
+            "expression again in its own equation"
         )
 
     __le__ = _one_bound

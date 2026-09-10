@@ -199,7 +199,7 @@ price / eta
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: parameter 'price' carries ('G',) and states no coefficient until it is read; read it at its sets as price[G]
+TypeError: parameter 'price' is over ('G',) and expresses no coefficient until it is read; read it at its sets as price[G]
 ```
 
 </details>

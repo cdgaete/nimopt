@@ -129,7 +129,7 @@ Sum(T - 1, x[T])
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: a sum is over the members of ['T'], so it takes the set and not a lag of it; state the lag at the variable's reference
+ValueError: a sum is over the members of ['T'] and takes the set, not a lag of it; write the lag at the variable's reference
 ```
 
 </details>
@@ -188,7 +188,7 @@ x = m.var("x", (P, W))
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: a relation has no truth value; a chained comparison such as 0 <= expr <= 10 reads as two comparisons joined by `and` and keeps only the second, so state each bound separately
+TypeError: a relation has no truth value; write each bound in its own equation
 ```
 
 </details>
@@ -217,7 +217,7 @@ x[T] ** 2
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: nimopt expresses a linear term, so a variable raised to a power is not one; a coefficient takes the power instead, and a variable multiplies it
+TypeError: cannot raise an expression to a power: expressions are linear; raise a coefficient to the power and multiply it by a variable
 ```
 
 </details>
@@ -241,7 +241,7 @@ x = m.var("x", (T,))
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: nimopt expresses a linear term, so a variable in a denominator is not one; state the reciprocal as a coefficient the variable multiplies
+TypeError: cannot divide by an expression: expressions are linear; declare the reciprocal as a coefficient the variable multiplies
 ```
 
 </details>
@@ -266,7 +266,7 @@ abs(x[T])
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: nimopt expresses a linear term, so the absolute value of one is not linear; reduce with `Sum` over its sets, or state the magnitude with two rows bounding the expression
+TypeError: an expression has no absolute value: expressions are linear; bound the expression with two rows, or reduce it with `Sum` over its sets
 ```
 
 </details>
@@ -289,7 +289,7 @@ x[T] < 5.0
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: an LP has no row for a strict inequality; state `<=` or `>=`. `min` and `max` compare two expressions this way and are not linear either, so reduce with `Sum` over the sets instead
+TypeError: an LP has no row for a strict inequality; write `<=` or `>=`, and reduce with `Sum` in place of `min` or `max`
 ```
 
 </details>
@@ -314,7 +314,7 @@ x[T].sum()
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: an expression is reduced over the sets it is summed across; state them with `Sum(I, J, expression)`
+TypeError: an expression is reduced over the sets it is summed across; name them with `Sum(I, J, expression)`
 ```
 
 </details>
@@ -338,7 +338,7 @@ x = m.var("x", (T,))
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: a relation is already an equation and states one bound; compare the expression a second time in its own equation rather than comparing the relation
+TypeError: a relation is already an equation with one bound; compare the expression again in its own equation
 ```
 
 </details>
@@ -362,7 +362,7 @@ Sum(T, Sum(T, x[T]))
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: term 'x' already sums over ['T']; a dimension is reduced once, and a second reduction has nothing left to reduce
+ValueError: term 'x' already sums over ['T']; sum over each dimension once
 ```
 
 </details>

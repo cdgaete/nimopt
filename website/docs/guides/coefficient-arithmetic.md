@@ -141,7 +141,7 @@ price[G, T] / holed[G, T]
 <summary>Raises ZeroDivisionError</summary>
 
 ```text
-ZeroDivisionError: divisor holed carries a zero at 1 coordinate(s), the first at {'G': 'base', 'T': 1}; a quotient there states a coefficient no solver can read
+ZeroDivisionError: divisor holed is zero at 1 coordinate(s), first at {'G': 'base', 'T': 1}; remove the zeros or divide by another parameter
 ```
 
 </details>

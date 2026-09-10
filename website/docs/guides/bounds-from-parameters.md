@@ -93,7 +93,7 @@ m.column_bounds()
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: the upper bound 'cap' carries no value for member ('b',) of variable 'x'; a bound covers every column of the variable it bounds
+ValueError: the upper bound 'cap' has no value at member ('b',) of variable 'x'; a bound covers every column of the variable it bounds
 ```
 
 </details>
@@ -125,7 +125,7 @@ m.var("x", (G,), upper=cap)
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: variable 'x' is declared over ('G',) and does not carry ['W']; its upper bound 'cap' is declared over ('W',)
+ValueError: variable 'x' is declared over ('G',) and is not over ['W']; its upper bound 'cap' is declared over ('W',)
 ```
 
 </details>

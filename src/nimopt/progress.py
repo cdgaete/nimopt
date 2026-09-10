@@ -1,9 +1,8 @@
-"""What a caller is told while a model is built.
+"""Progress reporting for a model build.
 
-A report states what it knows: the pass it is in, the work it has done
-against the total where a total exists, and how long it has taken. A pass
-that cannot state a total states none rather than a fraction of a number it
-guessed.
+A report contains the name of the pass, the number of units finished, the
+total where one is known, and the elapsed time. A pass with no known total
+reports no total and no percentage.
 """
 
 import sys
@@ -14,7 +13,7 @@ WIDTH = 19
 
 
 class Reporter(Protocol):
-    """What a build calls to say where it has got to."""
+    """The interface a build calls to report its progress."""
 
     def start(self, total: int | None, what: str) -> None: ...
     def step(self, done: int, what: str) -> None: ...
@@ -22,10 +21,9 @@ class Reporter(Protocol):
 
 
 class Progress:
-    """A report drawn where a terminal reads it, and nowhere else.
+    """A progress bar written to `stream` when `stream` is a terminal.
 
-    A redirected or piped run carries no bar and no carriage returns, so the
-    text a caller keeps is the text it meant to keep.
+    A redirected or piped stream receives no bar and no carriage returns.
     """
 
     def __init__(self, stream: TextIO | None = None) -> None:
@@ -36,7 +34,7 @@ class Progress:
         self.drawing = False
 
     def start(self, total: int | None, what: str) -> None:
-        """Begin a pass over `total` units of work, or over an unknown amount."""
+        """Start a pass over `total` units of work, or over an unknown total."""
         self.total = total
         self.what = what
         self.started = time.perf_counter()
@@ -44,17 +42,17 @@ class Progress:
         self._draw(0, "")
 
     def step(self, done: int, what: str) -> None:
-        """`done` units of the pass are finished, the last of them `what`."""
+        """Report `done` finished units of the pass, the last of them `what`."""
         self._draw(done, what)
 
     def done(self) -> None:
-        """End the pass, leaving its last line in place."""
+        """End the pass and keep its last line."""
         if self.drawing:
             self.stream.write("\n")
             self.stream.flush()
 
     def _draw(self, done: int, what: str) -> None:
-        """One line, rewritten in place."""
+        """Write one line of the bar, replacing the line before it."""
         if not self.drawing:
             return
         elapsed = time.perf_counter() - self.started
@@ -72,11 +70,10 @@ class Progress:
 
 
 def reporter(progress: Any) -> Reporter | None:
-    """The reporter `progress` asks for, or None where it asks for none.
+    """Return the reporter `progress` selects, or None for no reporting.
 
-    `False` reports nothing, `True` reports through the built-in one, and a
-    reporter of the caller's own is taken as it is, so a caller with a log or
-    an interface of its own writes there.
+    `None` and `False` select no reporter. `True` selects `Progress`. Any
+    other value is returned unchanged and is called as a `Reporter`.
     """
     if progress is None or progress is False:
         return None

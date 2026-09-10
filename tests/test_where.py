@@ -40,7 +40,7 @@ def test_a_condition_names_the_columns_the_arcs_stand_for():
     m, P, W, x, one, cap, arcs = arcs_model()
     m.constraint("supply", Sum(W, one[P, W] * x[P, W], where=arcs) <= cap[P])
     assembled = m.assemble()
-    # p1 reaches w1 and w2, which are columns 0 and 1; p2 reaches w3, column 5
+    # p1 spans w1 and w2, columns 0 and 1; p2 spans w3, column 5
     assert np.array_equal(assembled.indices, np.array([0, 1, 5], dtype=np.int32))
 
 
@@ -48,7 +48,7 @@ def test_a_condition_over_a_dimension_the_variable_lacks_is_refused():
     m, P, W, x, one, cap, arcs = arcs_model()
     other = Set("Z", np.array(["z1", "z2"]))
     wrong = subset((other,), {"Z": np.array(["z1"])})
-    with pytest.raises(ValueError, match="does not carry"):
+    with pytest.raises(ValueError, match="is not over"):
         Sum(W, one[P, W] * x[P, W], where=wrong)
 
 
@@ -113,10 +113,10 @@ def test_a_condition_may_name_a_dimension_the_coefficient_introduces():
 
 
 def network(rows):
-    """A bus balance whose terms each reach some of its rows.
+    """A bus balance whose terms each span some of its rows.
 
-    `rows` is called with the two sets and answers what states them, so one
-    model is stated four ways and the spellings are compared on equal terms.
+    `rows` is called with the two sets and returns the row domain. One model
+    is declared four ways and the four forms are compared on equal terms.
     """
     B = Set("B", np.array(["b0", "b1"]))
     T = Set("T", np.array([0, 1, 2]))
@@ -157,10 +157,10 @@ def test_rows_stated_as_sets_are_the_rows_the_product_states():
     assert shape(network(lambda B, T: (B, T))) == (6, 4)
 
 
-def test_rows_stated_as_a_parameter_are_the_coordinates_it_carries():
-    # a parameter's support is a set of coordinates, which is what a row
-    # domain is; an over= is not always a full product, so this is the shape
-    # that needs the second spelling
+def test_rows_declared_as_a_parameter_are_its_coordinates():
+    # a parameter's support is a set of coordinates, and so is a row domain;
+    # an over= is not always a full product, and this is the shape that needs
+    # the second form
     assert shape(network(lambda B, T: subset((B, T), marked(B, T)))) == (2, 2)
     assert shape(
         network(lambda B, T: Param.from_long("mark", (B, T), marked(B, T), np.ones(2)))

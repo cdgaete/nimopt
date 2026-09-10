@@ -9,10 +9,10 @@ from nimblend import Domain, StoredCoord
 
 
 def _periods(given: Any) -> int:
-    """A lag as the whole number of members it steps.
+    """Return `given` as a whole number of members.
 
-    A lag that is not whole states a different lag once truncated, and a model
-    built from it reports success, so it is refused rather than rounded.
+    Raises TypeError for a value that is not an integer or a float, and
+    ValueError for a float with a fractional part.
     """
     if isinstance(given, bool) or not isinstance(given, (int, float, np.integer)):
         raise TypeError(f"a lag is a whole number of members; got {given!r}")
@@ -22,11 +22,10 @@ def _periods(given: Any) -> int:
 
 
 class Set:
-    """A named dimension, with labels or awaiting them.
+    """A named dimension, with labels or without them.
 
-    A set declared without labels names a dimension and carries no members
-    until `_bind` gives it some, which is what lets a model be declared
-    before its data exists.
+    A set declared without labels has a name and no members. A model is
+    declared over such a set before its data exists.
     """
 
     def __init__(self, name: str, labels: npt.ArrayLike | None = None) -> None:
@@ -38,7 +37,7 @@ class Set:
 
     @property
     def declared(self) -> bool:
-        """Whether this set is still awaiting its members."""
+        """True where this set has no members."""
         return self.labels is None
 
     def _bind(self, labels: npt.ArrayLike) -> None:
@@ -48,8 +47,8 @@ class Set:
     def _members(self) -> StoredCoord:
         if self.coord is None:
             raise ValueError(
-                f"set {self.name!r} is declared and carries no members; bind "
-                f"it before reading them"
+                f"set {self.name!r} is declared and has no members; bind it "
+                f"before reading them"
             )
         return self.coord
 
@@ -62,12 +61,12 @@ class Set:
         return f"Set({self.name!r}, {len(self)} members)"
 
     def position_of(self, labels: npt.ArrayLike) -> npt.NDArray[np.integer]:
-        """Positions the given labels occupy in this set."""
+        """Return the positions the given labels occupy in this set."""
         return self._members().to_position(labels)
 
     @property
     def cyclic(self) -> "CyclicSet":
-        """This set read as a cyclic axis, where a lag past an end wraps."""
+        """Return this set as a cyclic axis, where a lag past an end wraps."""
         return CyclicSet(self)
 
     def __sub__(self, periods: Any) -> "LaggedSet":
@@ -80,10 +79,8 @@ class Set:
 class Alias:
     """A second name for a set, sharing its labels and its coordinate.
 
-    A parameter over a set and its alias is an ordinary two-dimensional
-    array, so a model relating a set to itself states it without a second
-    set. No labels are copied: the alias reads the coordinate the set
-    already built.
+    A parameter over a set and its alias is a two-dimensional array. The
+    alias copies no labels. It reads the coordinate the set already built.
     """
 
     def __init__(self, name: str, base: "Set") -> None:
@@ -92,12 +89,12 @@ class Alias:
 
     @property
     def labels(self) -> npt.NDArray[Any] | None:
-        """The labels of the set this names."""
+        """Return the labels of the set this alias refers to."""
         return self.base.labels
 
     @property
     def coord(self) -> StoredCoord | None:
-        """The coordinate of the set this names."""
+        """Return the coordinate of the set this alias refers to."""
         return self.base.coord
 
     def __len__(self) -> int:
@@ -108,7 +105,7 @@ class Alias:
 
     @property
     def cyclic(self) -> "CyclicSet":
-        """This alias read as a cyclic axis, where a lag past an end wraps."""
+        """Return this alias as a cyclic axis, where a lag past an end wraps."""
         return CyclicSet(self)
 
     def __sub__(self, periods: Any) -> "LaggedSet":
@@ -119,14 +116,14 @@ class Alias:
 
 
 class CyclicSet:
-    """A set whose lag arithmetic wraps, so every row stays stated."""
+    """A set whose lag arithmetic wraps, keeping every row."""
 
     def __init__(self, base: "Set | Alias") -> None:
         self.base = base
 
     @property
     def name(self) -> str:
-        """The name of the set this reads."""
+        """Return the name of the set this refers to."""
         return self.base.name
 
     def __repr__(self) -> str:
@@ -142,10 +139,10 @@ class CyclicSet:
 class LaggedSet:
     """A set referenced at an offset from the row's own member.
 
-    `T - 1` reads the previous member, which moves an entry from `t` to
-    `t + 1`, so it is a shift of `+1`. Under `drop` a reference reaching
-    outside the set removes the row rather than leaving it standing with a
-    term missing; `T.cyclic - 1` wraps instead and states every row.
+    `T - 1` reads the previous member. That moves an entry from `t` to
+    `t + 1`, a shift of `+1`. Under mode `drop` a reference outside the set
+    removes the row. Under mode `wrap`, written `T.cyclic - 1`, the reference
+    wraps and every row is kept.
     """
 
     def __init__(self, base: "Set | Alias", shift: int, mode: str) -> None:
@@ -155,7 +152,7 @@ class LaggedSet:
 
     @property
     def name(self) -> str:
-        """The name of the set this reads."""
+        """Return the name of the set this refers to."""
         return self.base.name
 
     def __len__(self) -> int:
@@ -163,7 +160,7 @@ class LaggedSet:
 
     @property
     def coord(self) -> StoredCoord | None:
-        """The coordinate of the set this reads."""
+        """Return the coordinate of the set this refers to."""
         return self.base.coord
 
     def __repr__(self) -> str:
@@ -171,9 +168,9 @@ class LaggedSet:
 
     def _one_lag(self, periods: Any) -> Any:
         raise TypeError(
-            f"set {self.name!r} is already read at a lag of {self.shift}; a "
-            f"reference carries one lag, so write the total as a single lag "
-            f"rather than {periods!r} more"
+            f"set {self.name!r} is already read at a lag of {self.shift} and a "
+            f"reference takes one lag; write the total as a single lag, not "
+            f"{periods!r} more"
         )
 
     __sub__ = _one_lag
@@ -186,11 +183,11 @@ SET_LIKE = (Set, Alias, CyclicSet, LaggedSet)
 def reference(
     sets: Any, dims: Sequence[str]
 ) -> tuple[tuple[str, ...], dict[str, tuple[int, str]], dict[str, Any]]:
-    """The dimension names a reference states, its lags, and its fixed members.
+    """Return the dimension names of a reference, its lags and its fixed members.
 
-    An entry that is not a set is a label, and it fixes the dimension standing
-    at its position in `dims`: `x[S, "t0"]` is the row at `t0` alone, and the
-    dimension it names leaves the frame.
+    An entry that is not a set is a label. It fixes the dimension at its
+    position in `dims`. `x[S, "t0"]` selects the rows at `t0`, and that
+    dimension is not in the frame.
     """
     given = sets if isinstance(sets, tuple) else (sets,)
     names = []
@@ -210,9 +207,10 @@ def reference(
 
 
 def check_members(sets: Iterable[Any], fixed: Mapping[str, Any], owner: str) -> None:
-    """Refuse a fixed member the dimension's own set does not carry.
+    """Check each fixed member against the labels of its own dimension's set.
 
-    A declared set carries no members yet, so its check waits until it binds.
+    Raises ValueError for a label the set does not contain. A declared set
+    has no members, and the check skips it.
     """
     by_name = {s.name: s for s in sets}
     for dim, label in fixed.items():
@@ -223,21 +221,22 @@ def check_members(sets: Iterable[Any], fixed: Mapping[str, Any], owner: str) -> 
             held.coord.to_position(np.asarray([label]))
         except KeyError:
             raise ValueError(
-                f"{owner} is read at member {label!r} of dimension {dim!r}, "
-                f"which that set does not carry"
+                f"{owner} is read at member {label!r} of dimension {dim!r}; "
+                f"read it at a member that set contains"
             ) from None
 
 
 def reading(name: str, dims: Sequence[str]) -> str:
-    """How a symbol over `dims` is read, as the spelling states it.
+    """Return the text that reads a symbol named `name` over `dims`.
 
-    A symbol over no dimension is already read, so it carries no bracket.
+    A symbol over no dimension requires no bracket. The name is returned
+    alone.
     """
     return f"{name}[{', '.join(dims)}]" if dims else str(name)
 
 
 def coords_of(sets: Iterable[Any]) -> dict[str, Any]:
-    """Each set's coordinate, keyed by the name of the dimension it names."""
+    """Return each set's coordinate, keyed by the dimension name."""
     return {s.name: s.coord for s in sets}
 
 
@@ -246,45 +245,43 @@ def _frame(sets: Iterable[Any]) -> tuple[tuple[str, ...], dict[str, Any]]:
 
 
 def subset(sets: Iterable[Any], columns: Mapping[str, npt.ArrayLike]) -> Domain:
-    """The members of a set product a model carries, named by label.
+    """Return the members of a set product, selected by label.
 
-    `columns` holds one label column per set, keyed by the set's name, read
-    in step: the k-th entry of each names one member.
+    `columns` contains one label column per set, keyed by the set's name. The
+    columns are read in step: the k-th entry of each identifies one member.
     """
     dims, coords = _frame(tuple(sets))
     return Domain.from_labels(dims, coords, columns)
 
 
 def product(sets: Iterable[Any]) -> Domain:
-    """Every member of a set product, as the rows a constraint states.
+    """Return every member of a set product, as the rows of a constraint.
 
-    A constraint whose terms each reach some of its rows states them with
-    this rather than having them derived from the terms.
+    A constraint declares its rows with this instead of deriving them from
+    its terms.
     """
     dims, coords = _frame(tuple(sets))
     return Domain.full(dims, coords)
 
 
 def subset_of(sets: Iterable[Any], index: npt.ArrayLike) -> Domain:
-    """The members of a set product a model carries, named by position.
+    """Return the members of a set product, selected by position.
 
-    Each column of `index` names one member. A caller holding positions
-    states them directly rather than building labels to resolve back.
+    Each column of `index` identifies one member. A caller with positions
+    passes them directly, with no labels to resolve.
     """
     dims, coords = _frame(tuple(sets))
     return Domain.from_coordinates(dims, coords, index)
 
 
 def rows_of(given: Any, dims: tuple[str, ...] | None, owner: str, what: str) -> Domain:
-    """The domain `given` states over `dims`.
+    """Return the domain `given` specifies over `dims`.
 
-    A tuple of sets is their full product, a parameter is the coordinates it
-    carries, and a domain is itself. A domain resolves labels through each
-    set's coordinate and a declared set carries none, so a definition names
-    the sets or the parameter and both spellings reach the same domain.
-
-    `dims` are the dimensions the domain is required to span, or `None` where
-    a caller has already checked them against something else.
+    A tuple of sets resolves to their full product, a parameter to the
+    coordinates of its array, and a domain to itself. `dims` are the
+    dimensions the domain is required to span, or `None` where a caller has
+    already checked them. Raises ValueError where the domain spans other
+    dimensions.
     """
     from nimopt.param import Param
 

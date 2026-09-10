@@ -47,7 +47,7 @@ def test_a_derived_coefficient_builds_the_model_its_arithmetic_states():
 
 
 @pytest.mark.parametrize(
-    "spelling,expected",
+    "form,expected",
     [
         ("a[G, T] + b[G, T]", "(a + b)"),
         ("a[G, T] - b[G, T]", "(a - b)"),
@@ -59,7 +59,7 @@ def test_a_derived_coefficient_builds_the_model_its_arithmetic_states():
         ("a[G, T] ** 2", "(a ** 2)"),
     ],
 )
-def test_each_combination_names_itself(spelling, expected):
+def test_each_combination_names_itself(form, expected):
     G, T, _, _ = fleet()
     named = {
         "G": G,
@@ -67,7 +67,7 @@ def test_each_combination_names_itself(spelling, expected):
         "a": Param.from_dense("a", (G, T), np.full((2, 3), 4.0)),
         "b": Param.from_dense("b", (G, T), np.full((2, 3), 2.0)),
     }
-    assert eval(spelling, named).name == expected  # noqa: S307
+    assert eval(form, named).name == expected  # noqa: S307
 
 
 def test_a_coefficient_over_a_wider_frame_aligns_on_what_they_share():

@@ -1,4 +1,4 @@
-"""A symbol's bracket lists the dimensions it carries."""
+"""A symbol's bracket lists the dimensions it is over."""
 
 import numpy as np
 import pytest
@@ -73,9 +73,9 @@ def test_a_coefficient_on_the_left_of_an_equality_states_the_same_row():
     assert m.constraints["flipped"].n_rows == 2
 
 
-def test_a_coefficient_compared_with_a_coefficient_still_states_no_row():
+def test_a_coefficient_compared_with_a_coefficient_is_not_a_row():
     _, P, _, _, _, cap = model()
-    with pytest.raises(TypeError, match="states no row"):
+    with pytest.raises(TypeError, match="is not a row"):
         cap[P] <= cap[P]
 
 
@@ -165,9 +165,9 @@ def test_a_parameter_over_no_dimension_compares_as_the_coefficient_it_is():
     _, S, theta, k, x, a = scalars()
     assert type(k == theta).__name__ == "Relation"
     assert type(theta == k).__name__ == "Relation"
-    with pytest.raises(TypeError, match="states no row"):
+    with pytest.raises(TypeError, match="is not a row"):
         k <= 3
-    with pytest.raises(TypeError, match="states no row"):
+    with pytest.raises(TypeError, match="is not a row"):
         k == 3
 
 

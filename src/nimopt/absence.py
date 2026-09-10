@@ -1,4 +1,4 @@
-"""Which coordinates fell out of a constraint, and by which rule."""
+"""The coordinates a constraint dropped, and the rule that dropped each."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -11,7 +11,7 @@ from nimopt.names import COLUMN
 
 @dataclass(frozen=True)
 class DroppedRow:
-    """A row a constraint did not state, and what removed it."""
+    """A row a constraint does not contain, and the rule that removed it."""
 
     coordinate: dict[str, Any]
     rule: str
@@ -20,7 +20,7 @@ class DroppedRow:
 
 @dataclass(frozen=True)
 class DroppedTerm:
-    """A term missing from a row that stands, and what removed it."""
+    """A term missing from a row that remains, and the rule that removed it."""
 
     coordinate: dict[str, Any]
     variable: str
@@ -30,16 +30,13 @@ class DroppedTerm:
 
 @dataclass(frozen=True)
 class Absence:
-    """What a constraint set out to state, what it states, and what fell.
+    """The rows a constraint expected, the rows it has, and the rows dropped.
 
-    `stated_by` is `"terms"` where the rows are derived from what the terms
-    reach and `"over"` where they are stated outright. Under `"over"` nothing
-    is dropped and an empty `dropped_rows` is structural rather than a
-    constraint that happened to lose nothing.
-
-    A coefficient absent inside a sum removes a term and leaves the row
-    standing; a term absent along a free dimension removes the row, because a
-    row missing one of its terms states something that was not written.
+    `stated_by` is `"terms"` where the rows are derived from the terms, and
+    `"over"` where they are declared with `over=`. Under `"over"` nothing is
+    dropped and `dropped_rows` is empty. A coefficient absent inside a sum
+    removes a term and keeps the row. A term absent along a free dimension
+    removes the row.
     """
 
     constraint: str
@@ -72,10 +69,9 @@ def _at(coordinate: Mapping[str, Any]) -> str:
 
 
 def _coordinates(domain: Domain) -> list[dict[str, Any]]:
-    """One dict of dimension to label per member of a domain.
+    """Return one dict of dimension to label per member of a domain.
 
-    A label is handed over as the Python value it stands for, so a caller
-    comparing one against a literal, and a rendering of it, both read plainly.
+    Each label is the Python value, not a numpy scalar.
     """
     labels = domain.labels()
     return [{d: labels[d][k].item() for d in domain.dims} for k in range(domain.size)]
@@ -84,22 +80,22 @@ def _coordinates(domain: Domain) -> list[dict[str, Any]]:
 def _absent_terms(
     rows: Domain, term: Any, before: SparseArray, after: SparseArray
 ) -> list[DroppedTerm]:
-    """Terms a coefficient removed from rows that still stand.
+    """Return the terms a coefficient removed from rows that remain.
 
-    A term is identified by the coordinate it carries once its coefficient has
-    placed it. Every such coordinate is the entries the variable brought,
-    crossed with each member of a dimension the coefficient introduced; the
-    ones the coefficient does not carry are the terms that are gone.
+    A term is identified by its coordinate after the coefficient multiplies.
+    The full set of such coordinates is the variable's entries crossed with
+    each member of a dimension the coefficient introduces. The coordinates
+    absent from the product are the removed terms.
     """
     if not term.summed:
         return []
     keep = tuple(d for d in after.dims if d != COLUMN)
-    carried = after.domain(keep)
+    placed = after.domain(keep)
     brought = tuple(d for d in before.dims if d != COLUMN)
     entries = before.domain(brought)
     introduced = tuple(d for d in keep if d not in brought)
-    whole = entries.expand(introduced, carried.coords).transpose(*keep)
-    lost = whole.difference(carried)
+    whole = entries.expand(introduced, placed.coords).transpose(*keep)
+    lost = whole.difference(placed)
     at = lost.coordinates()[[keep.index(d) for d in rows.dims]]
     standing = rows.positions_of_coordinates(at) >= 0
     variable = term.variable.name
@@ -112,11 +108,11 @@ def _absent_terms(
 
 
 class Recorder:
-    """What a constraint's shape pass dropped, gathered as it narrows.
+    """The rows and terms a constraint's shape pass drops, gathered as it runs.
 
-    A dropped row leaves no trace in the matrix, so it is attributed while the
-    narrowing runs rather than read back from it. Each narrowing sees only what
-    survived the one before, so a coordinate is attributed to one rule.
+    A dropped row is not present in the matrix. It is attributed while the
+    narrowing runs. Each narrowing reads only what the one before it kept,
+    and each coordinate is attributed to one rule.
     """
 
     def __init__(self) -> None:
@@ -129,14 +125,14 @@ class Recorder:
         self._standing: Domain | None = None
 
     def term_rows(self, term: Any, domain: Domain) -> None:
-        """The rows one term of the expression reaches."""
+        """Record the rows one term of the expression spans."""
         self._reached.append((term, domain))
 
     def reached(self, frame: Sequence[str], rows: Domain) -> None:
-        """The rows the terms reach, against the product the frame spans.
+        """Record the rows the terms span, against the product of the frame.
 
-        A coordinate no term reaches is attributed to the first term that
-        misses it, so each is named once and by the term that lost it.
+        A coordinate absent from every term is attributed to the first term
+        that lacks it.
         """
         whole = Domain.full(frame, rows.coords)
         self.expected = whole.size
@@ -149,13 +145,13 @@ class Recorder:
             standing = reduced
 
     def stated(self, rows: Domain) -> None:
-        """The rows an `over=` states outright, which drops nothing."""
+        """Record the rows `over=` declares, dropping none."""
         self.stated_by = "over"
         self.expected = rows.size
         self.rows = []
 
     def dropped(self, before: Domain, after: Domain, rule: str, detail: str) -> None:
-        """The rows one narrowing removed."""
+        """Record the rows one narrowing removed."""
         self._record_rows(before, after, rule, detail)
 
     def _record_rows(
@@ -165,17 +161,20 @@ class Recorder:
         self.rows.extend(DroppedRow(at, rule, detail) for at in _coordinates(lost))
 
     def coefficient(self, term: Any, before: SparseArray, after: SparseArray) -> None:
-        """A term's entries either side of the coefficient that multiplied it."""
+        """Record a term's entries before and after its coefficient multiplies."""
         self._coefficients.append((term, before, after))
 
     def settled(self, rows: Domain) -> None:
-        """The rows the constraint states, once every narrowing has run."""
+        """Record the constraint's rows, once every narrowing has run."""
         self._standing = rows
         for held in self._coefficients:
             self.terms.extend(_absent_terms(rows, *held))
 
     def absence(self, name: str) -> Absence:
-        """What this recorder gathered, as the answer a caller reads."""
+        """Return what this recorder gathered, as an `Absence`.
+
+        Raises ValueError before the shape pass has run.
+        """
         if self.expected is None or self._standing is None:
             raise ValueError(
                 f"constraint {name!r} has not settled its rows; an absence is "

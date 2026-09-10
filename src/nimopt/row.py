@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RowTerm:
-    """One coefficient of a row: its column, and what that column stands for."""
+    """One coefficient of a row: its column, its variable and its coordinate."""
 
     column: int
     variable: str
@@ -24,10 +24,10 @@ class RowTerm:
 
 @dataclass(frozen=True)
 class Row:
-    """A row as the matrix carries it: its terms, its sense and its bounds.
+    """A row as the matrix stores it: its terms, its sense and its bounds.
 
-    Read from the assembled matrix rather than from a second walk of the
-    expression, so what is shown is what the solver is given.
+    The row is read from the assembled matrix, not from a second walk of the
+    expression.
     """
 
     constraint: str
@@ -54,12 +54,10 @@ def _term(term: RowTerm) -> str:
 
 
 def senses(lower: npt.ArrayLike, upper: npt.ArrayLike) -> npt.NDArray[np.str_]:
-    """The sense each pair of row bounds states.
+    """Return the sense of each pair of row bounds.
 
-    Equal bounds are `==`, an infinite lower is `<=`, an infinite upper is
-    `>=`. `Constraint.write_bounds` writes one of those three, so a finite
-    unequal pair reaches no row and is refused rather than named: a rule
-    nothing produces is vocabulary a caller branches on and never reaches.
+    Equal bounds are `==`, an infinite lower bound is `<=`, and an infinite
+    upper bound is `>=`. Raises ValueError for a finite unequal pair.
     """
     lower = np.atleast_1d(np.asarray(lower, dtype=np.float64))
     upper = np.atleast_1d(np.asarray(upper, dtype=np.float64))
@@ -70,8 +68,8 @@ def senses(lower: npt.ArrayLike, upper: npt.ArrayLike) -> npt.NDArray[np.str_]:
     if ranged.any():
         first = int(np.nonzero(ranged)[0][0])
         raise ValueError(
-            f"row bounds [{lower[first]}, {upper[first]}] state a range, and "
-            f"no constraint states a range; a row carries one sense"
+            f"row bounds [{lower[first]}, {upper[first]}] are a range; give "
+            f"equal bounds, or an infinite bound on one side"
         )
     named = np.full(lower.shape, "==", dtype="<U2")
     named[below & ~equal] = "<="
@@ -80,15 +78,14 @@ def senses(lower: npt.ArrayLike, upper: npt.ArrayLike) -> npt.NDArray[np.str_]:
 
 
 def _sense_of(lower: float, upper: float) -> str:
-    """The sense one pair of row bounds states."""
+    """Return the sense of one pair of row bounds."""
     return str(senses(lower, upper)[0])
 
 
 def _coordinate(domain: Any, position: int) -> dict[str, Any]:
-    """The label of each dimension at one member of a domain.
+    """Return the label of each dimension at one member of a domain.
 
-    A label is handed over as the Python value it stands for, so a caller
-    comparing one against a literal, and a rendering of it, both read plainly.
+    Each label is the Python value, not a numpy scalar.
     """
     labels = domain.labels()
     return {d: labels[d][position].item() for d in domain.dims}
@@ -97,14 +94,13 @@ def _coordinate(domain: Any, position: int) -> dict[str, Any]:
 def resolve(
     model: "Model", columns: npt.ArrayLike
 ) -> tuple[tuple[int, int, str, dict[str, Any]], ...]:
-    """Each column as the variable and the coordinate it stands for.
+    """Return each column as its variable and coordinate, ordered by column.
 
-    Ordered by column, and carrying the position each stood at in `columns`,
-    so a caller holding a value per column follows it back. A variable owns a
-    contiguous range of the column space from its `start`, so a column
-    resolves to its variable by that range and to a coordinate through the
-    variable's own numbering rule. A column no variable carries is refused
-    rather than dropped.
+    Each entry also contains the position the column occupied in `columns`.
+    A variable owns a contiguous range of the column space from its `start`.
+    A column resolves to its variable by that range, and to a coordinate
+    through the variable's own numbering rule. Raises ValueError for a column
+    no variable owns.
     """
     columns = np.asarray(columns, dtype=np.int64)
     found = []
@@ -123,20 +119,20 @@ def resolve(
                 (int(position), int(columns[position]), variable.name, coordinate)
             )
     if len(found) != columns.size:
-        carried = {column for _, column, _, _ in found}
-        stray = sorted(set(columns.tolist()) - carried)
+        resolved = {column for _, column, _, _ in found}
+        stray = sorted(set(columns.tolist()) - resolved)
         raise ValueError(
             f"column {stray[0]} belongs to no variable of model "
-            f"{model.name!r}, which numbers {model.n_columns} columns"
+            f"{model.name!r}; the model numbers {model.n_columns} columns"
         )
     return tuple(sorted(found, key=lambda held: held[1]))
 
 
 def read(model: "Model", assembled: "Assembled", index: int) -> Row:
-    """The row at `index` of an assembled model, as the matrix carries it.
+    """Return the row at `index` of an assembled model.
 
-    `index` is the solver's own row number, which is what a backend reporting
-    a conflict hands back.
+    `index` is the solver's own row number, the number a solver reports for a
+    conflict. Raises ValueError for an index outside the assembled rows.
     """
     for name, constraint in model.constraints.items():
         at = assembled.row_of(name)
@@ -165,10 +161,10 @@ def read(model: "Model", assembled: "Assembled", index: int) -> Row:
 
 
 def position_of(constraint: "Constraint", coords: Mapping[str, Any]) -> int:
-    """Where in a constraint's rows the named coordinate stands.
+    """Return the position of the named coordinate in a constraint's rows.
 
-    Each label resolves through its dimension's own coordinate, and the row
-    domain answers where the member it names sits.
+    Each label resolves through its dimension's own coordinate. Raises
+    ValueError for a coordinate the constraint has no row at.
     """
     rows = constraint.rows
     if tuple(coords) != rows.dims:
@@ -185,7 +181,7 @@ def position_of(constraint: "Constraint", coords: Mapping[str, Any]) -> int:
     at = int(rows.positions_of_coordinates(index)[0])
     if at < 0:
         raise ValueError(
-            f"constraint {constraint.name!r} states no row at {dict(coords)}; "
+            f"constraint {constraint.name!r} has no row at {dict(coords)}; "
             f"`absent({constraint.name!r})` names the rule that dropped it"
         )
     return at

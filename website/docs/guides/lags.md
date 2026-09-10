@@ -105,7 +105,7 @@ Sum(T - 1, x[T])
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: a sum is over the members of ['T'], so it takes the set and not a lag of it; state the lag at the variable's reference
+ValueError: a sum is over the members of ['T'] and takes the set, not a lag of it; write the lag at the variable's reference
 ```
 
 </details>
@@ -134,7 +134,7 @@ rate[T - 1]
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: parameter 'rate' is read at a lag ['T']; state the lag at the variable's reference, where a coefficient multiplies the row it lands on
+ValueError: parameter 'rate' is read at a lag ['T']; write the lag at the variable's reference
 ```
 
 </details>

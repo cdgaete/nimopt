@@ -140,19 +140,19 @@ message beside it.
 <!-- refusals -->
 | Raises | Message | Shown at |
 | --- | --- | --- |
-| `ValueError` | the upper bound 'cap' carries no value for member ('b',) of variable 'x'; a bound covers every column of the variable it bounds | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
-| `ValueError` | variable 'x' is declared over ('G',) and does not carry ['W']; its upper bound 'cap' is declared over ('W',) | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
+| `ValueError` | the upper bound 'cap' has no value at member ('b',) of variable 'x'; a bound covers every column of the variable it bounds | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
+| `ValueError` | variable 'x' is declared over ('G',) and is not over ['W']; its upper bound 'cap' is declared over ('W',) | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
 | `TypeError` | a coefficient is a parameter; build one with `Param.from_dense` or `Param.from_long` and read it at its sets. A product of two expressions is not linear. | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | coefficient (fuel_price / efficiency) is over ('G', 'T'); got ('T', 'G') | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
-| `ZeroDivisionError` | divisor holed carries a zero at 1 coordinate(s), the first at {'G': 'base', 'T': 1}; a quotient there states a coefficient no solver can read | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
+| `ZeroDivisionError` | divisor holed is zero at 1 coordinate(s), first at {'G': 'base', 'T': 1}; remove the zeros or divide by another parameter | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | frames ('G',) and ('T',) share no dimension; there is nothing to align them on | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | constraint 'capacity' has free dimensions ('P',); its condition is over ('W',) | [/guides/conditions](/guides/conditions) |
 | `ValueError` | constraint 'capacity' states its rows with over= and narrows them with where=; state one | [/guides/conditions](/guides/conditions) |
-| `ValueError` | variable 'x' is read at member 't9' of dimension 'T', which that set does not carry | [/guides/fixed-members](/guides/fixed-members) |
+| `ValueError` | variable 'x' is read at member 't9' of dimension 'T'; read it at a member that set contains | [/guides/fixed-members](/guides/fixed-members) |
 | `ValueError` | a lag is a whole number of members; got 1.7 | [/guides/lags](/guides/lags) |
-| `ValueError` | a sum is over the members of ['T'], so it takes the set and not a lag of it; state the lag at the variable's reference | [/guides/lags](/guides/lags) [/reference/expression](/reference/expression) |
-| `ValueError` | parameter 'rate' is read at a lag ['T']; state the lag at the variable's reference, where a coefficient multiplies the row it lands on | [/guides/lags](/guides/lags) |
-| `ValueError` | 'max(gen[G, T]) <= 10': Sum is the one call the spelling carries | [/guides/saving-and-loading](/guides/saving-and-loading) |
+| `ValueError` | a sum is over the members of ['T'] and takes the set, not a lag of it; write the lag at the variable's reference | [/guides/lags](/guides/lags) [/reference/expression](/reference/expression) |
+| `ValueError` | parameter 'rate' is read at a lag ['T']; write the lag at the variable's reference | [/guides/lags](/guides/lags) |
+| `ValueError` | 'max(gen[G, T]) <= 10': Sum is the one call the syntax supports | [/guides/saving-and-loading](/guides/saving-and-loading) |
 | `ValueError` | capital does not fall from base to what follows it | [/models/expansion](/models/expansion) |
 | `ValueError` | frames ('P',) and ('Q',) share no dimension; there is nothing to align them on | [/nimblend/arrays](/nimblend/arrays) |
 | `ValueError` | label column 't' has length 2 and the value column has length 1; they name the same entries | [/nimblend/arrays](/nimblend/arrays) |
@@ -162,22 +162,22 @@ message beside it.
 | `ValueError` | constraint 'supply' has free dimensions ('P',); its right-hand side 'demand' is over ('W',) | [/reference/constraint](/reference/constraint) [/tutorial/constraints](/tutorial/constraints) |
 | `ValueError` | data does not cover ['S'] | [/reference/definition](/reference/definition) |
 | `ValueError` | parameter 'S' is already declared as a set; a name means one symbol, in an expression and in the data | [/reference/definition](/reference/definition) |
-| `TypeError` | a relation has no truth value; a chained comparison such as 0 <= expr <= 10 reads as two comparisons joined by `and` and keeps only the second, so state each bound separately | [/reference/expression](/reference/expression) [/tutorial/constraints](/tutorial/constraints) |
-| `TypeError` | a relation is already an equation and states one bound; compare the expression a second time in its own equation rather than comparing the relation | [/reference/expression](/reference/expression) |
-| `TypeError` | an LP has no row for a strict inequality; state `<=` or `>=`. `min` and `max` compare two expressions this way and are not linear either, so reduce with `Sum` over the sets instead | [/reference/expression](/reference/expression) |
-| `TypeError` | an expression is reduced over the sets it is summed across; state them with `Sum(I, J, expression)` | [/reference/expression](/reference/expression) |
-| `TypeError` | nimopt expresses a linear term, so a variable in a denominator is not one; state the reciprocal as a coefficient the variable multiplies | [/reference/expression](/reference/expression) |
-| `TypeError` | nimopt expresses a linear term, so a variable raised to a power is not one; a coefficient takes the power instead, and a variable multiplies it | [/reference/expression](/reference/expression) |
-| `TypeError` | nimopt expresses a linear term, so the absolute value of one is not linear; reduce with `Sum` over its sets, or state the magnitude with two rows bounding the expression | [/reference/expression](/reference/expression) |
-| `ValueError` | term 'x' already sums over ['T']; a dimension is reduced once, and a second reduction has nothing left to reduce | [/reference/expression](/reference/expression) |
+| `TypeError` | a relation has no truth value; write each bound in its own equation | [/reference/expression](/reference/expression) [/tutorial/constraints](/tutorial/constraints) |
+| `TypeError` | a relation is already an equation with one bound; compare the expression again in its own equation | [/reference/expression](/reference/expression) |
+| `TypeError` | an LP has no row for a strict inequality; write `<=` or `>=`, and reduce with `Sum` in place of `min` or `max` | [/reference/expression](/reference/expression) |
+| `TypeError` | an expression has no absolute value: expressions are linear; bound the expression with two rows, or reduce it with `Sum` over its sets | [/reference/expression](/reference/expression) |
+| `TypeError` | an expression is reduced over the sets it is summed across; name them with `Sum(I, J, expression)` | [/reference/expression](/reference/expression) |
+| `TypeError` | cannot divide by an expression: expressions are linear; declare the reciprocal as a coefficient the variable multiplies | [/reference/expression](/reference/expression) |
+| `TypeError` | cannot raise an expression to a power: expressions are linear; raise a coefficient to the power and multiply it by a variable | [/reference/expression](/reference/expression) |
+| `ValueError` | term 'x' already sums over ['T']; sum over each dimension once | [/reference/expression](/reference/expression) |
 | `ValueError` | constraint 'cap' states where= with a domain that has no name; declare its members as a parameter and name that | [/reference/files](/reference/files) |
 | `ValueError` | parameter 'c' is given columns ['value', 'S']; a table states the dimensions then value: ['S', 'value'] | [/reference/files](/reference/files) |
 | `ValueError` | variable 'x' carries ['bound'], which the format does not; it takes ('sets', 'subset', 'lower', 'upper', 'integer') | [/reference/files](/reference/files) |
-| `ValueError` | constraint 'cap' states no row at {'P': 'p3'}; `absent('cap')` names the rule that dropped it | [/reference/inspection](/reference/inspection) |
+| `ValueError` | constraint 'cap' has no row at {'P': 'p3'}; `absent('cap')` names the rule that dropped it | [/reference/inspection](/reference/inspection) |
 | `ValueError` | parameter 'cost': label column 'P' has length 1 and the value column has length 2; they name the same entries | [/reference/param](/reference/param) |
-| `TypeError` | parameter 'price' carries ('G',) and states no coefficient until it is read; read it at its sets as price[G] | [/reference/param](/reference/param) |
+| `TypeError` | parameter 'price' is over ('G',) and expresses no coefficient until it is read; read it at its sets as price[G] | [/reference/param](/reference/param) |
 | `ValueError` | status is 'infeasible' and the solver reports no feasible point; read `status` before reading values | [/reference/solution](/reference/solution) [/tutorial/solving](/tutorial/solving) |
 | `ValueError` | model 'm' has integer columns and 'highs' reports no duals for it; read primal values only | [/reference/solvers](/reference/solvers) |
-| `TypeError` | parameter 'supply' carries ('P',) and states no coefficient until it is read; read it at its sets as supply[P] | [/tutorial/constraints](/tutorial/constraints) |
+| `TypeError` | parameter 'supply' is over ('P',) and expresses no coefficient until it is read; read it at its sets as supply[P] | [/tutorial/constraints](/tutorial/constraints) |
 | `ValueError` | parameter 'cost' is over sets of shape (2, 3); got values of shape (2, 2) | [/tutorial/sets-and-parameters](/tutorial/sets-and-parameters) |
 <!-- /refusals -->

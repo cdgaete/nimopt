@@ -31,7 +31,7 @@ def test_a_coefficient_spells_with_its_brackets():
 
 def test_a_sum_wraps_each_term_it_reduces():
     G, T, gen, cost, *_ = fleet()
-    # the DSL distributes a sum over its terms, and the spelling states that
+    # the DSL distributes a sum over its terms, and the text shows that
     assert (
         render(Sum(G, cost[G, T] * gen[G, T] + gen[G, T]))
         == "Sum(G, cost[G, T] * gen[G, T]) + Sum(G, gen[G, T])"
@@ -241,7 +241,7 @@ def test_the_dsl_refuses_in_a_file_what_it_refuses_in_python():
         read("gen[G, T] < 5", held)
     with pytest.raises(TypeError, match="not linear"):
         read("gen[G, T] * gen[G, T]", held)
-    with pytest.raises(ValueError, match="takes the set and not a lag"):
+    with pytest.raises(ValueError, match="takes the set, not a lag"):
         read("Sum(T - 1, gen[G, T])", held)
     with pytest.raises(ValueError, match="declared over"):
         read("gen[T, G]", held)

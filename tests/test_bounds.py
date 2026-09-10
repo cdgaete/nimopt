@@ -72,7 +72,7 @@ def test_a_bound_over_more_members_than_a_subset_variable_holds_bounds_those_it_
     cap = Param.from_dense("cap", (S, J), np.array([[1.0, 2.0], [3.0, 4.0]]))
     m.var("x", (S, J), subset=members, upper=cap)
     _, upper = m.column_bounds()
-    # the variable holds (a,p) alone, which the bound carries at 1.0
+    # the variable has the member (a,p) alone, and the bound is 1.0 there
     assert np.array_equal(upper, np.array([1.0]))
 
 
@@ -126,7 +126,7 @@ def test_a_bound_over_a_dimension_the_variable_lacks_is_refused():
     S = Set("S", np.array(["a", "b"]))
     Z = Set("Z", np.array(["z1", "z2"]))
     cap = Param.from_dense("cap", (Z,), np.array([1.0, 2.0]))
-    with pytest.raises(ValueError, match="does not carry"):
+    with pytest.raises(ValueError, match="is not over"):
         m.var("x", (S,), upper=cap)
 
 
@@ -137,7 +137,7 @@ def test_a_bound_missing_a_member_names_it_under_the_product_rule():
         "cap", (S,), {"S": np.array(["p1", "p3"])}, np.array([1.0, 2.0])
     )
     m.var("x", (S,), upper=cap)
-    with pytest.raises(ValueError, match=r"no value for member \('p2',\)"):
+    with pytest.raises(ValueError, match=r"no value at member \('p2',\)"):
         m.column_bounds()
 
 
@@ -153,7 +153,7 @@ def test_a_bound_missing_a_member_names_it_under_the_subset_rule():
         "cap", (S, J), {"S": np.array(["p1"]), "J": np.array(["w1"])}, np.array([1.0])
     )
     m.var("y", (S, J), subset=arcs, upper=cap)
-    with pytest.raises(ValueError, match=r"no value for member \('p2', 'w2'\)"):
+    with pytest.raises(ValueError, match=r"no value at member \('p2', 'w2'\)"):
         m.column_bounds()
 
 

@@ -1,7 +1,7 @@
 """Dimension names nimopt reserves.
 
-A model's arrays carry the modeller's set names plus one of these. They are
-double-underscored so a set of the same name cannot collide with them.
+A model's arrays contain the caller's set names and one of these two names.
+Both names are double-underscored. No ordinary set name collides with them.
 """
 
 COLUMN = "__column__"

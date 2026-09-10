@@ -75,7 +75,7 @@ def test_a_subset_whose_sets_differ_from_the_variable_raises():
     P, W = sets_2x3()
     other = Set("Z", np.array(["z1"]))
     arcs = subset((P, other), {"P": np.array(["p1"]), "Z": np.array(["z1"])})
-    with pytest.raises(ValueError, match="members given"):
+    with pytest.raises(ValueError, match="its members span"):
         Variable("z", (P, W), start=0, total_columns=1, subset=arcs)
 
 
@@ -96,9 +96,7 @@ def test_a_variable_declares_over_declared_sets():
 
 
 def test_a_declared_variable_refuses_to_report_its_columns():
-    with pytest.raises(
-        ValueError, match="variable 'x' is declared and carries no columns"
-    ):
+    with pytest.raises(ValueError, match="variable 'x' is declared and has no columns"):
         Variable("x", (Set("S"),)).n_columns
 
 
@@ -127,8 +125,8 @@ def test_a_bound_variable_still_names_the_parameter_it_took_its_members_from():
 
 
 def test_a_subset_named_as_a_parameter_becomes_its_members_when_bound():
-    # the arcs are the coefficients the parameter carries, so a sparse
-    # variable takes one column per arc and not one per cell of the product
+    # the arcs are the parameter's coefficients; a sparse variable takes one
+    # column per arc and not one per cell of the product
     P, W = Set("P"), Set("W")
     cost = Param("cost", (P, W))
     v = Variable("flow", (P, W), subset=cost)
@@ -147,5 +145,5 @@ def test_a_subset_named_as_a_parameter_that_carries_nothing_yet_is_refused():
     v = Variable("flow", (P, W), subset=cost)
     P._bind(np.array(["p1"]))
     W._bind(np.array(["w1"]))
-    with pytest.raises(ValueError, match="carries no values"):
+    with pytest.raises(ValueError, match="has no values"):
         v._bind(start=0, total_columns=1)

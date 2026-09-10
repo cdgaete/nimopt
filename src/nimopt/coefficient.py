@@ -23,52 +23,39 @@ _BINARY = {
 
 
 def _rendered(operand: Any) -> str:
-    """How an operand reads inside a combination's name."""
+    """Return the text of an operand inside a combination's name."""
     return operand.name if isinstance(operand, Coefficient) else str(operand)
 
 
 def _finite_divisor(divisor: Any, named: str) -> None:
-    """Refuse a divisor that is zero, naming what is divided.
-
-    A numpy scalar divides to infinity where a Python number raises, so the
-    rule is stated rather than left to the arithmetic: a coefficient reaching
-    a solver is finite.
-    """
+    """Raise ZeroDivisionError for a divisor of zero, including a numpy zero."""
     if float(divisor) == 0.0:
         raise ZeroDivisionError(
-            f"{named} is divided by zero; a divisor of zero states a "
-            f"coefficient no solver can read, so it is prepared before it "
-            f"reaches an expression"
+            f"{named} is divided by zero; divide by a non-zero number"
         )
 
 
 def _finite_quotient(array: Any, name: str) -> None:
-    """Refuse a divisor carrying a zero, naming the first coordinate it sits at."""
+    """Raise ZeroDivisionError for a divisor array that contains a zero."""
     at = np.flatnonzero(array.values() == 0.0)
     if at.size:
         where = {
             d: labels[at[0]].item() for d, labels in array.domain().labels().items()
         }
         raise ZeroDivisionError(
-            f"divisor {name} carries a zero at {at.size} coordinate(s), the "
-            f"first at {where}; a quotient there states a coefficient no "
-            f"solver can read"
+            f"divisor {name} is zero at {at.size} coordinate(s), first at "
+            f"{where}; remove the zeros or divide by another parameter"
         )
 
 
 class Coefficient:
-    """What a term reads as its coefficient.
+    """The coefficient of a term: a parameter reference or a combination.
 
-    A `name` to report, the `dims` it carries, the array it `materialise()`s
-    to, and a reading at its sets. A parameter's reference and a combination
-    of coefficients both answer that surface, so a verb reporting a
-    coefficient reads one thing whichever it is handed.
-
-    The arithmetic is here because both answer it alike: a coefficient
-    meeting an expression multiplies its terms, one meeting another
-    coefficient or a number states a combination that computes where the
-    matrix is built, and everything else is declined so the operand on the
-    right is offered its turn.
+    A coefficient has a `name`, the `dims` it is over, an array from
+    `materialise()`, and a reading at its sets. Multiplying a coefficient by
+    an expression multiplies that expression's terms. Combining it with
+    another coefficient or a number returns a `Derived`, computed where the
+    matrix is built. Every other operand returns `NotImplemented`.
     """
 
     __array_ufunc__ = None
@@ -76,46 +63,44 @@ class Coefficient:
 
     @property
     def name(self) -> str:
-        """What this coefficient is called where it is reported."""
+        """Return the name this coefficient is reported under."""
         raise NotImplementedError
 
     @property
     def dims(self) -> tuple[str, ...]:
-        """The dimensions this coefficient carries."""
+        """Return the dimensions this coefficient is over."""
         raise NotImplementedError
 
     def materialise(self) -> Any:
-        """The array this coefficient computes to."""
+        """Return the array this coefficient computes to."""
         raise NotImplementedError
 
     def held(self) -> Any:
-        """The array this coefficient already holds, or None where it holds none.
+        """Return the array this coefficient already stores, or None.
 
-        A parameter that is bound holds its array, so a fact about its values
-        is in hand where the arithmetic is written. A combination holds none:
-        computing one to read a fact off it is the build, done early.
+        A bound parameter stores its array. A combination stores none, and
+        computing it is the build.
         """
         return None
 
     def parameters(self) -> tuple[Any, ...]:
-        """The parameters this coefficient reads, in order of appearance."""
+        """Return the parameters this coefficient reads, in order of appearance."""
         raise NotImplementedError
 
     def __getitem__(self, sets: Any) -> Any:
-        """Refuse a second reading of a coefficient already read."""
+        """Raise TypeError: a coefficient is read at its sets once."""
         raise TypeError(
             f"coefficient {self.name} is already read at {self.dims}; a "
             f"coefficient is read at its sets once"
         )
 
     def _read(self, sets: Any, holder: Any) -> dict[str, Any]:
-        """The members `sets` fixes, checked against the dimensions carried."""
+        """Return the members `sets` fixes, checked against the dimensions."""
         given, shifts, fixed = reference(sets, self.dims)
         if shifts:
             raise ValueError(
                 f"coefficient {self.name} is read at a lag {sorted(shifts)}; "
-                f"state the lag at the variable's reference, where a "
-                f"coefficient multiplies the row it lands on"
+                f"write the lag at the variable's reference"
             )
         if given != self.dims:
             raise ValueError(
@@ -181,42 +166,40 @@ class Coefficient:
 
     def __rpow__(self, other: Any) -> Any:
         raise TypeError(
-            f"a power takes a number, and {_rendered(other)} raised to "
-            f"coefficient {self.name} varies by coordinate; nimopt expresses a "
-            f"linear term, and such a value is data a caller prepares"
+            f"a power takes a number and coefficient {self.name} varies by "
+            f"coordinate; compute {_rendered(other)} raised to it as data and "
+            f"declare a parameter over the result"
         )
 
     def __pow__(self, other: Any) -> Any:
         if not isinstance(other, (int, float, np.number)):
             raise TypeError(
-                f"a power takes a number, and {_rendered(other)} carries "
-                f"dimensions; an exponent that varies by coordinate is data a "
-                f"caller prepares before a parameter exists"
+                f"a power takes a number and {_rendered(other)} is over "
+                f"dimensions; compute the exponent as data and declare a "
+                f"parameter over the result"
             )
         return Derived(self, other, "**")
 
     def __abs__(self) -> Any:
         raise TypeError(
-            f"coefficient {self.name} has no absolute value here; nimopt "
-            f"reduces with `Sum` over its sets, and a magnitude is prepared "
-            f"before a parameter exists"
+            f"coefficient {self.name} has no absolute value here; compute the "
+            f"magnitude as data and declare a parameter over the result"
         )
 
     def _no_row(self, other: Any) -> Any:
-        """Refuse a comparison of two coefficients, declining one that states a row.
+        """Raise TypeError for a comparison of two coefficients.
 
-        An expression or a symbol answers the comparison itself, so this
-        declines and Python offers it the reflected operator, which reverses
-        the sense: `capacity[G, T] >= gen[G, T]` is the row
-        `gen[G, T] <= capacity[G, T]`.
+        Returns `NotImplemented` for an expression or a symbol. Python then
+        applies the reflected operator and the sense reverses:
+        `capacity[G, T] >= gen[G, T]` is the row `gen[G, T] <= capacity[G, T]`.
         """
         from nimopt.term import Expression
 
         if isinstance(other, (Expression, Symbol)):
             return NotImplemented
         raise TypeError(
-            f"coefficient {self.name} compared with {_rendered(other)} states "
-            f"no row; an equation needs a variable on one side of it"
+            f"coefficient {self.name} compared with {_rendered(other)} is not "
+            f"a row; an equation requires a variable on one side"
         )
 
     __le__ = _no_row
@@ -229,47 +212,48 @@ class Coefficient:
 class Derived(Coefficient):
     """Two coefficients and an operator, or one coefficient and a number.
 
-    The combination holds handles: it states its dimensions from its
-    operands' and computes once, where the term it multiplies materialises.
-    A coefficient is therefore written in a definition before any data
-    exists.
+    The combination stores handles. It derives its dimensions from its
+    operands and computes once, where the term it multiplies materialises. A
+    combination is written in a definition before any data exists.
     """
 
     def __init__(self, left: Any, right: Any, symbol: str) -> None:
         self.left = left
         self.right = right
         self.symbol = symbol
-        carried = [
+        operand_dims = [
             operand.dims
             for operand in (left, right)
             if isinstance(operand, Coefficient)
         ]
-        self._dims = combined_dims(*carried) if len(carried) == 2 else carried[0]
+        self._dims = (
+            combined_dims(*operand_dims) if len(operand_dims) == 2 else operand_dims[0]
+        )
 
     @property
     def name(self) -> str:
-        """The arithmetic this combination states, as it was written."""
+        """Return the arithmetic of this combination, as it was written."""
         if self.right is None:
             return f"({self.symbol}{self.left.name})"
         return f"({_rendered(self.left)} {self.symbol} {_rendered(self.right)})"
 
     @property
     def dims(self) -> tuple[str, ...]:
-        """The dimensions the combination carries, read from its operands'.
+        """Return the dimensions of this combination, from its operands'.
 
-        They are settled where the combination is written, so two operands
-        sharing no dimension are refused there rather than at build.
+        The dimensions are computed where the combination is written. Two
+        operands sharing no dimension raise there.
         """
         return self._dims
 
     @property
     def sets(self) -> tuple[Any, ...]:
-        """The sets the dimensions this carries are declared over."""
+        """Return the sets this combination's dimensions are declared over."""
         held = {s.name: s for p in self.parameters() for s in p.sets}
         return tuple(held[d] for d in self.dims)
 
     def parameters(self) -> tuple[Any, ...]:
-        """The parameters this combination reads, in order of appearance."""
+        """Return the parameters this combination reads, in order of appearance."""
         found = {}
         for operand in (self.left, self.right):
             if isinstance(operand, Coefficient):
@@ -281,7 +265,7 @@ class Derived(Coefficient):
         return f"Derived({self.name!r}, {self.dims})"
 
     def materialise(self) -> Any:
-        """The array this combination computes to, over the frame it states."""
+        """Return the array this combination computes to, over its own frame."""
         left = self.left
         if isinstance(left, Coefficient):
             left = left.materialise()
@@ -299,11 +283,10 @@ class Derived(Coefficient):
         return _BINARY[self.symbol](left, right)
 
     def __getitem__(self, sets: Any) -> "DerivedRef":
-        """This combination read at its sets, as a parameter is read at its.
+        """Return this combination read at its sets.
 
-        The reading is checked against the dimensions the combination
-        carries, so a transposed or short spelling is refused where it is
-        written rather than a layer away.
+        The reading is checked against the dimensions of the combination. A
+        transposed or short reading raises where it is written.
         """
         return DerivedRef(self, self._read(sets, self))
 
@@ -317,28 +300,28 @@ class DerivedRef(Coefficient):
 
     @property
     def name(self) -> str:
-        """The arithmetic the combination this reads states."""
+        """Return the arithmetic of the combination this reference reads."""
         return self.derived.name
 
     @property
     def dims(self) -> tuple[str, ...]:
-        """The dimensions the reference carries, without those it fixes."""
+        """Return the dimensions of this reference, without those it fixes."""
         return tuple(d for d in self.derived.dims if d not in self.fixed)
 
     @property
     def sets(self) -> tuple[Any, ...]:
-        """The sets the dimensions this carries are declared over."""
+        """Return the sets this reference's dimensions are declared over."""
         return self.derived.sets
 
     def parameters(self) -> tuple[Any, ...]:
-        """The parameters the combination this reads carries."""
+        """Return the parameters the combination this reference reads."""
         return self.derived.parameters()
 
     def __repr__(self) -> str:
         return f"DerivedRef({self.name!r}, {self.dims})"
 
     def materialise(self) -> Any:
-        """The combination's array, read at the members this reference fixes."""
+        """Return the combination's array, read at the members this fixes."""
         array = self.derived.materialise()
         if not self.fixed:
             return array

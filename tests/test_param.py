@@ -66,7 +66,7 @@ def test_a_param_wrapping_an_array_of_the_wrong_dimensions_raises():
 
     P, W = sets_2x3()
     arr = from_dense(np.zeros((2, 3)), {"A": np.arange(2), "B": np.arange(3)})
-    with pytest.raises(ValueError, match="dimensions"):
+    with pytest.raises(ValueError, match="its array is over"):
         Param("c", (P, W), arr)
 
 
@@ -103,8 +103,8 @@ def test_a_solved_models_values_become_another_models_coefficients():
         second.set_objective(Sum(T, priced[T] * y[T]))
         assert second.solve().objective == pytest.approx(expected)
 
-    # the subset primal reaches a constraint by the same route. The columns
-    # read in step, so the subset names (0, g1) and (1, g2) -- two members
+    # the subset primal enters a constraint by the same route. The columns
+    # read in step: the subset names (0, g1) and (1, g2) -- two members
     members = solved.primal("z").as_empty()
     assert Param("held", (T, G), members).nnz == 2
 
@@ -119,7 +119,7 @@ def test_a_parameter_declares_without_values():
 def test_a_declared_parameter_refuses_to_materialise():
     p = Param("cost", (Set("G"),))
     with pytest.raises(
-        ValueError, match="parameter 'cost' is declared and carries no values"
+        ValueError, match="parameter 'cost' is declared and has no values"
     ):
         p.materialise()
 
@@ -138,5 +138,5 @@ def test_a_declared_parameter_refuses_wherever_its_values_are_read():
     # caller meets as a TypeError naming NoneType rather than the parameter
     G = Set("G")
     p = Param("cost", (G,))
-    with pytest.raises(ValueError, match="carries no values"):
+    with pytest.raises(ValueError, match="has no values"):
         p[G].materialise()

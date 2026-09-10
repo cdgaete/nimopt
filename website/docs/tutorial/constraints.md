@@ -124,7 +124,7 @@ m.constraint("supply", Sum(W, x[P, W]) <= supply)
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: parameter 'supply' carries ('P',) and states no coefficient until it is read; read it at its sets as supply[P]
+TypeError: parameter 'supply' is over ('P',) and expresses no coefficient until it is read; read it at its sets as supply[P]
 ```
 
 </details>
@@ -180,7 +180,7 @@ x = m.var("x", (P, W))
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: a relation has no truth value; a chained comparison such as 0 <= expr <= 10 reads as two comparisons joined by `and` and keeps only the second, so state each bound separately
+TypeError: a relation has no truth value; write each bound in its own equation
 ```
 
 </details>

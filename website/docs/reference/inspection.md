@@ -83,7 +83,7 @@ m.row("cap", P="p3")
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: constraint 'cap' states no row at {'P': 'p3'}; `absent('cap')` names the rule that dropped it
+ValueError: constraint 'cap' has no row at {'P': 'p3'}; `absent('cap')` names the rule that dropped it
 ```
 
 </details>

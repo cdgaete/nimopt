@@ -55,14 +55,14 @@ def test_each_sense_is_read_from_the_bounds_the_row_carries():
 
 
 def test_a_bound_pair_no_constraint_writes_is_refused_rather_than_named():
-    # write_bounds writes -inf, +inf or an equal pair, so a finite unequal
-    # pair reaches no row; naming it would be vocabulary nothing produces
+    # write_bounds writes -inf, +inf or an equal pair; a finite unequal pair
+    # belongs to no row the builder writes
     from nimopt.row import _sense_of
 
     assert _sense_of(-np.inf, 4.0) == "<="
     assert _sense_of(1.0, np.inf) == ">="
     assert _sense_of(2.0, 2.0) == "=="
-    with pytest.raises(ValueError, match="no constraint states a range"):
+    with pytest.raises(ValueError, match="are a range"):
         _sense_of(1.0, 4.0)
 
 
@@ -74,11 +74,11 @@ def test_a_row_over_several_dimensions_names_every_one_of_them():
     assert row.terms[0].coefficient == -1.0
 
 
-def test_a_row_the_constraint_does_not_state_is_refused():
-    # the live rows are stated for the first hour alone, so naming another is
-    # a question absent() answers and row() cannot
+def test_a_row_the_constraint_does_not_contain_raises():
+    # the live rows cover the first hour alone; absent() reports the rule
+    # that dropped any other row, and row() does not
     m = nodal().build(nodal_data())
-    with pytest.raises(ValueError, match="states no row at"):
+    with pytest.raises(ValueError, match="has no row at"):
         m.row("live", B="b0", T=2)
 
 
@@ -94,7 +94,7 @@ def test_a_row_of_a_constraint_that_is_not_declared_is_refused():
 
 
 def test_an_empty_row_stated_by_over_reads_back_with_no_terms():
-    # the balance states every bus-hour, and no link touches the third
+    # the balance covers every bus-hour, and no link touches the third
     row = nodal().build(nodal_data()).row("balance", B="b0", T=2)
     assert row.terms == ()
     assert row.sense == "=="
@@ -113,7 +113,7 @@ def test_every_rows_sense_is_read_by_one_rule():
 def test_a_range_is_refused_wherever_the_rule_is_read():
     from nimopt.row import senses
 
-    with pytest.raises(ValueError, match="no constraint states a range"):
+    with pytest.raises(ValueError, match="are a range"):
         senses(np.array([-np.inf, 1.0]), np.array([4.0, 4.0]))
 
 

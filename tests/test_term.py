@@ -51,14 +51,14 @@ def test_a_coefficient_over_fewer_dimensions_than_the_variable_is_accepted():
 def test_a_coefficient_over_a_dimension_the_variable_lacks_widens_the_term():
     _, P, W, _, y, c, _ = model()
     term = (c[P, W] * y[P]).terms[0]
-    # the coefficient states which W rows read each of y's P columns
+    # the coefficient pairs each of y's P columns to the W rows that read it
     assert term.carried_dims == ("P", "W")
     assert term.free_dims == ("P", "W")
 
 
 def test_a_second_coefficient_on_one_term_multiplies_the_two():
-    # a linear term carries one coefficient, and a product of coefficients
-    # is one: the outer factor leads, as it was written
+    # a linear term has one coefficient, and a product of coefficients is
+    # one: the outer factor comes first, as it was written
     _, P, W, x, _, c, a = model()
     coefficient = (a[P] * (c[P, W] * x[P, W])).terms[0].coefficient
     assert coefficient.name == "(a * c)"
@@ -82,7 +82,7 @@ def test_summing_several_dimensions_in_one_call():
 
 def test_summing_a_dimension_no_term_carries_raises():
     _, P, W, _, y, _, a = model()
-    with pytest.raises(ValueError, match="does not carry"):
+    with pytest.raises(ValueError, match="is not over"):
         Sum(W, a[P] * y[P])
 
 
@@ -169,7 +169,7 @@ def test_an_expression_is_not_a_dictionary_key():
 
 def test_a_chained_comparison_raises_rather_than_keeping_half_of_itself():
     _, P, _, _, y, _, _ = model()
-    with pytest.raises(TypeError, match="two comparisons"):
+    with pytest.raises(TypeError, match="each bound in its own equation"):
         0.0 <= y[P] <= 10.0
 
 

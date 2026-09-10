@@ -17,9 +17,10 @@ if TYPE_CHECKING:
 class Param(Symbol):
     """Coefficients over a set product.
 
-    A `Param` is an array with a name: its values reach a constraint through
-    the array's own product and reduction, with no marshalling, which is what
-    lets a solved model's duals become another model's coefficients.
+    A `Param` is a named `nimblend` array. Its values enter a constraint
+    through the array's own product and reduction, with no conversion step.
+    A solved model's duals are usable directly as another model's
+    coefficients.
     """
 
     def __init__(
@@ -33,20 +34,20 @@ class Param(Symbol):
 
     @property
     def declared(self) -> bool:
-        """Whether this parameter is still awaiting its values."""
+        """True where this parameter has no values."""
         return self.array is None
 
     def _bind(self, array: SparseArray) -> None:
         if array.dims != self.dims:
             raise ValueError(
-                f"parameter {self.name!r} is declared over dimensions "
-                f"{self.dims}; its array carries {array.dims}"
+                f"parameter {self.name!r} is declared over {self.dims} and its "
+                f"array is over {array.dims}; bind an array over {self.dims}"
             )
         if array.absence != "empty":
             raise ValueError(
-                f"a coefficient absent from parameter {self.name!r} is a term "
-                f"that is not there, so its array declares absence 'empty'; "
-                f"got {array.absence!r}"
+                f"parameter {self.name!r} is bound to an array declaring "
+                f"absence {array.absence!r}; bind an array declaring absence "
+                f"'empty'"
             )
         self.array = array
 
@@ -54,11 +55,11 @@ class Param(Symbol):
     def from_dense(
         cls, name: str, sets: Iterable[Any], values: npt.ArrayLike
     ) -> "Param":
-        """Every cell of `values` as a coefficient.
+        """Return a parameter holding every cell of `values` as a coefficient.
 
-        The cells are read in row-major order, which is the order the full
-        product carries its members, so the values state the grid without an
-        index being built for them.
+        `values` has the shape of the set product. The cells are read in
+        row-major order, the order of the full product's members. Raises
+        ValueError for any other shape.
         """
         sets = tuple(sets)
         values = np.array(values, dtype=np.float64)
@@ -80,11 +81,9 @@ class Param(Symbol):
         columns: Mapping[str, npt.ArrayLike],
         values: npt.ArrayLike,
     ) -> "Param":
-        """Coefficients from one label column per set and one value column.
+        """Return a parameter from one label column per set and one value column.
 
-        Each label resolves through the coordinate its set already holds, so
-        a dimension's labels are looked up once however many parameters are
-        declared over it.
+        Each label resolves through the coordinate its set already stores.
         """
         sets = tuple(sets)
         dims = tuple(s.name for s in sets)
@@ -100,10 +99,11 @@ class Param(Symbol):
         return tuple(s.name for s in self.sets)
 
     def __getitem__(self, sets: Any) -> "ParamRef":
-        """A reference to this parameter, checking the sets given.
+        """Return a reference to this parameter at the sets given.
 
-        A label in place of a set fixes that dimension at one member, so the
-        coefficient is read there and the dimension leaves the reference.
+        A label in place of a set fixes that dimension at one member, and the
+        reference is not over that dimension. Raises ValueError for a lag and
+        for a set list that differs from the declared dimensions.
         """
         from nimopt.sets import check_members, reference
         from nimopt.term import ParamRef
@@ -112,8 +112,7 @@ class Param(Symbol):
         if shifts:
             raise ValueError(
                 f"parameter {self.name!r} is read at a lag {sorted(shifts)}; "
-                f"state the lag at the variable's reference, where a "
-                f"coefficient multiplies the row it lands on"
+                f"write the lag at the variable's reference"
             )
         if given != self.dims:
             raise ValueError(
@@ -123,21 +122,24 @@ class Param(Symbol):
         return ParamRef(self, fixed)
 
     def materialise(self) -> SparseArray:
-        """The array this parameter carries."""
+        """Return the array bound to this parameter.
+
+        Raises ValueError where the parameter is declared and has no array.
+        """
         if self.array is None:
             raise ValueError(
-                f"parameter {self.name!r} is declared and carries no values; "
+                f"parameter {self.name!r} is declared and has no values; "
                 f"bind it before reading them"
             )
         return self.array
 
     @property
     def nnz(self) -> int:
-        """Number of coefficients this parameter carries."""
+        """Number of coefficients this parameter contains."""
         return self.materialise().nnz
 
     kind = "parameter"
-    states = "coefficient"
+    expresses = "coefficient"
 
     def __repr__(self) -> str:
         if self.declared:

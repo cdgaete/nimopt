@@ -73,7 +73,7 @@ def test_a_set_declares_without_members():
 
 def test_a_declared_set_refuses_to_report_a_size():
     # a size of zero is a fact a caller acts on; an unbound set has none
-    with pytest.raises(ValueError, match="set 'S' is declared and carries no members"):
+    with pytest.raises(ValueError, match="set 'S' is declared and has no members"):
         len(Set("S"))
 
 
