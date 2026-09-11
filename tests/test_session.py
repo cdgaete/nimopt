@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 
@@ -133,16 +135,20 @@ def test_a_model_with_no_upper_bound_and_a_negative_cost_is_unbounded():
 def test_an_unbounded_model_reads_no_objective_no_primal_and_no_gap():
     # HiGHS reports the zero vector as a primal-feasible point here; the
     # reads raise on the status, and the three adapters then agree
+    message = re.escape(
+        "status is 'unbounded' and the objective has no finite optimum; "
+        "read `Session.diagnose()` for the ray"
+    )
     solution = unbounded().solve()
     assert solution.status == "unbounded"
     assert solution.feasible is True
     assert solution.bound is None
     assert repr(solution) == "Solution('unbounded', no values)"
-    with pytest.raises(ValueError, match="the objective has no finite optimum"):
+    with pytest.raises(ValueError, match=message):
         solution.objective
-    with pytest.raises(ValueError, match="the objective has no finite optimum"):
+    with pytest.raises(ValueError, match=message):
         solution.primal("x")
-    with pytest.raises(ValueError, match="the objective has no finite optimum"):
+    with pytest.raises(ValueError, match=message):
         solution.gap
 
 

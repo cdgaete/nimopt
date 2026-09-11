@@ -191,6 +191,33 @@ def test_a_repr_reports_the_objective_the_bound_and_the_gap():
     )
 
 
+def test_a_status_with_no_finite_optimum_names_what_a_caller_reads():
+    # no solver here reaches unbounded_or_infeasible deterministically, so
+    # the Solution is built over the fields a read looks at. `unbounded` is
+    # solved through HiGHS in test_session.py
+    m = transport()
+    either = solution_over(m, "unbounded_or_infeasible", False, 0.0, None)
+    assert repr(either) == "Solution('unbounded_or_infeasible', no values)"
+    message = re.escape(
+        "status is 'unbounded_or_infeasible' and the model has no finite "
+        "optimum; read `status` and `Session.diagnose()`"
+    )
+    with pytest.raises(ValueError, match=message):
+        either.objective
+    with pytest.raises(ValueError, match=message):
+        either.primal("x")
+    with pytest.raises(ValueError, match=message):
+        either.gap
+    ray = solution_over(m, "unbounded", True, 0.0, None)
+    assert repr(ray) == "Solution('unbounded', no values)"
+    ray_message = re.escape(
+        "status is 'unbounded' and the objective has no finite optimum; "
+        "read `Session.diagnose()` for the ray"
+    )
+    with pytest.raises(ValueError, match=ray_message):
+        ray.objective
+
+
 def test_a_gap_over_a_zero_objective_is_zero_or_infinite():
     m = transport()
     assert solution_over(m, "time_limit", True, 0.0, 0.0).gap == 0.0

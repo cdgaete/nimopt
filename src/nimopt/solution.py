@@ -67,10 +67,15 @@ class Solution:
 
     def _reject_unbounded(self) -> None:
         """Raise ValueError at a status reporting no finite optimum."""
-        if self.status in NO_FINITE_OPTIMUM:
+        if self.status == "unbounded":
             raise ValueError(
-                f"status is {self.status!r} and the objective has no finite "
-                f"optimum; read `Session.diagnose()` for the ray"
+                "status is 'unbounded' and the objective has no finite "
+                "optimum; read `Session.diagnose()` for the ray"
+            )
+        if self.status == "unbounded_or_infeasible":
+            raise ValueError(
+                "status is 'unbounded_or_infeasible' and the model has no "
+                "finite optimum; read `status` and `Session.diagnose()`"
             )
 
     def _require_feasible(self) -> None:
