@@ -144,7 +144,7 @@ beside it.
 | `TypeError` | a coefficient is a parameter; build one with `Param.from_dense` or `Param.from_long` and read it at its sets. A product of two expressions is not linear. | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | coefficient (fuel_price / efficiency) is over ('G', 'T'); got ('T', 'G') | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ZeroDivisionError` | divisor holed is zero at 1 coordinate(s), first at {'G': 'base', 'T': 1}; remove the zeros or divide by another parameter | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
-| `ValueError` | frames ('G',) and ('T',) share no dimension; expand one operand over the dimensions of the other first | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
+| `ValueError` | frames ('G',) and ('T',) share no dimension; pass operands that share a dimension | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | constraint 'capacity' has free dimensions ('P',); its condition is over ('W',) | [/guides/conditions](/guides/conditions) |
 | `ValueError` | constraint 'capacity' is given over= and where= together; pass one of them | [/guides/conditions](/guides/conditions) |
 | `ValueError` | variable 'x' is read at member 't9' of dimension 'T'; read it at a member that set contains | [/guides/fixed-members](/guides/fixed-members) |
@@ -154,7 +154,7 @@ beside it.
 | `ValueError` | 'max(gen[G, T]) <= 10': the syntax supports one call; write Sum | [/guides/saving-and-loading](/guides/saving-and-loading) |
 | `ValueError` | capital does not fall from base to what follows it; pass a capital cost that falls across the merit order | [/models/expansion](/models/expansion) |
 | `ValueError` | absence is 'unknown' and the array has no value at 3 of 4 coordinates; pass fill=<value> to to_dense() | [/nimblend/arrays](/nimblend/arrays) |
-| `ValueError` | frames ('P',) and ('Q',) share no dimension; expand one operand over the dimensions of the other first | [/nimblend/arrays](/nimblend/arrays) |
+| `ValueError` | frames ('P',) and ('Q',) share no dimension; pass operands that share a dimension | [/nimblend/arrays](/nimblend/arrays) |
 | `ValueError` | label column 't' has length 2 and the value column has length 1; pass columns of equal length | [/nimblend/arrays](/nimblend/arrays) |
 | `ValueError` | 3 member(s) numbered from 4 end at position 6, and dimension 'k' has extent 6; pass a smaller start or a larger coord | [/nimblend/domains](/nimblend/domains) |
 | `ValueError` | a domain of 3 member(s) requires values of shape (3,); got shape (2,) | [/nimblend/domains](/nimblend/domains) |
@@ -2900,7 +2900,7 @@ nimblend.combined_dims(("P",), ("Q",))
 Raises ValueError:
 
 ```text
-ValueError: frames ('P',) and ('Q',) share no dimension; expand one operand over the dimensions of the other first
+ValueError: frames ('P',) and ('Q',) share no dimension; pass operands that share a dimension
 ```
 
 ## Densifying an unknown array
@@ -5126,7 +5126,7 @@ over_g[G] * over_t[T]
 Raises ValueError:
 
 ```text
-ValueError: frames ('G',) and ('T',) share no dimension; expand one operand over the dimensions of the other first
+ValueError: frames ('G',) and ('T',) share no dimension; pass operands that share a dimension
 ```
 
 **A coefficient never adds a column the variable does not have.** The

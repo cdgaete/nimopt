@@ -317,7 +317,7 @@ nimblend.combined_dims(("P",), ("Q",))
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: frames ('P',) and ('Q',) share no dimension; expand one operand over the dimensions of the other first
+ValueError: frames ('P',) and ('Q',) share no dimension; pass operands that share a dimension
 ```
 
 </details>
