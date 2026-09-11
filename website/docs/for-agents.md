@@ -150,7 +150,7 @@ beside it.
 | `TypeError` | a coefficient is a parameter; build one with `Param.from_dense` or `Param.from_long` and read it at its sets. A product of two expressions is not linear. | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | coefficient (fuel_price / efficiency) is over ('G', 'T'); got ('T', 'G') | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ZeroDivisionError` | divisor holed is zero at 1 coordinate(s), first at {'G': 'base', 'T': 1}; remove the zeros or divide by another parameter | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
-| `ValueError` | frames ('G',) and ('T',) share no dimension; there is nothing to align them on | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
+| `ValueError` | frames ('G',) and ('T',) share no dimension; expand one operand over the dimensions of the other first | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | constraint 'capacity' has free dimensions ('P',); its condition is over ('W',) | [/guides/conditions](/guides/conditions) |
 | `ValueError` | constraint 'capacity' is given over= and where= together; pass one of them | [/guides/conditions](/guides/conditions) |
 | `ValueError` | variable 'x' is read at member 't9' of dimension 'T'; read it at a member that set contains | [/guides/fixed-members](/guides/fixed-members) |
@@ -159,11 +159,11 @@ beside it.
 | `ValueError` | parameter 'rate' is read at a lag ['T']; write the lag at the variable's reference | [/guides/lags](/guides/lags) |
 | `ValueError` | 'max(gen[G, T]) <= 10': the syntax supports one call; write Sum | [/guides/saving-and-loading](/guides/saving-and-loading) |
 | `ValueError` | capital does not fall from base to what follows it; pass a capital cost that falls across the merit order | [/models/expansion](/models/expansion) |
-| `ValueError` | frames ('P',) and ('Q',) share no dimension; there is nothing to align them on | [/nimblend/arrays](/nimblend/arrays) |
-| `ValueError` | label column 't' has length 2 and the value column has length 1; they name the same entries | [/nimblend/arrays](/nimblend/arrays) |
-| `ValueError` | this array declares absence 'unknown' and does not carry every coordinate of its frame, so densifying must state fill=<value> to place at the rest | [/nimblend/arrays](/nimblend/arrays) [/tutorial/reading-the-answer](/tutorial/reading-the-answer) |
-| `ValueError` | 3 member(s) numbered from 4 reach position 6, and dimension 'k' spans 6 | [/nimblend/domains](/nimblend/domains) |
-| `ValueError` | a domain of 3 member(s) takes one value each, as a column of that length; got shape (2,) | [/nimblend/domains](/nimblend/domains) |
+| `ValueError` | absence is 'unknown' and the array has no value at 3 of 4 coordinates; pass fill=<value> to to_dense() | [/nimblend/arrays](/nimblend/arrays) |
+| `ValueError` | frames ('P',) and ('Q',) share no dimension; expand one operand over the dimensions of the other first | [/nimblend/arrays](/nimblend/arrays) |
+| `ValueError` | label column 't' has length 2 and the value column has length 1; pass columns of equal length | [/nimblend/arrays](/nimblend/arrays) |
+| `ValueError` | 3 member(s) numbered from 4 end at position 6, and dimension 'k' has extent 6; pass a smaller start or a larger coord | [/nimblend/domains](/nimblend/domains) |
+| `ValueError` | a domain of 3 member(s) requires values of shape (3,); got shape (2,) | [/nimblend/domains](/nimblend/domains) |
 | `ValueError` | constraint 'supply' has free dimensions ('P',); its right-hand side 'demand' is over ('W',) | [/reference/constraint](/reference/constraint) [/tutorial/constraints](/tutorial/constraints) |
 | `ValueError` | data does not cover ['S']; add an entry for each | [/reference/definition](/reference/definition) |
 | `ValueError` | parameter 'S' is already declared as a set; declare another name | [/reference/definition](/reference/definition) |
@@ -179,10 +179,11 @@ beside it.
 | `ValueError` | parameter 'c' is given columns ['value', 'S']; a table lists the dimensions then value: ['S', 'value'] | [/reference/files](/reference/files) |
 | `ValueError` | variable 'x' contains the unknown keys ['bound']; write only ('sets', 'subset', 'lower', 'upper', 'integer') | [/reference/files](/reference/files) |
 | `ValueError` | constraint 'cap' has no row at {'P': 'p3'}; read `absent('cap')` for the rule that dropped it | [/reference/inspection](/reference/inspection) |
-| `ValueError` | parameter 'cost': label column 'P' has length 1 and the value column has length 2; they name the same entries | [/reference/param](/reference/param) |
+| `ValueError` | parameter 'cost': label column 'P' has length 1 and the value column has length 2; pass columns of equal length | [/reference/param](/reference/param) |
 | `TypeError` | parameter 'price' is over ('G',) and expresses no coefficient until it is read; read it at its sets as price[G] | [/reference/param](/reference/param) |
 | `ValueError` | status is 'infeasible' and the solver reports no feasible point; read `status` before reading values | [/reference/solution](/reference/solution) [/tutorial/solving](/tutorial/solving) |
 | `ValueError` | model 'm' has integer columns and 'highs' reports no duals for it; read primal values only | [/reference/solvers](/reference/solvers) |
 | `TypeError` | parameter 'supply' is over ('P',) and expresses no coefficient until it is read; read it at its sets as supply[P] | [/tutorial/constraints](/tutorial/constraints) |
+| `ValueError` | absence is 'unknown' and the array has no value at 1 of 6 coordinates; pass fill=<value> to to_dense() | [/tutorial/reading-the-answer](/tutorial/reading-the-answer) |
 | `ValueError` | parameter 'cost' is over sets of shape (2, 3); got values of shape (2, 2) | [/tutorial/sets-and-parameters](/tutorial/sets-and-parameters) |
 <!-- /refusals -->

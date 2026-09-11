@@ -105,7 +105,7 @@ over_g[G] * over_t[T]
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: frames ('G',) and ('T',) share no dimension; there is nothing to align them on
+ValueError: frames ('G',) and ('T',) share no dimension; expand one operand over the dimensions of the other first
 ```
 
 </details>

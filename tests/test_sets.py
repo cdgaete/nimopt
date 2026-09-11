@@ -33,7 +33,7 @@ def test_a_subsets_members_read_back_in_labels():
 
 def test_a_member_named_twice_raises():
     P, W = sets()
-    with pytest.raises(ValueError, match="named twice"):
+    with pytest.raises(ValueError, match="appears twice"):
         subset((P, W), {"P": np.array(["p1", "p1"]), "W": np.array(["w1", "w1"])})
 
 

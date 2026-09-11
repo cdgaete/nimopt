@@ -265,7 +265,7 @@ nimblend.Domain.full(("t",), coords).array(np.array([1.0, 2.0]))
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: a domain of 3 member(s) takes one value each, as a column of that length; got shape (2,)
+ValueError: a domain of 3 member(s) requires values of shape (3,); got shape (2,)
 ```
 
 </details>
@@ -320,7 +320,7 @@ members.identity("k", nimblend.ProductCoord((6,)), start=4)
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: 3 member(s) numbered from 4 reach position 6, and dimension 'k' spans 6
+ValueError: 3 member(s) numbered from 4 end at position 6, and dimension 'k' has extent 6; pass a smaller start or a larger coord
 ```
 
 </details>

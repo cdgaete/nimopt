@@ -154,7 +154,7 @@ solution.primal("x").to_dense()
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: this array declares absence 'unknown' and does not carry every coordinate of its frame, so densifying must state fill=<value> to place at the rest
+ValueError: absence is 'unknown' and the array has no value at 1 of 6 coordinates; pass fill=<value> to to_dense()
 ```
 
 </details>

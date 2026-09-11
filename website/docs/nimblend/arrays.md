@@ -238,7 +238,7 @@ nimblend.from_long(
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: label column 't' has length 2 and the value column has length 1; they name the same entries
+ValueError: label column 't' has length 2 and the value column has length 1; pass columns of equal length
 ```
 
 </details>
@@ -317,7 +317,7 @@ nimblend.combined_dims(("P",), ("Q",))
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: frames ('P',) and ('Q',) share no dimension; there is nothing to align them on
+ValueError: frames ('P',) and ('Q',) share no dimension; expand one operand over the dimensions of the other first
 ```
 
 </details>
@@ -353,7 +353,7 @@ partial.to_dense()
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: this array declares absence 'unknown' and does not carry every coordinate of its frame, so densifying must state fill=<value> to place at the rest
+ValueError: absence is 'unknown' and the array has no value at 3 of 4 coordinates; pass fill=<value> to to_dense()
 ```
 
 </details>
