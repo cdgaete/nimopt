@@ -56,7 +56,7 @@ def test_gurobi_refuses_a_mixed_integer_models_duals_too():
     solved = model.solve(solver="gurobi")
     assert solved.status == "optimal"
     with pytest.raises(ValueError, match="reports no duals for it"):
-        solved.dual("demand")
+        solved.dual("balance")
 
 
 def test_a_conflict_from_gurobi_is_native_and_reads_as_a_row():

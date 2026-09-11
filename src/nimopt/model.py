@@ -283,16 +283,49 @@ class Model:
             mapping["data"] = to_inline(self)
         return dumps(mapping, instructions)
 
+    def _variable(self, name: str, other: str | None = None) -> Variable:
+        """Return the named variable.
+
+        Raises KeyError for a name that is not a declared variable. The message
+        lists the declared variables. `other` is the action the message gives
+        where `name` is a constraint.
+        """
+        if name in self.variables:
+            return self.variables[name]
+        valid = f"use one of {tuple(self.variables)}"
+        if name in self.constraints:
+            raise KeyError(
+                f"{name!r} is a constraint, not a variable; {other or valid}"
+            )
+        raise KeyError(f"model {self.name!r} has no variable {name!r}; {valid}")
+
+    def _constraint(self, name: str, other: str | None = None) -> Constraint:
+        """Return the named constraint.
+
+        Raises KeyError for a name that is not a declared constraint. The
+        message lists the declared constraints. `other` is the action the
+        message gives where `name` is a variable.
+        """
+        if name in self.constraints:
+            return self.constraints[name]
+        valid = f"use one of {tuple(self.constraints)}"
+        if name in self.variables:
+            raise KeyError(
+                f"{name!r} is a variable, not a constraint; {other or valid}"
+            )
+        raise KeyError(f"model {self.name!r} has no constraint {name!r}; {valid}")
+
     def row(self, name: str, **coords: Any) -> "Row":
         """Return one row of this model's matrix, at the coordinate given.
 
         The row is read from the assembled matrix, and is the row the solver
-        is given. A coordinate the constraint has no row at raises, and the
+        is given. Raises KeyError for a name that is not a declared
+        constraint. A coordinate the constraint has no row at raises, and the
         message refers to `absent`.
         """
         from nimopt.row import position_of, read
 
-        constraint = self.constraints[name]
+        constraint = self._constraint(name)
         assembled = self.assemble()
         at = assembled.row_of(name).start + position_of(constraint, coords)
         return read(self, assembled, at)
@@ -302,12 +335,13 @@ class Model:
 
         A dropped row leaves no trace in the matrix. This runs that one
         constraint's shape pass again with a recorder attached. The model and
-        the rows already built are unchanged.
+        the rows already built are unchanged. Raises KeyError for a name that
+        is not a declared constraint.
         """
         from nimopt.absence import Recorder
         from nimopt.constraint import narrow
 
-        constraint = self.constraints[name]
+        constraint = self._constraint(name)
         record = Recorder()
         narrow(constraint, record)
         return record.absence(name)
@@ -511,7 +545,15 @@ class Assembled:
         return self.matrix.shape[1]
 
     def row_of(self, name: str) -> slice:
-        """Return the range of rows the named constraint occupies."""
+        """Return the range of rows the named constraint occupies.
+
+        Raises KeyError for a name that is not a constraint of the matrix.
+        """
+        if name not in self._rows_of:
+            raise KeyError(
+                f"assembled matrix has no constraint {name!r}; use one of "
+                f"{tuple(self._rows_of)}"
+            )
         return self._rows_of[name]
 
     def to_dense(self) -> npt.NDArray[np.float64]:

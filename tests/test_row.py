@@ -89,7 +89,7 @@ def test_a_coordinate_the_constraint_is_not_free_over_is_refused():
 
 
 def test_a_row_of_a_constraint_that_is_not_declared_is_refused():
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError, match="has no constraint 'nowhere'; use one of"):
         dispatch().build(data()).row("nowhere", snapshot=0)
 
 

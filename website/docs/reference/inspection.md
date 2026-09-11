@@ -62,7 +62,9 @@ supply[P='porto']  row 1
 <!-- /output -->
 
 A coordinate at which the constraint has no row raises `ValueError`; the
-message points to the function that reports why it is missing.
+message points to the function that reports why it is missing. `row` and
+`absent` raise `KeyError` for a name that is not a declared constraint, and
+the message lists the declared constraints.
 
 ```python raises=ValueError
 import numpy as np

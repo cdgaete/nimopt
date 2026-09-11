@@ -28,6 +28,10 @@ A solve stopped at a limit reports `feasible` True where the solver found a
 point, and those reads then return it. `dual` raises `ValueError` where
 `status` is not `optimal`. Read `status` first.
 
+`primal` and `dual` raise `KeyError` for a name the model does not declare.
+The message lists the declared names of that kind, or reports that the name
+is the other kind and which method reads it.
+
 `bound` is a lower bound on the optimal objective under sense `min` and an
 upper bound under sense `max`. It is `None` where the solver reports none.
 For a model without integer columns it is the objective at status `optimal`

@@ -144,7 +144,7 @@ def test_a_constraint_that_drops_nothing_says_so_without_an_empty_rule():
 
 
 def test_asking_a_constraint_that_is_not_declared_is_refused():
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError, match="has no constraint 'nowhere'; use one of"):
         nodal().build(nodal_data()).absent("nowhere")
 
 

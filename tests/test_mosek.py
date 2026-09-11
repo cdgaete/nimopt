@@ -112,7 +112,7 @@ def test_mosek_refuses_a_mixed_integer_models_duals_too():
     solved = model.solve(solver="mosek")
     assert solved.status == "optimal"
     with pytest.raises(ValueError, match="reports no duals for it"):
-        solved.dual("demand")
+        solved.dual("balance")
 
 
 @licensed

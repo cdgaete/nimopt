@@ -125,11 +125,12 @@ class Solution:
     def primal(self, name: str) -> DenseArray | SparseArray:
         """Return the named variable's values over its own sets.
 
-        Raises ValueError where `feasible` is False. Raises ValueError at
-        status `unbounded` and `unbounded_or_infeasible`.
+        Raises KeyError for a name that is not a declared variable. Raises
+        ValueError where `feasible` is False. Raises ValueError at status
+        `unbounded` and `unbounded_or_infeasible`.
         """
+        variable = self.model._variable(name, "read it with dual()")
         self._require_feasible()
-        variable = self.model.variables[name]
         at = slice(variable.start, variable.start + variable.n_columns)
         values = self._col_value[at]
         if variable.subset is None:
@@ -142,9 +143,11 @@ class Solution:
     def dual(self, name: str) -> DenseArray | SparseArray:
         """Return the named constraint's duals over its free sets.
 
-        Raises ValueError where `status` is not `optimal`. Raises ValueError
-        for a model with integer columns.
+        Raises KeyError for a name that is not a declared constraint. Raises
+        ValueError where `status` is not `optimal`. Raises ValueError for a
+        model with integer columns.
         """
+        constraint = self.model._constraint(name, "read it with primal()")
         if self.status != "optimal":
             raise ValueError(
                 f"status is {self.status!r}; duals are defined at status 'optimal' only"
@@ -155,7 +158,6 @@ class Solution:
                 f"{self.solver!r} reports no duals for it; read primal values "
                 f"only"
             )
-        constraint = self.model.constraints[name]
         rows = constraint.rows
         values = self._row_dual[self._rows_of[name]]
         if rows.is_full:

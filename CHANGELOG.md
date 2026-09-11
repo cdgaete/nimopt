@@ -12,6 +12,14 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Changed
+
+- `Solution.primal`, `Solution.dual`, `Model.row`, `Model.absent` and
+  `Assembled.row_of` raise `KeyError` with a message for a name that is not
+  declared. The message identifies the model and lists the declared names of
+  that kind, or reports that the name is the other kind and which method
+  reads it. `primal` and `dual` check the name before `status`.
+
 ## 0.2.0 - 2026-09-11
 
 ### Added
