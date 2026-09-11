@@ -53,6 +53,7 @@ class Solution:
         self._col_value = col_value
         self._row_dual = row_dual
         self._rows_of = rows_of
+        self._variables = frozenset(model.variables)
 
     def __repr__(self) -> str:
         if not self.feasible or self.status in NO_FINITE_OPTIMUM:
@@ -129,7 +130,7 @@ class Solution:
         `unbounded_or_infeasible`.
         """
         variable = self.model._variable(name, "read it with dual()")
-        if variable.start + variable.n_columns > self._col_value.size:
+        if name not in self._variables:
             raise KeyError(
                 f"variable {name!r} is not in the solved matrix; solve the model again"
             )

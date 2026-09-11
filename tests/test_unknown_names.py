@@ -123,3 +123,12 @@ def test_a_session_whose_model_changed_after_it_opened_raises():
             session.solve()
         with pytest.raises(ValueError, match=message):
             session.diagnose()
+
+
+def test_a_variable_with_no_columns_declared_after_the_solve_raises():
+    m, P, x = transport_like()
+    s = m.solve()
+    E = no.Set("E", np.array([], dtype=str))
+    m.var("late", (E,))
+    with raises("variable 'late' is not in the solved matrix; solve the model again"):
+        s.primal("late")
