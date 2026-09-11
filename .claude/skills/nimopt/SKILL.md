@@ -91,10 +91,10 @@ gives both.
 
 **Reading values from a model that did not solve.** `objective` and
 `primal` raise where `feasible` is False. They raise at status `unbounded`
-and `unbounded_or_infeasible` whatever `feasible` reports, and `gap` raises
-there too. `dual` raises where `status` is not `"optimal"`. A solve stopped
-at a limit reports `feasible` True where the solver found a point, with
-`bound` and `gap` beside it. Read `status` first.
+and `unbounded_or_infeasible` whatever `feasible` reports. `bound` and `gap`
+are `None` at those two statuses. `dual` raises where `status` is not
+`"optimal"`. A solve stopped at a limit reports `feasible` True where the
+solver found a point, with `bound` and `gap` beside it. Read `status` first.
 
 **A domain over a definition's sets.** `product((B, T))` needs each set's
 coordinate, and a declared set has none. In a definition, give `where=`,

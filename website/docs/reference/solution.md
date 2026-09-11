@@ -23,7 +23,8 @@ they were declared over.
 `status` and `feasible` are readable whatever the solver reported.
 `objective` and `primal` raise `ValueError` where `feasible` is False. They
 raise at status `unbounded` and `unbounded_or_infeasible` whatever `feasible`
-reports, and `gap` raises there too. An unbounded model has no optimal value.
+reports. An unbounded model has no optimal value, and `bound` and `gap` are
+`None` there.
 A solve stopped at a limit reports `feasible` True where the solver found a
 point, and those reads then return it. `dual` raises `ValueError` where
 `status` is not `optimal`. Read `status` first.
@@ -37,8 +38,9 @@ upper bound under sense `max`. It is `None` where the solver reports none.
 For a model without integer columns it is the objective at status `optimal`
 and `None` at any other status. `bound` is readable at every status, and the
 solvers report none at status `unbounded` and `unbounded_or_infeasible`.
-`gap` is `abs(objective - bound) / abs(objective)`, and is `None` where
-`feasible` is False or `bound` is `None`.
+`gap` is `abs(objective - bound) / abs(objective)`. It is `None` where
+`feasible` is False, where `bound` is `None`, and at status `unbounded` and
+`unbounded_or_infeasible`.
 
 ```python
 import numpy as np

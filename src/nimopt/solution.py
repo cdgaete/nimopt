@@ -25,11 +25,11 @@ class Solution:
     domain by the same rule.
 
     `status` and `feasible` are readable after any solve. `objective` and
-    `primal` raise ValueError where `feasible` is False. `objective`, `primal`
-    and `gap` raise ValueError at status `unbounded` and
-    `unbounded_or_infeasible`, whatever `feasible` reports. `dual` raises
-    ValueError where `status` is not `optimal`, and for a model with integer
-    columns.
+    `primal` raise ValueError where `feasible` is False. They raise ValueError
+    at status `unbounded` and `unbounded_or_infeasible`, whatever `feasible`
+    reports. `bound` and `gap` are None where no value is defined, at those two
+    statuses included. `dual` raises ValueError where `status` is not
+    `optimal`, and for a model with integer columns.
     """
 
     def __init__(
@@ -110,13 +110,11 @@ class Solution:
     def gap(self) -> float | None:
         """Return the relative distance from the objective to the bound.
 
-        It is None where `feasible` is False or `bound` is None. For an
-        objective of zero it is 0.0 under a bound of zero and infinity under
-        any other bound. Raises ValueError at status `unbounded` and
-        `unbounded_or_infeasible`.
+        It is None where `feasible` is False, where `bound` is None, and at
+        status `unbounded` and `unbounded_or_infeasible`. For an objective of
+        zero it is 0.0 under a bound of zero and infinity under any other bound.
         """
-        self._reject_unbounded()
-        if not self.feasible or self._bound is None:
+        if self.status in NO_FINITE_OPTIMUM or not self.feasible or self._bound is None:
             return None
         if self._objective == 0.0:
             return 0.0 if self._bound == 0.0 else float("inf")

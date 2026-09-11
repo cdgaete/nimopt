@@ -19,6 +19,9 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   declared. The message identifies the model and lists the declared names of
   that kind, or reports that the name is the other kind and which method
   reads it. `primal` and `dual` check the name before `status`.
+- `Solution.gap` returns `None` at status `unbounded` and
+  `unbounded_or_infeasible`, as `Solution.bound` does. `Solution.objective`
+  and `Solution.primal` raise `ValueError` there.
 
 ## 0.2.0 - 2026-09-11
 

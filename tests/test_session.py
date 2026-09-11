@@ -148,8 +148,7 @@ def test_an_unbounded_model_reads_no_objective_no_primal_and_no_gap():
         solution.objective
     with pytest.raises(ValueError, match=message):
         solution.primal("x")
-    with pytest.raises(ValueError, match=message):
-        solution.gap
+    assert solution.gap is None
 
 
 def test_a_conflict_names_the_rows_that_cannot_hold_together():

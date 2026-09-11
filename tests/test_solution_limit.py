@@ -206,8 +206,9 @@ def test_a_status_with_no_finite_optimum_names_what_a_caller_reads():
         either.objective
     with pytest.raises(ValueError, match=message):
         either.primal("x")
-    with pytest.raises(ValueError, match=message):
-        either.gap
+    # bound and gap are optional values; both read None where no optimum exists
+    assert either.bound is None
+    assert either.gap is None
     ray = solution_over(m, "unbounded", True, 0.0, None)
     assert repr(ray) == "Solution('unbounded', no values)"
     ray_message = re.escape(
@@ -216,6 +217,9 @@ def test_a_status_with_no_finite_optimum_names_what_a_caller_reads():
     )
     with pytest.raises(ValueError, match=ray_message):
         ray.objective
+    assert ray.gap is None
+    # a bound reported beside an unbounded status does not produce a gap
+    assert solution_over(m, "unbounded", True, 0.0, 5.0).gap is None
 
 
 def test_a_gap_over_a_zero_objective_is_zero_or_infinite():

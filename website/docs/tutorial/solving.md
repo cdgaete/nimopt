@@ -54,8 +54,9 @@ The status is `optimal` and the objective value is 135.
 `status` reports the outcome of the solve. `status` and `feasible` are
 readable after any solve. `objective` and `primal` raise `ValueError` where
 `feasible` is False. They raise at status `unbounded` and
-`unbounded_or_infeasible` whatever `feasible` reports, and `gap` raises
-there too. `dual` raises `ValueError` where `status` is not `optimal`.
+`unbounded_or_infeasible` whatever `feasible` reports. `bound` and `gap` are
+`None` at those two statuses. `dual` raises `ValueError` where `status` is not
+`optimal`.
 
 Raising the demand of Berlin to 40 makes total demand 70 against total
 supply 55. The model is infeasible.
