@@ -395,7 +395,7 @@ MIT. See `LICENSE`.
 
 The package includes a `CITATION.cff`. Cite it by author, name and version:
 
-> Gaete-Morales, Carlos. *nimopt* (version 0.1.2). MIT.
+> Gaete-Morales, Carlos. *nimopt* (version 0.2.0). MIT.
 
 ## Contributing
 

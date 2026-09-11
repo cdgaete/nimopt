@@ -12,16 +12,27 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+## 0.2.0 - 2026-09-11
+
 ### Added
 
 - `save`, `dumps`, `Model.to_yaml` and `Definition.to_yaml` take
-  `instructions=True`, which opens the written file on a fixed comment block
-  explaining the format, so that a reader given one file alone can interpret
-  it without the package. The block is a YAML comment, so a file carrying it
-  reads to the same definition as one without it.
+  `instructions=True`. The written file then opens on a fixed comment block
+  that explains the format to a reader without the package. The block is a
+  YAML comment; a file with the block loads to the same definition as one
+  without it.
 
 ### Changed
 
+- `Model.constraint` and `Definition.constraint` replace the method `eq`;
+  every relation goes through them.
+- `Capabilities.rejected` and `Capabilities.rejects(one, other)` replace
+  `refused` and `refuses`. The repr writes `rejects a+b`.
+- `Param.expresses` and `Variable.expresses` replace `Param.states` and
+  `Variable.states`.
+- Each solver adapter returns a `Result` from `solve`, with `status`,
+  `feasible`, `objective`, `bound`, `col_value`, `row_dual` and `backend`.
+  `Result` validates `feasible`, `objective` and `bound` against `status`.
 - `Solution.objective` and `Solution.primal` return the point a solver reports
   at a limit. They raise `ValueError` where the solver reports no feasible
   point, and `Solution.dual` raises where `status` is not `optimal`.
@@ -35,20 +46,12 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - `Solution.__repr__` reports the objective of a feasible point, and the gap
   beside it where the solver proved a bound. It writes `no values` where a
   value read raises.
-- Each solver adapter returns a `Result` from `solve`, with `status`,
-  `feasible`, `objective`, `bound`, `col_value`, `row_dual` and `backend`.
-  `Result` validates `feasible`, `objective` and `bound` against `status`.
-- The package supports Python 3.12, 3.13 and 3.14, and numpy from 2.3.
-- `Model.constraint` and `Definition.constraint` replace the method `eq`;
-  every relation goes through them.
+- The error messages and the docstrings are written in technical English.
+  Each message is a condition followed by the action to take. The text of
+  several messages changed.
+- The package supports Python 3.12, 3.13 and 3.14, and numpy from 2.3, and
+  requires `nimblend` 0.2.0.
 - The install section of the documentation opens on the PyPI install.
-- `Capabilities.rejected` and `Capabilities.rejects(one, other)` replace
-  `refused` and `refuses`. The repr writes `rejects a+b`.
-- `Param.expresses` and `Variable.expresses` replace `Param.states` and
-  `Variable.states`.
-- The error messages and the docstrings of the model, file and solver layers
-  are written in technical English. Each message is a condition followed by
-  the action to take. The text of several messages changed.
 
 ## 0.1.2 - 2026-09-09
 

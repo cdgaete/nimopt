@@ -7,5 +7,5 @@ authors:
     given-names: Carlos
     email: cdgaete@gmail.com
 abstract: An LP/MILP builder whose constraint blocks are labeled sparse arrays
-version: 0.1.2
+version: 0.2.0
 license: MIT
