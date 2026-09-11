@@ -25,6 +25,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - `Solution.gap` returns `None` at status `unbounded` and
   `unbounded_or_infeasible`, as `Solution.bound` does. `Solution.objective`
   and `Solution.primal` raise `ValueError` there.
+- The package requires `nimblend` 0.2.1. The `nimblend` messages that nimopt
+  passes through report the condition, then the action to take.
 
 ## 0.2.0 - 2026-09-11
 

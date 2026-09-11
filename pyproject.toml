@@ -11,7 +11,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Carlos Gaete-Morales", email = "cdgaete@gmail.com" }]
 requires-python = ">=3.12,<3.15"
-dependencies = ["nimblend>=0.2.0", "numpy>=2.3", "pyyaml>=6"]
+dependencies = ["nimblend>=0.2.1", "numpy>=2.3", "pyyaml>=6"]
 keywords = [
     "linear programming",
     "milp",
