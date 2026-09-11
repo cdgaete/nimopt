@@ -69,7 +69,7 @@ function origin() {
 function Playground() {
   const wheels = [
     useBaseUrl("/wheels/nimblend-0.2.2-py3-none-any.whl"),
-    useBaseUrl("/wheels/nimopt-0.2.2-py3-none-any.whl"),
+    useBaseUrl("/wheels/nimopt-0.2.3-py3-none-any.whl"),
   ];
   const [source, setSource] = useState(seeded);
   const [output, setOutput] = useState("");

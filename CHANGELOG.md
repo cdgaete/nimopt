@@ -12,6 +12,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+## 0.2.3 - 2026-09-11
+
 ### Fixed
 
 - A set whose members are `datetime64` or `timedelta64` round trips exactly
