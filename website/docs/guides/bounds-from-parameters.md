@@ -69,7 +69,7 @@ print(m.column_bounds()[1])
 
 Six columns. The three periods of each unit take the capacity of that unit.
 
-## A bound covers every column
+## A bound has a value at every column
 
 A bound with no value at some member of the variable raises `ValueError`,
 and the message gives the member. A dense parameter covers its product by
@@ -93,7 +93,7 @@ m.column_bounds()
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: the upper bound 'cap' has no value at member ('b',) of variable 'x'; a bound covers every column of the variable it bounds
+ValueError: the upper bound 'cap' has no value at member ('b',) of variable 'x'; give the bound a value at every member of the variable
 ```
 
 </details>

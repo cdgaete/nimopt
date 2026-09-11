@@ -92,7 +92,8 @@ constraint over two plants produces two rows.
 
 **Right-hand side.** The scalar or parameter on the other side of the
 relation. A scalar applies to every row. A parameter is indexed over exactly
-the frame of the constraint, and each row then has its own value.
+the frame of the constraint. Any other frame raises `ValueError`. Each row
+then has its own value.
 
 **Objective.** A scalar expression, one with an empty frame, that the solver
 minimizes or maximizes. `Sum(P, W, cost[P, W] * x[P, W])` is the total

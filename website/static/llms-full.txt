@@ -139,7 +139,7 @@ beside it.
 
 | Raises | Message | Shown at |
 | --- | --- | --- |
-| `ValueError` | the upper bound 'cap' has no value at member ('b',) of variable 'x'; a bound covers every column of the variable it bounds | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
+| `ValueError` | the upper bound 'cap' has no value at member ('b',) of variable 'x'; give the bound a value at every member of the variable | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
 | `ValueError` | variable 'x' is declared over ('G',) and is not over ['W']; its upper bound 'cap' is declared over ('W',) | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
 | `TypeError` | a coefficient is a parameter; build one with `Param.from_dense` or `Param.from_long` and read it at its sets. A product of two expressions is not linear. | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | coefficient (fuel_price / efficiency) is over ('G', 'T'); got ('T', 'G') | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
@@ -161,8 +161,8 @@ beside it.
 | `ValueError` | constraint 'supply' has free dimensions ('P',); its right-hand side 'demand' is over ('W',) | [/reference/constraint](/reference/constraint) [/tutorial/constraints](/tutorial/constraints) |
 | `ValueError` | data does not cover ['S']; add an entry for each | [/reference/definition](/reference/definition) |
 | `ValueError` | parameter 'S' is already declared as a set; declare another name | [/reference/definition](/reference/definition) |
-| `TypeError` | a relation has no truth value; write each bound in its own equation | [/reference/expression](/reference/expression) [/tutorial/constraints](/tutorial/constraints) |
-| `TypeError` | a relation is already an equation with one bound; compare the expression again in its own equation | [/reference/expression](/reference/expression) |
+| `TypeError` | a relation already has one bound; compare the expression again in its own constraint | [/reference/expression](/reference/expression) |
+| `TypeError` | a relation has no truth value; write each bound in its own constraint | [/reference/expression](/reference/expression) [/tutorial/constraints](/tutorial/constraints) |
 | `TypeError` | an LP has no row for a strict inequality; write `<=` or `>=`, and reduce with `Sum` in place of `min` or `max` | [/reference/expression](/reference/expression) |
 | `TypeError` | an expression has no absolute value: expressions are linear; bound the expression with two rows, or reduce it with `Sum` over its sets | [/reference/expression](/reference/expression) |
 | `TypeError` | an expression is reduced over the sets it is summed across; specify them with `Sum(I, J, expression)` | [/reference/expression](/reference/expression) |
@@ -614,7 +614,8 @@ constraint over two plants produces two rows.
 
 **Right-hand side.** The scalar or parameter on the other side of the
 relation. A scalar applies to every row. A parameter is indexed over exactly
-the frame of the constraint, and each row then has its own value.
+the frame of the constraint. Any other frame raises `ValueError`. Each row
+then has its own value.
 
 **Objective.** A scalar expression, one with an empty frame, that the solver
 minimizes or maximizes. `Sum(P, W, cost[P, W] * x[P, W])` is the total
@@ -1201,7 +1202,7 @@ x = m.var("x", (P, W))
 Raises TypeError:
 
 ```text
-TypeError: a relation has no truth value; write each bound in its own equation
+TypeError: a relation has no truth value; write each bound in its own constraint
 ```
 
 ## Forms that are not linear
@@ -1320,7 +1321,7 @@ x = m.var("x", (T,))
 Raises TypeError:
 
 ```text
-TypeError: a relation is already an equation with one bound; compare the expression again in its own equation
+TypeError: a relation already has one bound; compare the expression again in its own constraint
 ```
 
 A dimension is reduced once. A second reduction over the same dimension
@@ -2440,15 +2441,15 @@ An `Option` has a `name`, the `kind` it takes, what it `does`, and its
 | `pdlp_tol` | float | relative tolerance at which the first-order method stops | `pdlp_optimality_tolerance` | not supported | not supported |
 
 A choice each solver writes differently is given once and translated. The
-value a caller writes has one meaning for every solver. No solver
-supports every option or every choice. `newton_system` and `pdlp_tol` are
-specific to HiGHS, and so are `hipo` and `pdlp` under `method`. Passing one
-of them to Gurobi or Mosek raises, and the message identifies it. No solver runs a
+value a caller writes has one meaning for every solver. No solver supports
+every option or every choice. `newton_system` and `pdlp_tol` are specific to
+HiGHS, and so are `hipo` and `pdlp` under `method`. Passing one of them to
+Gurobi or Mosek raises, and the message identifies it. No solver runs a
 different algorithm in its place. Mosek runs only its mixed-integer
 optimizer on a model with integer columns. `method` is `choose` there, and
 any other choice raises. The guide on [interior point and first-order
-methods](/guides/highs-methods) gives the memory each method requires and the
-installation of a HiGHS with HiPO and a GPU.
+methods](/guides/highs-methods) gives the memory each method requires. It
+also gives the installation of a HiGHS with HiPO and a GPU.
 
 ## Progress reporting
 
@@ -4414,7 +4415,7 @@ x = m.var("x", (P, W))
 Raises TypeError:
 
 ```text
-TypeError: a relation has no truth value; write each bound in its own equation
+TypeError: a relation has no truth value; write each bound in its own constraint
 ```
 
 Next: [Solving](/tutorial/solving).
@@ -4969,7 +4970,7 @@ Output:
 
 Six columns. The three periods of each unit take the capacity of that unit.
 
-## A bound covers every column
+## A bound has a value at every column
 
 A bound with no value at some member of the variable raises `ValueError`,
 and the message gives the member. A dense parameter covers its product by
@@ -4991,7 +4992,7 @@ m.column_bounds()
 Raises ValueError:
 
 ```text
-ValueError: the upper bound 'cap' has no value at member ('b',) of variable 'x'; a bound covers every column of the variable it bounds
+ValueError: the upper bound 'cap' has no value at member ('b',) of variable 'x'; give the bound a value at every member of the variable
 ```
 
 The check runs when the bound vectors are built. `column_bounds()`,
@@ -5194,8 +5195,8 @@ message that gives the form to write instead. There is no third outcome.
 | `x[P] / 0.0` | a divisor of zero is handled before it is passed to an expression |
 | `x[P] < 1.0` | `<=` and `>=`; an LP has no row for a strict inequality |
 | `x[P] > 1.0` | the same |
-| `x[P] != 1.0` | one bound per equation |
-| `0.0 <= x[P] <= 1.0` | each bound as its own equation |
+| `x[P] != 1.0` | one bound per constraint |
+| `0.0 <= x[P] <= 1.0` | each bound as its own constraint |
 | `x[P] + c[P]` | a coefficient has no row until a variable multiplies it |
 | `abs(x[P])`, `min` and `max` | reduce with `Sum`, or bound the expression with two rows |
 | `np.sum(x[P])` | `Sum` and its sets |

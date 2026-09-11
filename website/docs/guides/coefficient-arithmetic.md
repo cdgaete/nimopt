@@ -197,8 +197,8 @@ message that gives the form to write instead. There is no third outcome.
 | `x[P] / 0.0` | a divisor of zero is handled before it is passed to an expression |
 | `x[P] < 1.0` | `<=` and `>=`; an LP has no row for a strict inequality |
 | `x[P] > 1.0` | the same |
-| `x[P] != 1.0` | one bound per equation |
-| `0.0 <= x[P] <= 1.0` | each bound as its own equation |
+| `x[P] != 1.0` | one bound per constraint |
+| `0.0 <= x[P] <= 1.0` | each bound as its own constraint |
 | `x[P] + c[P]` | a coefficient has no row until a variable multiplies it |
 | `abs(x[P])`, `min` and `max` | reduce with `Sum`, or bound the expression with two rows |
 | `np.sum(x[P])` | `Sum` and its sets |

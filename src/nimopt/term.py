@@ -30,7 +30,7 @@ def _dims_of(given: Any) -> tuple[str, ...]:
     return given.dims
 
 
-_EACH_BOUND = "write each bound in its own equation"
+_EACH_BOUND = "write each bound in its own constraint"
 
 
 class Term:
@@ -513,8 +513,8 @@ class Relation:
 
     def _one_bound(self, other: Any) -> Any:
         raise TypeError(
-            "a relation is already an equation with one bound; compare the "
-            "expression again in its own equation"
+            "a relation already has one bound; compare the expression "
+            "again in its own constraint"
         )
 
     __le__ = _one_bound

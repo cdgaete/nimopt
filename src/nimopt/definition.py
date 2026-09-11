@@ -136,7 +136,7 @@ class Definition:
     def constraint(
         self, name: str, relation: Any, where: Any = None, over: Any = None
     ) -> None:
-        """Declare an equation from a comparison of an expression.
+        """Declare a constraint from a comparison of an expression.
 
         `where=` narrows the rows and `over=` declares them. Each is a tuple
         of this definition's sets, or one of its parameters whose coefficients

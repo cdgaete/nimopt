@@ -144,7 +144,7 @@ beside it.
 <!-- refusals -->
 | Raises | Message | Shown at |
 | --- | --- | --- |
-| `ValueError` | the upper bound 'cap' has no value at member ('b',) of variable 'x'; a bound covers every column of the variable it bounds | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
+| `ValueError` | the upper bound 'cap' has no value at member ('b',) of variable 'x'; give the bound a value at every member of the variable | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
 | `ValueError` | variable 'x' is declared over ('G',) and is not over ['W']; its upper bound 'cap' is declared over ('W',) | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
 | `TypeError` | a coefficient is a parameter; build one with `Param.from_dense` or `Param.from_long` and read it at its sets. A product of two expressions is not linear. | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | coefficient (fuel_price / efficiency) is over ('G', 'T'); got ('T', 'G') | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
@@ -166,8 +166,8 @@ beside it.
 | `ValueError` | constraint 'supply' has free dimensions ('P',); its right-hand side 'demand' is over ('W',) | [/reference/constraint](/reference/constraint) [/tutorial/constraints](/tutorial/constraints) |
 | `ValueError` | data does not cover ['S']; add an entry for each | [/reference/definition](/reference/definition) |
 | `ValueError` | parameter 'S' is already declared as a set; declare another name | [/reference/definition](/reference/definition) |
-| `TypeError` | a relation has no truth value; write each bound in its own equation | [/reference/expression](/reference/expression) [/tutorial/constraints](/tutorial/constraints) |
-| `TypeError` | a relation is already an equation with one bound; compare the expression again in its own equation | [/reference/expression](/reference/expression) |
+| `TypeError` | a relation already has one bound; compare the expression again in its own constraint | [/reference/expression](/reference/expression) |
+| `TypeError` | a relation has no truth value; write each bound in its own constraint | [/reference/expression](/reference/expression) [/tutorial/constraints](/tutorial/constraints) |
 | `TypeError` | an LP has no row for a strict inequality; write `<=` or `>=`, and reduce with `Sum` in place of `min` or `max` | [/reference/expression](/reference/expression) |
 | `TypeError` | an expression has no absolute value: expressions are linear; bound the expression with two rows, or reduce it with `Sum` over its sets | [/reference/expression](/reference/expression) |
 | `TypeError` | an expression is reduced over the sets it is summed across; specify them with `Sum(I, J, expression)` | [/reference/expression](/reference/expression) |

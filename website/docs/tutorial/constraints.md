@@ -181,7 +181,7 @@ x = m.var("x", (P, W))
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: a relation has no truth value; write each bound in its own equation
+TypeError: a relation has no truth value; write each bound in its own constraint
 ```
 
 </details>

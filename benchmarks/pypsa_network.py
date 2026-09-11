@@ -24,7 +24,8 @@ def _first_hours(arrays, hours):
     available = len(arrays["snapshots"])
     if hours > available:
         raise ValueError(
-            f"the extraction contains {available} snapshots; pass at most {available}"
+            f"the extraction contains {available} snapshots; pass at most "
+            f"{available}, got {hours}"
         )
     cut = {}
     for name, value in arrays.items():

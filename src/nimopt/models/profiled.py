@@ -1,11 +1,11 @@
 """A dispatch whose capacity is a profile: one bound per generator and hour.
 
 `dispatch` bounds a generator by a single number. Here `p_max` is a parameter
-over generators crossed with snapshots, and the bound has a different value in
-every hour. The profile is declared over `(G, T)` and the variable over
+over generators crossed with snapshots, and the bound has a different value
+in every hour. The profile is declared over `(G, T)` and the variable over
 `(T, G)`. A bound is read in the dimension order of the variable it bounds,
-and both orders resolve to the same columns. Each snapshot is independent, and the
-optimum is the merit order against that hour's capacities.
+and both orders resolve to the same columns. Each snapshot is independent,
+and the optimum is the merit order against that hour's capacities.
 """
 
 from collections.abc import Mapping

@@ -237,6 +237,6 @@ class Variable(Symbol):
         named = tuple(str(labels[d][0]) for d in self.dims)
         raise ValueError(
             f"the {which} bound {bound.name!r} has no value at member "
-            f"{named} of variable {self.name!r}; a bound covers every "
-            f"column of the variable it bounds"
+            f"{named} of variable {self.name!r}; give the bound a value at "
+            f"every member of the variable"
         )

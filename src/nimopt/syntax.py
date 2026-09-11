@@ -256,8 +256,8 @@ class _Reader(ast.NodeVisitor):
         apply = _COMPARE.get(type(node.ops[0]))
         if apply is None:
             self.reject(
-                f"{type(node.ops[0]).__name__} is not an equation operator; an "
-                f"equation is <=, >= or =="
+                f"{type(node.ops[0]).__name__} is not a relation operator; a "
+                f"relation is <=, >= or =="
             )
         return apply(self.visit(node.left), self.visit(node.comparators[0]))
 

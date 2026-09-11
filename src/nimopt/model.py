@@ -170,7 +170,7 @@ class Model:
     def constraint(
         self, name: str, relation: Any, where: Any = None, over: Any = None
     ) -> Constraint:
-        """Declare an equation from a comparison of an expression.
+        """Declare a constraint from a comparison of an expression.
 
         The relation is symbolic. The constraint stores the term list, not a
         block. `where=` takes a domain over the constraint's free dimensions

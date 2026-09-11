@@ -44,6 +44,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - The install section of the documentation opens on the PyPI install.
 - `Capabilities.rejected` and `Capabilities.rejects(one, other)` replace
   `refused` and `refuses`. The repr writes `rejects a+b`.
+- `Param.expresses` and `Variable.expresses` replace `Param.states` and
+  `Variable.states`.
 - The error messages and the docstrings of the model, file and solver layers
   are written in technical English. Each message is a condition followed by
   the action to take. The text of several messages changed.

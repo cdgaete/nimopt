@@ -169,7 +169,7 @@ def test_an_expression_is_not_a_dictionary_key():
 
 def test_a_chained_comparison_raises_rather_than_keeping_half_of_itself():
     _, P, _, _, y, _, _ = model()
-    with pytest.raises(TypeError, match="each bound in its own equation"):
+    with pytest.raises(TypeError, match="each bound in its own constraint"):
         0.0 <= y[P] <= 10.0
 
 

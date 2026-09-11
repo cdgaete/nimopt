@@ -188,7 +188,7 @@ x = m.var("x", (P, W))
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: a relation has no truth value; write each bound in its own equation
+TypeError: a relation has no truth value; write each bound in its own constraint
 ```
 
 </details>
@@ -337,7 +337,7 @@ x = m.var("x", (T,))
 <summary>Raises TypeError</summary>
 
 ```text
-TypeError: a relation is already an equation with one bound; compare the expression again in its own equation
+TypeError: a relation already has one bound; compare the expression again in its own constraint
 ```
 
 </details>
