@@ -12,6 +12,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+## 0.2.1 - 2026-09-11
+
 ### Changed
 
 - `Solution.primal`, `Solution.dual`, `Model.row`, `Model.absent` and
