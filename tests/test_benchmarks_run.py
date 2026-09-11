@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "benchmarks"))
 
@@ -82,6 +83,9 @@ def test_a_build_peaks_within_eight_times_the_matrix_it_produces():
 
 
 def test_a_rung_measured_without_a_solve_reports_its_shape():
+    pytest.importorskip(
+        "linopy", reason="the comparison benchmarks need the bench extra"
+    )
     from bench_vs_linopy import compare
 
     sizes = dict(n_plants=20, n_warehouses=10, arcs_per_plant=3)
@@ -94,7 +98,9 @@ def test_a_rung_measured_without_a_solve_reports_its_shape():
 
 
 def test_agreement_refuses_a_shape_mismatch_whether_or_not_it_solved():
-    import pytest
+    pytest.importorskip(
+        "linopy", reason="the comparison benchmarks need the bench extra"
+    )
     from bench_vs_linopy import agree
 
     stated = {"rows": 10, "cols": 5, "nnz": 20}
@@ -109,8 +115,6 @@ def test_the_european_case_reports_the_sparsity_it_measured():
     from bench_pypsa import ARRAYS, nimopt
 
     if not ARRAYS.exists():
-        import pytest
-
         pytest.skip(f"generate {ARRAYS} with benchmarks/pypsa_reference.py")
     case = nimopt(24)
     got = case.describe(case.build())
@@ -123,6 +127,9 @@ def test_the_european_case_reports_the_sparsity_it_measured():
 
 
 def test_the_process_peak_is_not_below_a_phase_it_contains():
+    pytest.importorskip(
+        "linopy", reason="the comparison benchmarks need the bench extra"
+    )
     from bench_vs_linopy import transport
     from compare import measure
 
