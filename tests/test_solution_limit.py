@@ -192,9 +192,9 @@ def test_a_repr_reports_the_objective_the_bound_and_the_gap():
 
 
 def test_a_status_with_no_finite_optimum_names_what_a_caller_reads():
-    # no solver here reaches unbounded_or_infeasible deterministically, so
-    # the Solution is built over the fields a read looks at. `unbounded` is
-    # solved through HiGHS in test_session.py
+    # no solver reports unbounded_or_infeasible deterministically here; the
+    # Solution is constructed over the fields these reads use. `unbounded`
+    # is solved through HiGHS in test_session.py
     m = transport()
     either = solution_over(m, "unbounded_or_infeasible", False, 0.0, None)
     assert repr(either) == "Solution('unbounded_or_infeasible', no values)"
