@@ -164,6 +164,7 @@ def position_of(constraint: "Constraint", coords: Mapping[str, Any]) -> int:
     """Return the position of the named coordinate in a constraint's rows.
 
     Each label resolves through its dimension's own coordinate. Raises
+    KeyError for a label that is not a member of its dimension. Raises
     ValueError for a coordinate the constraint has no row at.
     """
     rows = constraint.rows
@@ -172,12 +173,17 @@ def position_of(constraint: "Constraint", coords: Mapping[str, Any]) -> int:
             f"constraint {constraint.name!r} is free over {rows.dims}; got "
             f"{tuple(coords)}"
         )
-    index = np.stack(
-        [
-            rows.coords[d].to_position(np.asarray([coords[d]])).astype(np.int32)
-            for d in rows.dims
-        ]
-    )
+    positions = []
+    for d in rows.dims:
+        try:
+            at = rows.coords[d].to_position(np.asarray([coords[d]]))
+        except KeyError:
+            raise KeyError(
+                f"member {coords[d]!r} is not in dimension {d!r} of constraint "
+                f"{constraint.name!r}; pass a member of {d!r}"
+            ) from None
+        positions.append(at.astype(np.int32))
+    index = np.stack(positions)
     at = int(rows.positions_of_coordinates(index)[0])
     if at < 0:
         raise ValueError(

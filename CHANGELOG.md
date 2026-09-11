@@ -12,6 +12,11 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Changed
+
+- `Model.row` raises `KeyError` with a message that identifies the dimension
+  and the constraint for a label that is not a member of its dimension.
+
 ## 0.2.1 - 2026-09-11
 
 ### Changed

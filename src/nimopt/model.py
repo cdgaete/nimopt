@@ -328,8 +328,9 @@ class Model:
 
         The row is read from the assembled matrix, and is the row the solver
         is given. Raises KeyError for a name that is not a declared
-        constraint. A coordinate the constraint has no row at raises, and the
-        message refers to `absent`.
+        constraint, and for a label that is not a member of its dimension. A
+        coordinate the constraint has no row at raises, and the message refers
+        to `absent`.
         """
         from nimopt.row import position_of, read
 

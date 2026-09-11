@@ -132,3 +132,11 @@ def test_a_variable_with_no_columns_declared_after_the_solve_raises():
     m.var("late", (E,))
     with raises("variable 'late' is not in the solved matrix; solve the model again"):
         s.primal("late")
+
+
+def test_a_row_at_a_label_outside_its_set_identifies_the_set():
+    m, P, x = transport_like()
+    with raises(
+        "member 'zz' is not in dimension 'P' of constraint 'cap'; pass a member of 'P'"
+    ):
+        m.row("cap", P="zz")
