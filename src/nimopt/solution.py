@@ -10,6 +10,8 @@ from nimblend import DenseArray, SparseArray
 if TYPE_CHECKING:
     from nimopt.model import Model
 
+NO_FINITE_OPTIMUM = ("unbounded", "unbounded_or_infeasible")
+
 
 class Solution:
     """Primal and dual values, read back onto the sets they were declared over.
@@ -23,7 +25,9 @@ class Solution:
     domain by the same rule.
 
     `status` and `feasible` are readable after any solve. `objective` and
-    `primal` raise ValueError where `feasible` is False. `dual` raises
+    `primal` raise ValueError where `feasible` is False. `objective`, `primal`
+    and `gap` raise ValueError at status `unbounded` and
+    `unbounded_or_infeasible`, whatever `feasible` reports. `dual` raises
     ValueError where `status` is not `optimal`, and for a model with integer
     columns.
     """
@@ -51,7 +55,7 @@ class Solution:
         self._rows_of = rows_of
 
     def __repr__(self) -> str:
-        if not self.feasible:
+        if not self.feasible or self.status in NO_FINITE_OPTIMUM:
             return f"Solution({self.status!r}, no values)"
         head = f"Solution({self.status!r}, objective {self._objective:g}"
         gap = self.gap
@@ -61,8 +65,17 @@ class Solution:
             return f"{head})"
         return f"{head}, gap {gap:.2%})"
 
+    def _reject_unbounded(self) -> None:
+        """Raise ValueError at a status reporting no finite optimum."""
+        if self.status in NO_FINITE_OPTIMUM:
+            raise ValueError(
+                f"status is {self.status!r} and the objective has no finite "
+                f"optimum; read `Session.diagnose()` for the ray"
+            )
+
     def _require_feasible(self) -> None:
-        """Raise where the solver reports no feasible point."""
+        """Raise ValueError where the solution defines no value to read."""
+        self._reject_unbounded()
         if not self.feasible:
             raise ValueError(
                 f"status is {self.status!r} and the solver reports no feasible "
@@ -73,7 +86,8 @@ class Solution:
     def objective(self) -> float:
         """Return the objective value of the point the solver reported.
 
-        Raises ValueError where `feasible` is False.
+        Raises ValueError where `feasible` is False. Raises ValueError at
+        status `unbounded` and `unbounded_or_infeasible`.
         """
         self._require_feasible()
         return self._objective
@@ -93,8 +107,10 @@ class Solution:
 
         It is None where `feasible` is False or `bound` is None. For an
         objective of zero it is 0.0 under a bound of zero and infinity under
-        any other bound.
+        any other bound. Raises ValueError at status `unbounded` and
+        `unbounded_or_infeasible`.
         """
+        self._reject_unbounded()
         if not self.feasible or self._bound is None:
             return None
         if self._objective == 0.0:
@@ -104,7 +120,8 @@ class Solution:
     def primal(self, name: str) -> DenseArray | SparseArray:
         """Return the named variable's values over its own sets.
 
-        Raises ValueError where `feasible` is False.
+        Raises ValueError where `feasible` is False. Raises ValueError at
+        status `unbounded` and `unbounded_or_infeasible`.
         """
         self._require_feasible()
         variable = self.model.variables[name]

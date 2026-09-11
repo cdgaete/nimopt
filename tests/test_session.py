@@ -130,6 +130,22 @@ def test_a_model_with_no_upper_bound_and_a_negative_cost_is_unbounded():
     assert unbounded().solve().status == "unbounded"
 
 
+def test_an_unbounded_model_reads_no_objective_no_primal_and_no_gap():
+    # HiGHS reports the zero vector as a primal-feasible point here; the
+    # reads raise on the status, and the three adapters then agree
+    solution = unbounded().solve()
+    assert solution.status == "unbounded"
+    assert solution.feasible is True
+    assert solution.bound is None
+    assert repr(solution) == "Solution('unbounded', no values)"
+    with pytest.raises(ValueError, match="the objective has no finite optimum"):
+        solution.objective
+    with pytest.raises(ValueError, match="the objective has no finite optimum"):
+        solution.primal("x")
+    with pytest.raises(ValueError, match="the objective has no finite optimum"):
+        solution.gap
+
+
 def test_a_conflict_names_the_rows_that_cannot_hold_together():
     # the second snapshot demands 100 against a fleet of 30
     with infeasible().session() as session:

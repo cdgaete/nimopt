@@ -24,14 +24,17 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 - `Solution.objective` and `Solution.primal` return the point a solver reports
   at a limit. They raise `ValueError` where the solver reports no feasible
-  point.
+  point, and `Solution.dual` raises where `status` is not `optimal`.
+- `Solution.objective`, `Solution.primal` and `Solution.gap` raise
+  `ValueError` at status `unbounded` and `unbounded_or_infeasible`, whatever
+  `Solution.feasible` reports. The three adapters agree at those statuses.
 - `Solution.feasible` reports whether the solver found a primal-feasible
   point. `Solution.bound` is the bound on the optimal objective the solver
   proved, or `None`. `Solution.gap` is the relative distance from the
   objective to that bound, or `None`.
-- `Solution.dual` raises `ValueError` where `status` is not `optimal`.
-- `Solution.__repr__` reports the objective of a feasible point at any status,
-  and the gap beside it where the solver proved a bound.
+- `Solution.__repr__` reports the objective of a feasible point, and the gap
+  beside it where the solver proved a bound. It writes `no values` where a
+  value read raises.
 - Each solver adapter returns a `Result` from `solve`, with `status`,
   `feasible`, `objective`, `bound`, `col_value`, `row_dual` and `backend`.
   `Result` validates `feasible`, `objective` and `bound` against `status`.

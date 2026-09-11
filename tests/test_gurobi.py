@@ -103,10 +103,13 @@ def test_gurobi_reaches_an_infeasibility_that_is_only_the_integrality():
 def test_gurobi_names_the_direction_an_unbounded_model_runs_off_in():
     # the ray is not HiGHS's ray; what holds of each is that it names a column
     with unbounded().session(solver="gurobi") as session:
-        assert session.solve().status == "unbounded"
+        solution = session.solve()
+        assert solution.status == "unbounded"
         found = session.diagnose()
     assert found.ray
     assert {held.variable for held in found.ray} == {"x"}
+    with pytest.raises(ValueError, match="the objective has no finite optimum"):
+        solution.objective
 
 
 def test_a_sense_the_gurobi_adapter_does_not_know_is_refused():

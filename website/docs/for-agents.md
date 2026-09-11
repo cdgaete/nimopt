@@ -91,10 +91,11 @@ side is a parameter over exactly its free dimensions. The error message
 gives both.
 
 **Reading values from a model that did not solve.** `objective` and
-`primal` raise where `feasible` is False. `dual` raises where `status` is
-not `"optimal"`. A solve stopped at a limit reports `feasible` True where
-the solver found a point, with `bound` and `gap` beside it. Read `status`
-first.
+`primal` raise where `feasible` is False. They raise at status `unbounded`
+and `unbounded_or_infeasible` whatever `feasible` reports, and `gap` raises
+there too. `dual` raises where `status` is not `"optimal"`. A solve stopped
+at a limit reports `feasible` True where the solver found a point, with
+`bound` and `gap` beside it. Read `status` first.
 
 **A domain over a definition's sets.** `product((B, T))` needs each set's
 coordinate, and a declared set has none. In a definition, give `where=`,

@@ -134,10 +134,13 @@ def test_mosek_names_the_direction_an_unbounded_model_runs_off_in():
     # which the primal is unbounded; the assertion is that it identifies a
     # column
     with unbounded().session(solver="mosek") as session:
-        assert session.solve().status == "unbounded"
+        solution = session.solve()
+        assert solution.status == "unbounded"
         found = session.diagnose()
     assert found.ray
     assert {held.variable for held in found.ray} == {"x"}
+    with pytest.raises(ValueError, match="the objective has no finite optimum"):
+        solution.objective
 
 
 @licensed
