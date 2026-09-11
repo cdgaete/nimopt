@@ -12,6 +12,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+## 0.2.2 - 2026-09-11
+
 ### Changed
 
 - `Model.row` raises `KeyError` with a message that identifies the dimension
