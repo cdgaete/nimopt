@@ -31,7 +31,8 @@ point, and those reads then return it. `dual` raises `ValueError` where
 
 `primal` and `dual` raise `KeyError` for a name the model does not declare.
 The message lists the declared names of that kind, or reports that the name
-is the other kind and which method reads it.
+is the other kind and which method reads it. They also raise `KeyError` for a
+name declared after the solve.
 
 `bound` is a lower bound on the optimal objective under sense `min` and an
 upper bound under sense `max`. It is `None` where the solver reports none.

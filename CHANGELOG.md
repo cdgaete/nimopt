@@ -16,9 +16,12 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 - `Solution.primal`, `Solution.dual`, `Model.row`, `Model.absent` and
   `Assembled.row_of` raise `KeyError` with a message for a name that is not
-  declared. The message identifies the model and lists the declared names of
-  that kind, or reports that the name is the other kind and which method
-  reads it. `primal` and `dual` check the name before `status`.
+  declared. The message lists the declared names of that kind. For a name of
+  the other kind, the message reports its kind. `primal` and `dual` check the
+  name before `status`, and raise `KeyError` for a name declared after the
+  solve.
+- `Session.solve` and `Session.diagnose` raise `ValueError` where the model
+  declares a variable or a constraint after the session opened.
 - `Solution.gap` returns `None` at status `unbounded` and
   `unbounded_or_infeasible`, as `Solution.bound` does. `Solution.objective`
   and `Solution.primal` raise `ValueError` there.

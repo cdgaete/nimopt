@@ -2130,7 +2130,8 @@ point, and those reads then return it. `dual` raises `ValueError` where
 
 `primal` and `dual` raise `KeyError` for a name the model does not declare.
 The message lists the declared names of that kind, or reports that the name
-is the other kind and which method reads it.
+is the other kind and which method reads it. They also raise `KeyError` for a
+name declared after the solve.
 
 `bound` is a lower bound on the optimal objective under sense `min` and an
 upper bound under sense `max`. It is `None` where the solver reports none.
@@ -2303,6 +2304,10 @@ matrix to the solver, and a later query reads the same solved instance.
 
 `Model.solve()` opens a session, solves and closes it. A caller who needs
 only a solution needs no session.
+
+The session assembles the matrix when it opens. `solve()` and `diagnose()`
+raise `ValueError` where the model declares a variable or a constraint after
+that. Open a new session on the changed model.
 
 ```python
 import numpy as np

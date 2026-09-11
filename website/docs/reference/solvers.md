@@ -101,6 +101,10 @@ matrix to the solver, and a later query reads the same solved instance.
 `Model.solve()` opens a session, solves and closes it. A caller who needs
 only a solution needs no session.
 
+The session assembles the matrix when it opens. `solve()` and `diagnose()`
+raise `ValueError` where the model declares a variable or a constraint after
+that. Open a new session on the changed model.
+
 ```python
 import numpy as np
 from nimopt import Model, Param, Set, Sum

@@ -292,7 +292,11 @@ class Model:
         """
         if name in self.variables:
             return self.variables[name]
-        valid = f"use one of {tuple(self.variables)}"
+        valid = (
+            f"use one of {tuple(self.variables)}"
+            if self.variables
+            else "declare a variable first"
+        )
         if name in self.constraints:
             raise KeyError(
                 f"{name!r} is a constraint, not a variable; {other or valid}"
@@ -308,7 +312,11 @@ class Model:
         """
         if name in self.constraints:
             return self.constraints[name]
-        valid = f"use one of {tuple(self.constraints)}"
+        valid = (
+            f"use one of {tuple(self.constraints)}"
+            if self.constraints
+            else "declare a constraint first"
+        )
         if name in self.variables:
             raise KeyError(
                 f"{name!r} is a variable, not a constraint; {other or valid}"
@@ -550,10 +558,12 @@ class Assembled:
         Raises KeyError for a name that is not a constraint of the matrix.
         """
         if name not in self._rows_of:
-            raise KeyError(
-                f"assembled matrix has no constraint {name!r}; use one of "
-                f"{tuple(self._rows_of)}"
+            valid = (
+                f"use one of {tuple(self._rows_of)}"
+                if self._rows_of
+                else "declare a constraint and assemble the model again"
             )
+            raise KeyError(f"assembled matrix has no constraint {name!r}; {valid}")
         return self._rows_of[name]
 
     def to_dense(self) -> npt.NDArray[np.float64]:

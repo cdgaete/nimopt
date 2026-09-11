@@ -71,3 +71,55 @@ def test_an_unknown_name_raises_before_the_status_is_checked():
         s.primal("y")
     with raises("model 'short' has no constraint 'y'; use one of ('cap', 'need')"):
         s.dual("y")
+
+
+def transport_like(name="t"):
+    P = no.Set("P", np.array(["a", "b"]))
+    m = no.Model(name)
+    x = m.var("x", (P,))
+    m.constraint("cap", x[P] <= 1.0)
+    m.set_objective(no.Sum(P, x[P]))
+    return m, P, x
+
+
+def test_a_name_declared_after_the_solve_is_not_in_the_solution():
+    m, P, x = transport_like()
+    s = m.solve()
+    late = m.var("late", (P,))
+    m.constraint("later", late[P] <= 2.0)
+    with raises("variable 'late' is not in the solved matrix; solve the model again"):
+        s.primal("late")
+    with raises(
+        "constraint 'later' is not in the solved matrix; solve the model again"
+    ):
+        s.dual("later")
+
+
+def test_an_empty_model_asks_for_a_declaration():
+    m = no.Model("empty")
+    with raises("model 'empty' has no variable 'x'; declare a variable first"):
+        m.solve().primal("x")
+    with raises("model 'empty' has no constraint 'c'; declare a constraint first"):
+        m.row("c")
+    with raises("model 'empty' has no constraint 'c'; declare a constraint first"):
+        m.absent("c")
+    with raises(
+        "assembled matrix has no constraint 'c'; declare a constraint and "
+        "assemble the model again"
+    ):
+        m.assemble().row_of("c")
+
+
+def test_a_session_whose_model_changed_after_it_opened_raises():
+    m, P, x = transport_like()
+    message = re.escape(
+        "model 't' declares variables or constraints that are not in the "
+        "assembled matrix; open a new Session"
+    )
+    with m.session() as session:
+        assert session.solve().status == "optimal"
+        m.constraint("later", x[P] >= 0.0)
+        with pytest.raises(ValueError, match=message):
+            session.solve()
+        with pytest.raises(ValueError, match=message):
+            session.diagnose()
