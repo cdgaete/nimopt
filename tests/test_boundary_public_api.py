@@ -20,7 +20,13 @@ FOREIGN_BUFFERS = ("linopy_models.py", "pypsa_reference.py", "bench_pypsa.py")
 # The exemption covers `index` and `data` alone. `codes` collides with nothing
 # nimopt owns, so `test_nimopt_reads_no_domains_codes` scans every source with no
 # exemption at all.
-OWN_INDEX = ("row.py", "test_row.py", "test_session.py", "test_gurobi.py")
+OWN_INDEX = (
+    "row.py",
+    "test_row.py",
+    "test_session.py",
+    "test_gurobi.py",
+    "test_datetime_members.py",
+)
 
 # the raw buffers of the layer below the array layer: an array's index matrix
 # and value buffer, and a domain's ravelled member codes. Each has a public

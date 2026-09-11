@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import numpy.typing as npt
 
+from nimopt.sets import as_label, as_member, coord_dtype, label_text, shown
+
 if TYPE_CHECKING:
     from nimopt.constraint import Constraint
     from nimopt.model import Assembled, Model
@@ -39,7 +41,7 @@ class Row:
     upper: float
 
     def __repr__(self) -> str:
-        at = ", ".join(f"{d}={v!r}" for d, v in self.coordinate.items())
+        at = ", ".join(f"{d}={shown(v)}" for d, v in self.coordinate.items())
         terms = " + ".join(_term(t) for t in self.terms)
         bound = self.upper if self.sense != ">=" else self.lower
         return (
@@ -49,7 +51,7 @@ class Row:
 
 
 def _term(term: RowTerm) -> str:
-    at = ",".join(str(v) for v in term.coordinate.values())
+    at = ",".join(label_text(v) for v in term.coordinate.values())
     return f"{term.coefficient:g}·{term.variable}[{at}]"
 
 
@@ -85,10 +87,11 @@ def _sense_of(lower: float, upper: float) -> str:
 def _coordinate(domain: Any, position: int) -> dict[str, Any]:
     """Return the label of each dimension at one member of a domain.
 
-    Each label is the Python value, not a numpy scalar.
+    Each label is the Python value. A datetime64 or a timedelta64 label is
+    the numpy scalar.
     """
     labels = domain.labels()
-    return {d: labels[d][position].item() for d in domain.dims}
+    return {d: as_label(labels[d][position]) for d in domain.dims}
 
 
 def resolve(
@@ -112,7 +115,7 @@ def resolve(
         index = variable.coord.to_index(columns[at])
         for k, position in enumerate(at):
             coordinate = {
-                d: s.coord.to_index(np.asarray([index[j][k]]))[0].item()
+                d: as_label(s.coord.to_index(np.asarray([index[j][k]]))[0])
                 for j, (d, s) in enumerate(zip(variable.dims, variable.sets))
             }
             found.append(
@@ -163,9 +166,11 @@ def read(model: "Model", assembled: "Assembled", index: int) -> Row:
 def position_of(constraint: "Constraint", coords: Mapping[str, Any]) -> int:
     """Return the position of the named coordinate in a constraint's rows.
 
-    Each label resolves through its dimension's own coordinate. Raises
-    KeyError for a label that is not a member of its dimension. Raises
-    ValueError for a coordinate the constraint has no row at.
+    Each label is converted to the dtype of its dimension's members and
+    resolves through that dimension's own coordinate. Raises KeyError for a
+    label that is not a member of its dimension. Raises ValueError for a
+    label that does not convert and for a coordinate the constraint has no
+    row at.
     """
     rows = constraint.rows
     if tuple(coords) != rows.dims:
@@ -175,12 +180,15 @@ def position_of(constraint: "Constraint", coords: Mapping[str, Any]) -> int:
         )
     positions = []
     for d in rows.dims:
+        dtype = coord_dtype(rows.coords[d])
+        where = f"dimension {d!r} of constraint {constraint.name!r}"
+        label = coords[d] if dtype is None else as_member(coords[d], dtype, where)
         try:
-            at = rows.coords[d].to_position(np.asarray([coords[d]]))
+            at = rows.coords[d].to_position(np.asarray([label]))
         except KeyError:
             raise KeyError(
-                f"member {coords[d]!r} is not in dimension {d!r} of constraint "
-                f"{constraint.name!r}; pass a member of {d!r}"
+                f"member {shown(coords[d])} is not in dimension {d!r} of "
+                f"constraint {constraint.name!r}; pass a member of {d!r}"
             ) from None
         positions.append(at.astype(np.int32))
     index = np.stack(positions)

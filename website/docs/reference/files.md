@@ -32,7 +32,7 @@ load to the same model.
 
 | Key | Contains |
 | --- | --- |
-| `version` | `2`; any other value raises `ValueError` and reports the version this reader accepts |
+| `version` | `3`; a file of version `2` also loads; any other value raises `ValueError` and reports the versions this reader accepts |
 | `name`, `sense` | the model's |
 | `sets` | a list of names |
 | `aliases` | each alias to its base set; absent where the model declares none |
@@ -70,7 +70,7 @@ print(loads(text).to_yaml() == text)
 <summary>Output</summary>
 
 ```text
-version: 2
+version: 3
 name: d
 sense: min
 sets: [S]
@@ -97,7 +97,7 @@ inside an entry.
 from nimopt import loads
 
 loads(
-    "version: 2\nname: d\nsense: min\nsets: [S]\n"
+    "version: 3\nname: d\nsense: min\nsets: [S]\n"
     "variables:\n  x: {sets: [S], bound: 1}\n"
 )
 ```
@@ -120,6 +120,7 @@ The data in a file is the mapping `build` takes, in three shapes.
 | Shape | Inline | In the `.npz` |
 | --- | --- | --- |
 | a set's members | a list | a one-dimensional label array |
+| a set of `datetime64` or `timedelta64` members | `dtype` and `members` | a one-dimensional label array |
 | a dense parameter | nested lists in row-major order | its grid |
 | a long parameter | `columns`, the dimensions then `value`, and `rows` | a structured array with one field per dimension and `value` |
 
@@ -132,7 +133,7 @@ container would pickle it, and the reader rejects a pickled array.
 from nimopt import loads
 
 loads(
-    "version: 2\nname: d\nsense: min\nsets: [S]\nparameters:\n  c: [S]\n"
+    "version: 3\nname: d\nsense: min\nsets: [S]\nparameters:\n  c: [S]\n"
     "data:\n  S: [a]\n  c:\n    columns: [value, S]\n    rows:\n    - [1.0, a]\n"
 )
 ```
@@ -147,6 +148,35 @@ ValueError: parameter 'c' is given columns ['value', 'S']; a table lists the dim
 
 </details>
 <!-- /output -->
+
+## Datetime members
+
+A set whose members are `datetime64` or `timedelta64` is written inline as a
+mapping of `dtype` and `members`, instead of a list.
+
+```yaml
+data:
+  T:
+    dtype: datetime64[s]
+    members: ['2030-01-01T00:00:00', '2030-01-01T01:00:00']
+```
+
+A `datetime64` member is written as its ISO 8601 string. A `timedelta64`
+member is written as its integer count of the unit in the `dtype`. A label
+column of a long table is written in the same text and takes no marker: the
+column belongs to a set, and the reader converts it to that set's dtype. The
+`.npz` stores the dtype of every array and uses no separate form.
+
+A member fixed in a relation is written as text. A `datetime64` member is its
+quoted ISO 8601 string, such as `x['2030-01-01T00:00:00']`. A `timedelta64`
+member is a quoted count and numpy unit code, such as `x['3 h']`.
+
+Every member is converted to the dtype of its set. A string is parsed as ISO
+8601. A `datetime.datetime`, a `datetime.date` and a `datetime64` of another
+unit are converted. An integer against a `timedelta64` set is a count of that
+set's own unit. A conversion that is not exact raises `ValueError`:
+`'2030-01-01T00:30'` against a set in hours raises instead of truncating to
+the hour.
 
 ## What raises before anything is written
 

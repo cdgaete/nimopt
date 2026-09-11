@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 from nimblend import combined_dims
 
-from nimopt.sets import check_members, reference
+from nimopt.sets import check_members, displayed, reference
 from nimopt.symbol import Symbol, read_bare
 
 NOT_A_COEFFICIENT = (
@@ -40,7 +40,7 @@ def _finite_quotient(array: Any, name: str) -> None:
     at = np.flatnonzero(array.values() == 0.0)
     if at.size:
         where = {
-            d: labels[at[0]].item() for d, labels in array.domain().labels().items()
+            d: displayed(labels[at[0]]) for d, labels in array.domain().labels().items()
         }
         raise ZeroDivisionError(
             f"divisor {name} is zero at {at.size} coordinate(s), first at "

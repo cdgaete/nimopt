@@ -12,6 +12,24 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Fixed
+
+- A set whose members are `datetime64` or `timedelta64` round trips exactly
+  through both save formats, in every unit, with and without a fixed member.
+  A conversion that is not exact raises `ValueError` instead of truncating.
+
+### Changed
+
+- The model file format is version 3. A version 2 file still loads. A set of
+  `datetime64` or `timedelta64` members is written inline as a mapping of
+  `dtype` and `members`.
+- A member fixed in a relation is written as text: a `datetime64` member as
+  its quoted ISO 8601 string, and a `timedelta64` member as a quoted count
+  and numpy unit code such as `'3 h'`.
+- `Model.row` takes an ISO 8601 string for a `datetime64` dimension and a
+  count and unit code for a `timedelta64` dimension. A `Row` displays each
+  such coordinate in the same text.
+
 ## 0.2.2 - 2026-09-11
 
 ### Changed

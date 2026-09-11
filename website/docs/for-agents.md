@@ -158,6 +158,7 @@ beside it.
 | `ValueError` | a sum is over the members of ['T'] and takes the set, not a lag of it; write the lag at the variable's reference | [/guides/lags](/guides/lags) [/reference/expression](/reference/expression) |
 | `ValueError` | parameter 'rate' is read at a lag ['T']; write the lag at the variable's reference | [/guides/lags](/guides/lags) |
 | `ValueError` | 'max(gen[G, T]) <= 10': the syntax supports one call; write Sum | [/guides/saving-and-loading](/guides/saving-and-loading) |
+| `ValueError` | member '2030-01-01T00:30' does not convert exactly to datetime64[h] at dimension 'T' of variable 'gen'; write a member in the unit of that dimension | [/guides/saving-and-loading](/guides/saving-and-loading) |
 | `ValueError` | capital does not fall from base to what follows it; pass a capital cost that falls across the merit order | [/models/expansion](/models/expansion) |
 | `ValueError` | absence is 'unknown' and the array has no value at 3 of 4 coordinates; pass fill=<value> to to_dense() | [/nimblend/arrays](/nimblend/arrays) |
 | `ValueError` | frames ('P',) and ('Q',) share no dimension; pass operands that share a dimension | [/nimblend/arrays](/nimblend/arrays) |

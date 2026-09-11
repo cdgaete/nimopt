@@ -7,7 +7,7 @@ import numpy as np
 import numpy.typing as npt
 from nimblend import Domain, SparseArray, from_long
 
-from nimopt.sets import coords_of
+from nimopt.sets import as_members, coords_of
 from nimopt.symbol import Symbol
 
 if TYPE_CHECKING:
@@ -87,8 +87,16 @@ class Param(Symbol):
         """
         sets = tuple(sets)
         dims = tuple(s.name for s in sets)
+        converted = dict(columns)
+        for held in sets:
+            if held.name in converted and held.labels is not None:
+                converted[held.name] = as_members(
+                    converted[held.name],
+                    held.labels.dtype,
+                    f"column {held.name!r} of parameter {name!r}",
+                )
         try:
-            array = from_long(dims, coords_of(sets), columns, values)
+            array = from_long(dims, coords_of(sets), converted, values)
         except ValueError as error:
             raise ValueError(f"parameter {name!r}: {error}") from None
         return cls(name, sets, array)

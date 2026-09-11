@@ -29,7 +29,7 @@ print(d.to_yaml())
 <summary>Output</summary>
 
 ```text
-version: 2
+version: 3
 name: dispatch
 sense: min
 sets: [G, T]
@@ -65,7 +65,7 @@ import numpy as np
 from nimopt import loads
 
 text = """
-version: 2
+version: 3
 name: dispatch
 sense: min
 sets: [G, T]
@@ -116,7 +116,7 @@ file written back is the canonical form.
 from nimopt import loads
 
 edited = """
-version: 2
+version: 3
 name: dispatch
 sense: min
 sets: [G, T]
@@ -153,7 +153,7 @@ from nimopt import loads
 
 loads(
     """
-version: 2
+version: 3
 name: dispatch
 sense: min
 sets: [G, T]
@@ -227,6 +227,83 @@ data:
 </details>
 <!-- /output -->
 
+## Datetime members
+
+A set whose members are `datetime64` or `timedelta64` round trips through both
+data sources, in every unit. Inline, such a set is written as a mapping of
+`dtype` and `members`: a `datetime64` member as its ISO 8601 string, and a
+`timedelta64` member as its integer count of the unit in the `dtype`. A member
+fixed in a relation is written as quoted text.
+
+```python
+import numpy as np
+from nimopt import Model, Param, Set, Sum, loads
+
+T = Set("T", np.array(["2030-01-01T00", "2030-01-01T01"], dtype="datetime64[h]"))
+cost = Param.from_dense("cost", (T,), np.array([2.0, 5.0]))
+m = Model("dispatch", sense="min")
+gen = m.var("gen", (T,), upper=10.0)
+m.constraint("start", gen["2030-01-01T00"] == 4.0)
+m.constraint("total", Sum(T, gen[T]) >= 6.0)
+m.set_objective(Sum(T, cost[T] * gen[T]))
+text = m.to_yaml(inline=True)
+print(text[text.index("constraints:") :])
+print(loads(text).solve().objective)
+```
+
+<!-- output -->
+<details open>
+<summary>Output</summary>
+
+```text
+constraints:
+  start:
+    relation: gen['2030-01-01T00'] == 4
+  total:
+    relation: Sum(T, gen[T]) >= 6
+objective: Sum(T, cost[T] * gen[T])
+data:
+  T:
+    dtype: datetime64[h]
+    members: [2030-01-01T00, 2030-01-01T01]
+  cost: [2.0, 5.0]
+
+18.0
+```
+
+</details>
+<!-- /output -->
+
+The fixed member is written as a string and is read back to the same member.
+A string is parsed as ISO 8601, and a `datetime.datetime`, a `datetime.date`
+and a `datetime64` of another unit are converted. An integer against a
+`timedelta64` set is a count of that set's own unit. A conversion that is not
+exact raises `ValueError` instead of truncating.
+
+```python raises=ValueError
+import numpy as np
+from nimopt import Model, Set
+
+T = Set("T", np.array(["2030-01-01T00", "2030-01-01T01"], dtype="datetime64[h]"))
+m = Model("dispatch")
+gen = m.var("gen", (T,))
+gen["2030-01-01T00:30"]
+```
+
+<!-- output -->
+<details open>
+<summary>Raises ValueError</summary>
+
+```text
+ValueError: member '2030-01-01T00:30' does not convert exactly to datetime64[h] at dimension 'T' of variable 'gen'; write a member in the unit of that dimension
+```
+
+</details>
+<!-- /output -->
+
+`Model.row` takes the same text for a datetime dimension, and a `Row` displays
+each datetime coordinate in it.
+
 ## Data beside the file, for a large model
 
 `save` writes a model's file and its data as an `.npz` beside it, under the
@@ -296,7 +373,7 @@ print(loads(text).to_yaml(instructions=True) == text)
 
 ```text
 # --- Reading this file --------------------------------------------------
-# A nimopt model file, format version 2. The keys are written in this
+# A nimopt model file, format version 3. The keys are written in this
 # order, and no other key is accepted: version, name, sense, sets,
 # aliases, parameters, variables, constraints, objective, data. Only
 # version, name and sense are required.

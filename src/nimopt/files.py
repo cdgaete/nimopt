@@ -11,10 +11,12 @@ import yaml
 from nimopt.definition import Definition
 from nimopt.model import Model
 from nimopt.param import Param
+from nimopt.sets import as_members, member_text
 from nimopt.syntax import read, render
 from nimopt.term import Relation
 
-VERSION = 2
+VERSION = 3
+VERSIONS = (2, 3)
 KEYS = (
     "version",
     "name",
@@ -29,9 +31,10 @@ KEYS = (
 )
 VARIABLE_KEYS = ("sets", "subset", "lower", "upper", "integer")
 CONSTRAINT_KEYS = ("relation", "where", "over")
+SET_KEYS = ("dtype", "members")
 INSTRUCTIONS = """\
 # --- Reading this file --------------------------------------------------
-# A nimopt model file, format version 2. The keys are written in this
+# A nimopt model file, format version 3. The keys are written in this
 # order, and no other key is accepted: version, name, sense, sets,
 # aliases, parameters, variables, constraints, objective, data. Only
 # version, name and sense are required.
@@ -58,6 +61,15 @@ INSTRUCTIONS = """\
 #             that is not listed is not a zero; it is a coefficient
 #             that does not exist. The constraint row rules below
 #             depend on that difference.
+#             A set of datetime64 or timedelta64 members is written as
+#             a mapping of 'dtype' and 'members' instead of a list:
+#               T:
+#                 dtype: datetime64[s]
+#                 members: ['2030-01-01T00:00:00', '2030-01-01T01:00:00']
+#             A datetime64 member is its ISO 8601 string and a
+#             timedelta64 member is its integer count of the unit in
+#             the dtype. A label column of a table is written in the
+#             same text.
 #
 # variables   name: {sets, subset, lower, upper, integer}
 #   sets      The index sets of the variable. Required.
@@ -91,7 +103,10 @@ INSTRUCTIONS = """\
 # Expression syntax, in relation and objective:
 #   Name[s, ...]           a parameter or a variable indexed by its
 #                          sets; a bare Name where it has no sets
-#   Name['label']          that index fixed at one member
+#   Name['label']          that index fixed at one member; a
+#                          datetime64 member is its quoted ISO 8601
+#                          string and a timedelta64 member is a quoted
+#                          count and numpy unit code such as '3 h'
 #   s - k      s + k       that index shifted by k positions; the term
 #                          has no entry where the shift leaves the set
 #   s.cyclic - k           shifted, wrapping around at the ends
@@ -394,28 +409,47 @@ def _spec(text: str) -> dict[str, Any]:
     if not isinstance(spec, dict):
         raise ValueError(f"a model file is a YAML mapping; got {type(spec).__name__}")
     version = spec.get("version")
-    if version != VERSION:
+    if version not in VERSIONS:
+        accepted = " or ".join(str(v) for v in VERSIONS)
         raise ValueError(
-            f"the file declares version {version!r}; pass a file of version {VERSION}"
+            f"the file declares version {version!r}; pass a file of version {accepted}"
         )
     _only(spec, KEYS, "a model file")
     return spec
+
+
+def _written(value: Any) -> Any:
+    """Return one label as the value its inline entry contains.
+
+    A datetime64 label returns its ISO 8601 string. A timedelta64 label
+    returns its integer count. Every other label returns its Python value.
+    """
+    if value.dtype.kind == "M":
+        return member_text(value)
+    if value.dtype.kind == "m":
+        return int(value.astype(np.int64))
+    return value.item()
 
 
 def to_inline(model: Any) -> dict[str, Any]:
     """Return a model's data as the block its file contains."""
     out = {}
     for name, array in _arrays(model).items():
-        if array.dtype.names is None:
-            out[name] = array.tolist()
-        else:
+        if array.dtype.names is not None:
             columns = list(array.dtype.names)
             out[name] = {
                 "columns": columns,
                 "rows": [
-                    [array[c][k].item() for c in columns] for k in range(array.size)
+                    [_written(array[c][k]) for c in columns] for k in range(array.size)
                 ],
             }
+        elif array.dtype.kind in "Mm":
+            out[name] = {
+                "dtype": str(array.dtype),
+                "members": [_written(value) for value in array],
+            }
+        else:
+            out[name] = array.tolist()
     return out
 
 
@@ -440,6 +474,32 @@ def _table(
     return labels, np.asarray(held[-1], dtype=np.float64)
 
 
+def _members(name: str, entry: Mapping[str, Any]) -> npt.NDArray[Any]:
+    """Return a set's members from the mapping form of an inline entry.
+
+    The mapping declares `dtype` and `members`. Raises ValueError for a
+    missing key, for a dtype that is not a datetime64 or a timedelta64 dtype,
+    and for a member that does not convert exactly to that dtype.
+    """
+    what = f"set {name!r}"
+    _only(entry, SET_KEYS, what)
+    missing = [key for key in SET_KEYS if key not in entry]
+    if missing:
+        raise ValueError(f"{what} declares no {missing}; write dtype and members")
+    given = entry["dtype"]
+    message = (
+        f"{what} declares the dtype {given!r}; write a datetime64 or a "
+        f"timedelta64 dtype, or write the members as a list"
+    )
+    try:
+        dtype = np.dtype(given)
+    except TypeError:
+        raise ValueError(message) from None
+    if dtype.kind not in "Mm":
+        raise ValueError(message)
+    return as_members(entry["members"], dtype, what)
+
+
 def from_inline(block: Mapping[str, Any], definition: Definition) -> dict[str, Any]:
     """Return the mapping `build` takes, from a file's inline block."""
     out = {}
@@ -450,6 +510,8 @@ def from_inline(block: Mapping[str, Any], definition: Definition) -> dict[str, A
             out[name] = _table(name, parameter.dims, value["columns"], value["rows"])
         elif parameter is not None:
             out[name] = np.asarray(value, dtype=np.float64)
+        elif isinstance(value, dict):
+            out[name] = _members(name, value)
         else:
             out[name] = np.asarray(value)
     return out

@@ -18,7 +18,7 @@ def module(name):
 
 DISPATCH = textwrap.dedent(
     """\
-    version: 2
+    version: 3
     name: dispatch
     sense: min
     sets: [G, T]
@@ -113,7 +113,7 @@ def test_a_model_writes_its_structure_in_order_of_first_appearance():
     m.constraint("cap", Sum(P, cost[P] * x[P]) <= 3.0)
     assert m.to_yaml() == textwrap.dedent(
         """\
-        version: 2
+        version: 3
         name: m
         sense: max
         sets: [P]
@@ -430,7 +430,7 @@ def test_a_model_writes_the_block_above_its_inline_data():
     text = m.to_yaml(inline=True, instructions=True)
     assert text == INSTRUCTIONS + m.to_yaml(inline=True)
     block, head, data = (
-        text.index(s) for s in ("Reading this file", "version: 2", "data:")
+        text.index(s) for s in ("Reading this file", "version: 3", "data:")
     )
     assert block < head < data
 

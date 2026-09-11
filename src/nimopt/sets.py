@@ -1,11 +1,169 @@
 """The index sets a model is declared over."""
 
-from collections.abc import Iterable, Mapping, Sequence
+import datetime
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 from nimblend import Domain, StoredCoord
+
+ISO = "'2030-01-01T00:00:00'"
+COUNT = "'3 h'"
+
+
+def _datetime(value: Any, where: str) -> np.datetime64:
+    """Return `value` as a datetime64 in the unit the value itself specifies.
+
+    Raises ValueError for a value that is not a datetime and for a string
+    that is not an ISO 8601 datetime.
+    """
+    if isinstance(value, np.generic) and value.dtype.kind == "M":
+        return value
+    if isinstance(value, str):
+        try:
+            return np.datetime64(value)
+        except ValueError:
+            raise ValueError(
+                f"member {value!r} is not an ISO 8601 datetime at {where}; "
+                f"write a datetime such as {ISO}"
+            ) from None
+    if isinstance(value, (datetime.datetime, datetime.date)):
+        return np.datetime64(value)
+    raise ValueError(
+        f"member {value!r} is not a datetime at {where}; write an ISO 8601 "
+        f"string such as {ISO}"
+    )
+
+
+def _counted(text: str, where: str) -> np.timedelta64:
+    """Return a timedelta64 from text of the form `<count> <unit>`.
+
+    The unit is a numpy unit code. Raises ValueError for any other text.
+    """
+    count, _, unit = text.partition(" ")
+    try:
+        return np.timedelta64(int(count), unit.strip())
+    except (ValueError, TypeError):
+        raise ValueError(
+            f"member {text!r} is not a timedelta at {where}; write a count and "
+            f"a numpy unit code such as {COUNT}"
+        ) from None
+
+
+def _timedelta(value: Any, dtype: np.dtype[Any], where: str) -> np.timedelta64:
+    """Return `value` as a timedelta64, counting `dtype`'s unit for an integer.
+
+    Raises ValueError for a value that is not a timedelta and for a string
+    that is not a count and a numpy unit code.
+    """
+    if isinstance(value, np.generic) and value.dtype.kind == "m":
+        return value
+    if isinstance(value, str):
+        return _counted(value, where)
+    if isinstance(value, datetime.timedelta):
+        return np.timedelta64(value)
+    if isinstance(value, (int, np.integer)) and not isinstance(value, bool):
+        return np.timedelta64(int(value), np.datetime_data(dtype)[0])
+    raise ValueError(
+        f"member {value!r} is not a timedelta at {where}; write a count and a "
+        f"numpy unit code such as {COUNT}"
+    )
+
+
+def as_member(label: Any, dtype: Any, where: str) -> Any:
+    """Return one label converted to the dtype of a set's members.
+
+    A datetime64 or a timedelta64 dtype converts the label. Every other dtype
+    returns the label unchanged. Raises ValueError for a label that does not
+    convert and for a conversion that is not exact.
+    """
+    dtype = np.dtype(dtype)
+    if dtype.kind not in "Mm":
+        return label
+    if isinstance(label, np.generic) and label.dtype.kind not in "Mm":
+        label = label.item()
+    if dtype.kind == "M":
+        given = _datetime(label, where)
+    else:
+        given = _timedelta(label, dtype, where)
+    converted = given.astype(dtype)
+    if converted.astype(given.dtype) != given:
+        raise ValueError(
+            f"member {label!r} does not convert exactly to {dtype} at {where}; "
+            f"write a member in the unit of that dimension"
+        )
+    return converted
+
+
+def as_members(labels: npt.ArrayLike, dtype: Any, where: str) -> Any:
+    """Return a label column converted to the dtype of a set's members.
+
+    A datetime64 or a timedelta64 dtype returns an array of that dtype. Every
+    other dtype returns the column unchanged. Raises ValueError for a label
+    that does not convert and for a conversion that is not exact.
+    """
+    dtype = np.dtype(dtype)
+    if dtype.kind not in "Mm":
+        return labels
+    given = np.asarray(labels)
+    if given.dtype == dtype:
+        return given
+    converted = [as_member(label, dtype, where) for label in given.reshape(-1)]
+    return np.array(converted, dtype=dtype).reshape(given.shape)
+
+
+def coord_dtype(coord: Any) -> np.dtype[Any] | None:
+    """Return the dtype of the labels a coordinate stores.
+
+    Returns None for a coordinate that stores no labels.
+    """
+    return coord.labels.dtype if isinstance(coord, StoredCoord) else None
+
+
+def member_text(value: Any) -> str:
+    """Return a datetime64 or timedelta64 member as the text that reads back to it.
+
+    A datetime64 member returns its ISO 8601 string. A timedelta64 member
+    returns its count and its numpy unit code. Raises TypeError for any other
+    dtype.
+    """
+    if value.dtype.kind == "M":
+        return str(np.datetime_as_string(value))
+    if value.dtype.kind == "m":
+        return f"{int(value.astype(np.int64))} {np.datetime_data(value.dtype)[0]}"
+    raise TypeError(
+        f"a member of dtype {value.dtype} has no datetime text; pass a "
+        f"datetime64 or a timedelta64 member"
+    )
+
+
+def as_label(value: Any) -> Any:
+    """Return one stored label as the value a caller reads.
+
+    A datetime64 or a timedelta64 label returns the numpy scalar. Every other
+    label returns its Python value.
+    """
+    return value if value.dtype.kind in "Mm" else value.item()
+
+
+def displayed(value: Any) -> Any:
+    """Return one stored label as the value a message writes.
+
+    A datetime64 or a timedelta64 label returns its text. Every other label
+    returns its Python value.
+    """
+    return member_text(value) if value.dtype.kind in "Mm" else value.item()
+
+
+def shown(value: Any) -> str:
+    """Return one label as the quoted text a display writes."""
+    return repr(displayed(value) if isinstance(value, np.generic) else value)
+
+
+def label_text(value: Any) -> str:
+    """Return one label as text, with no quoting."""
+    return str(displayed(value) if isinstance(value, np.generic) else value)
 
 
 def _periods(given: Any) -> int:
@@ -206,22 +364,28 @@ def reference(
     return tuple(names), shifts, fixed
 
 
-def check_members(sets: Iterable[Any], fixed: Mapping[str, Any], owner: str) -> None:
-    """Check each fixed member against the labels of its own dimension's set.
+def check_members(
+    sets: Iterable[Any], fixed: MutableMapping[str, Any], owner: str
+) -> None:
+    """Convert each fixed member to its dimension's dtype and check it.
 
-    Raises ValueError for a label the set does not contain. A declared set
-    has no members, and the check skips it.
+    The converted member replaces the given one in `fixed`. Raises ValueError
+    for a label the set does not contain, for a label that does not convert
+    and for a conversion that is not exact. A declared set has no members,
+    and the check skips it.
     """
     by_name = {s.name: s for s in sets}
     for dim, label in fixed.items():
         held = by_name[dim]
         if getattr(held, "declared", False):
             continue
+        label = as_member(label, held.labels.dtype, f"dimension {dim!r} of {owner}")
+        fixed[dim] = label
         try:
             held.coord.to_position(np.asarray([label]))
         except KeyError:
             raise ValueError(
-                f"{owner} is read at member {label!r} of dimension {dim!r}; "
+                f"{owner} is read at member {shown(label)} of dimension {dim!r}; "
                 f"read it at a member that set contains"
             ) from None
 

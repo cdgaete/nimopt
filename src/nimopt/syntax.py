@@ -9,7 +9,7 @@ import numpy as np
 
 from nimopt.coefficient import Coefficient, Derived, DerivedRef
 from nimopt.param import Param
-from nimopt.sets import Alias, Set
+from nimopt.sets import Alias, Set, shown
 from nimopt.term import Expression, ParamRef, Relation, Sum
 
 
@@ -18,13 +18,6 @@ def number(value: float) -> str:
     value = float(value)
     if np.isfinite(value) and value == int(value):
         return str(int(value))
-    return repr(value)
-
-
-def label(value: Any) -> str:
-    """Return a member's label as text: a string quoted, a number bare."""
-    if isinstance(value, np.generic):
-        value = value.item()
     return repr(value)
 
 
@@ -41,7 +34,7 @@ def _items(
             base = f"{dim}.cyclic" if mode == "wrap" else dim
             out.append(f"{base} - {shift}" if shift > 0 else f"{base} + {-shift}")
         elif dim in fixed:
-            out.append(label(fixed[dim]))
+            out.append(shown(fixed[dim]))
         else:
             out.append(dim)
     return ", ".join(out)

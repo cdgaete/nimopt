@@ -7,6 +7,7 @@ from typing import Any
 from nimblend import Domain, SparseArray
 
 from nimopt.names import COLUMN
+from nimopt.sets import as_label, shown
 
 
 @dataclass(frozen=True)
@@ -65,16 +66,19 @@ class Absence:
 
 
 def _at(coordinate: Mapping[str, Any]) -> str:
-    return ", ".join(f"{d}={v!r}" for d, v in coordinate.items())
+    return ", ".join(f"{d}={shown(v)}" for d, v in coordinate.items())
 
 
 def _coordinates(domain: Domain) -> list[dict[str, Any]]:
     """Return one dict of dimension to label per member of a domain.
 
-    Each label is the Python value, not a numpy scalar.
+    Each label is the Python value. A datetime64 or a timedelta64 label is
+    the numpy scalar.
     """
     labels = domain.labels()
-    return [{d: labels[d][k].item() for d in domain.dims} for k in range(domain.size)]
+    return [
+        {d: as_label(labels[d][k]) for d in domain.dims} for k in range(domain.size)
+    ]
 
 
 def _absent_terms(
