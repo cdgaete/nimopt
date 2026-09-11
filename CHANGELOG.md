@@ -29,6 +29,13 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - `Model.row` takes an ISO 8601 string for a `datetime64` dimension and a
   count and unit code for a `timedelta64` dimension. A `Row` displays each
   such coordinate in the same text.
+- A member of a `datetime64` set specifies no time zone. A string with an
+  offset or a trailing `Z`, and a `datetime.datetime` with a `tzinfo`, raise
+  `ValueError`.
+- A member outside the range of its `datetime64` or `timedelta64` dtype raises
+  `ValueError` and reports the first and the last member that dtype
+  represents. A `NaT` member raises `ValueError` and reports that it is not a
+  time.
 
 ## 0.2.2 - 2026-09-11
 

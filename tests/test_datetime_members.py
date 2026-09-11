@@ -1,3 +1,4 @@
+import datetime
 import textwrap
 
 import numpy as np
@@ -223,6 +224,66 @@ def test_a_malformed_iso_string_raises():
     x = m.var("x", (T,))
     with pytest.raises(ValueError, match="is not an ISO 8601 datetime"):
         x["not-a-date"]
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "2030-01-01T00:00:00+02:00",
+        "2030-01-01T00:00:00-05:00",
+        "2030-01-01T00:00:00Z",
+        datetime.datetime(2030, 1, 1, tzinfo=datetime.UTC),
+        datetime.datetime(
+            2030, 1, 1, tzinfo=datetime.timezone(datetime.timedelta(hours=2))
+        ),
+    ],
+)
+def test_a_member_that_specifies_a_time_zone_raises(label):
+    m = Model("rt")
+    T = Set("T", stamps("ns"))
+    x = m.var("x", (T,))
+    with pytest.raises(ValueError, match="specifies a time zone"):
+        x[label]
+
+
+def test_a_naive_datetime_object_is_a_member():
+    m = Model("rt")
+    T = Set("T", stamps("ns"))
+    x = m.var("x", (T,))
+    m.constraint("start", x[datetime.datetime(2030, 1, 1)] == 1.0)
+    assert "x['2030-01-01T00:00:00.000000000'] == 1" in m.to_yaml()
+
+
+def test_a_member_outside_the_range_of_its_dtype_raises():
+    m = Model("rt")
+    T = Set("T", stamps("ns"))
+    x = m.var("x", (T,))
+    with pytest.raises(ValueError, match="is outside the range of datetime64"):
+        x["9999-01-01"]
+
+
+def test_a_not_a_time_member_raises():
+    m = Model("rt")
+    T = Set("T", stamps("ns"))
+    x = m.var("x", (T,))
+    with pytest.raises(ValueError, match="is not a time at dimension"):
+        x["NaT"]
+
+
+def test_an_inline_set_entry_missing_members_names_the_key():
+    text = (INLINE_SET % "timedelta64[h]").replace("    members: [1, 2]\n", "")
+    with pytest.raises(ValueError, match="declares no 'members'; write"):
+        loads(text)
+
+
+def test_a_right_hand_side_missing_a_row_shows_the_datetime_coordinate():
+    members = stamps("ns")
+    m = Model("rt")
+    T = Set("T", members)
+    rhs = Param.from_long("r", (T,), {"T": members[:1]}, np.array([1.0]))
+    x = m.var("x", (T,))
+    with pytest.raises(ValueError, match="'T': '2030-01-02T00:00:00.000000000'"):
+        m.constraint("c", x[T] <= rhs[T], over=(T,))
 
 
 def test_an_integer_against_a_datetime_set_raises():

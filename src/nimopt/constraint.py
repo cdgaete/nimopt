@@ -9,7 +9,7 @@ from nimblend import Domain, EntryBuffer, SparseArray
 from nimopt.coefficient import Coefficient
 from nimopt.names import ROW
 from nimopt.param import Param
-from nimopt.sets import rows_of
+from nimopt.sets import displayed, rows_of
 from nimopt.term import Relation
 
 SENSES = ("<=", ">=", "==")
@@ -167,7 +167,7 @@ def narrow(
         else:
             missing = rows.difference(covered)
             if missing.size:
-                first = {d: v[0] for d, v in missing.labels().items()}
+                first = {d: displayed(v[0]) for d, v in missing.labels().items()}
                 raise ValueError(
                     f"constraint {constraint.name!r} declares {rows.size} rows "
                     f"and right-hand side {rhs.name!r} misses {missing.size} "

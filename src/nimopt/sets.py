@@ -12,14 +12,31 @@ ISO = "'2030-01-01T00:00:00'"
 COUNT = "'3 h'"
 
 
+def _zoned(text: str) -> bool:
+    """True where an ISO 8601 datetime string specifies a time zone."""
+    time = text.partition("T")[2]
+    return text.endswith(("Z", "z")) or "+" in text or "-" in time
+
+
 def _datetime(value: Any, where: str) -> np.datetime64:
     """Return `value` as a datetime64 in the unit the value itself specifies.
 
-    Raises ValueError for a value that is not a datetime and for a string
-    that is not an ISO 8601 datetime.
+    Raises ValueError for a value that is not a datetime, for a string that
+    is not an ISO 8601 datetime, and for a value that specifies a time zone.
     """
     if isinstance(value, np.generic) and value.dtype.kind == "M":
         return value
+    if isinstance(value, str):
+        zoned = _zoned(value)
+    elif isinstance(value, datetime.datetime):
+        zoned = value.utcoffset() is not None
+    else:
+        zoned = False
+    if zoned:
+        raise ValueError(
+            f"member {value!r} specifies a time zone at {where}; write a "
+            f"datetime with no offset such as {ISO}"
+        )
     if isinstance(value, str):
         try:
             return np.datetime64(value)
@@ -71,12 +88,19 @@ def _timedelta(value: Any, dtype: np.dtype[Any], where: str) -> np.timedelta64:
     )
 
 
+def _range(dtype: np.dtype[Any]) -> str:
+    """Return the first and the last member a dtype represents."""
+    ends = np.array([np.iinfo(np.int64).min + 1, np.iinfo(np.int64).max]).astype(dtype)
+    return f"{member_text(ends[0])} to {member_text(ends[1])}"
+
+
 def as_member(label: Any, dtype: Any, where: str) -> Any:
     """Return one label converted to the dtype of a set's members.
 
     A datetime64 or a timedelta64 dtype converts the label. Every other dtype
     returns the label unchanged. Raises ValueError for a label that does not
-    convert and for a conversion that is not exact.
+    convert, for a label outside the range of the dtype, and for a conversion
+    that is not exact.
     """
     dtype = np.dtype(dtype)
     if dtype.kind not in "Mm":
@@ -87,8 +111,21 @@ def as_member(label: Any, dtype: Any, where: str) -> Any:
         given = _datetime(label, where)
     else:
         given = _timedelta(label, dtype, where)
-    converted = given.astype(dtype)
-    if converted.astype(given.dtype) != given:
+    if np.isnat(given):
+        example = ISO if dtype.kind == "M" else COUNT
+        raise ValueError(
+            f"member {label!r} is not a time at {where}; write a member with a "
+            f"value such as {example}"
+        )
+    try:
+        converted = given.astype(dtype)
+        back = converted.astype(given.dtype)
+    except OverflowError:
+        raise ValueError(
+            f"member {label!r} is outside the range of {dtype} at {where}; "
+            f"write a member from {_range(dtype)}"
+        ) from None
+    if back != given:
         raise ValueError(
             f"member {label!r} does not convert exactly to {dtype} at {where}; "
             f"write a member in the unit of that dimension"
@@ -122,20 +159,15 @@ def coord_dtype(coord: Any) -> np.dtype[Any] | None:
 
 
 def member_text(value: Any) -> str:
-    """Return a datetime64 or timedelta64 member as the text that reads back to it.
+    """Return the text a reader converts back to this member.
 
-    A datetime64 member returns its ISO 8601 string. A timedelta64 member
-    returns its count and its numpy unit code. Raises TypeError for any other
-    dtype.
+    The member has dtype kind `M` or `m`. A datetime64 member returns its ISO
+    8601 string. A timedelta64 member returns its count and its numpy unit
+    code.
     """
     if value.dtype.kind == "M":
         return str(np.datetime_as_string(value))
-    if value.dtype.kind == "m":
-        return f"{int(value.astype(np.int64))} {np.datetime_data(value.dtype)[0]}"
-    raise TypeError(
-        f"a member of dtype {value.dtype} has no datetime text; pass a "
-        f"datetime64 or a timedelta64 member"
-    )
+    return f"{int(value.astype(np.int64))} {np.datetime_data(value.dtype)[0]}"
 
 
 def as_label(value: Any) -> Any:

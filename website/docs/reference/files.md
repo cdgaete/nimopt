@@ -178,6 +178,15 @@ set's own unit. A conversion that is not exact raises `ValueError`:
 `'2030-01-01T00:30'` against a set in hours raises instead of truncating to
 the hour.
 
+A member specifies no time zone. `datetime64` represents no offset, and a
+conversion to UTC would move the member. A string with an offset or a trailing
+`Z` raises `ValueError`, and a `datetime.datetime` with a `tzinfo` raises the
+same error. Write the naive form, `'2030-01-01T00:00:00'`.
+
+A member outside the range its dtype represents raises `ValueError` and
+reports the first and the last member of that range. A `NaT` member raises
+`ValueError`.
+
 ## What raises before anything is written
 
 | Written | Reason |

@@ -483,7 +483,7 @@ def _members(name: str, entry: Mapping[str, Any]) -> npt.NDArray[Any]:
     """
     what = f"set {name!r}"
     _only(entry, SET_KEYS, what)
-    missing = [key for key in SET_KEYS if key not in entry]
+    missing = " and ".join(repr(key) for key in SET_KEYS if key not in entry)
     if missing:
         raise ValueError(f"{what} declares no {missing}; write dtype and members")
     given = entry["dtype"]
