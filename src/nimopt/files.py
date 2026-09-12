@@ -301,11 +301,18 @@ def structure(held: Any) -> dict[str, Any]:
     return out
 
 
+def _names(names: Iterable[str]) -> str:
+    """Return the names quoted and separated by commas."""
+    return ", ".join(repr(name) for name in names)
+
+
 def _only(entry: Mapping[str, Any], keys: Iterable[str], what: str) -> None:
     unknown = sorted(set(entry) - set(keys))
     if unknown:
+        word = "key" if len(unknown) == 1 else "keys"
         raise ValueError(
-            f"{what} contains the unknown keys {unknown}; write only {keys}"
+            f"{what} contains the unknown {word} {_names(unknown)}; "
+            f"write only {_names(keys)}"
         )
 
 

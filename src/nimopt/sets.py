@@ -18,11 +18,20 @@ def _zoned(text: str) -> bool:
     return text.endswith(("Z", "z")) or "+" in text or "-" in time
 
 
+def _not_a_time(label: Any, example: str, where: str) -> ValueError:
+    """Return the error for a member that is NaT."""
+    return ValueError(
+        f"member {label!r} is not a time at {where}; write a member with a "
+        f"value such as {example}"
+    )
+
+
 def _datetime(value: Any, where: str) -> np.datetime64:
     """Return `value` as a datetime64 in the unit the value itself specifies.
 
     Raises ValueError for a value that is not a datetime, for a string that
-    is not an ISO 8601 datetime, and for a value that specifies a time zone.
+    is not an ISO 8601 datetime, for the string NaT in any case, and for a
+    value that specifies a time zone.
     """
     if isinstance(value, np.generic) and value.dtype.kind == "M":
         return value
@@ -38,6 +47,8 @@ def _datetime(value: Any, where: str) -> np.datetime64:
             f"datetime with no offset such as {ISO}"
         )
     if isinstance(value, str):
+        if value.lower() == "nat":
+            raise _not_a_time(value, ISO, where)
         try:
             return np.datetime64(value)
         except ValueError:
@@ -112,11 +123,7 @@ def as_member(label: Any, dtype: Any, where: str) -> Any:
     else:
         given = _timedelta(label, dtype, where)
     if np.isnat(given):
-        example = ISO if dtype.kind == "M" else COUNT
-        raise ValueError(
-            f"member {label!r} is not a time at {where}; write a member with a "
-            f"value such as {example}"
-        )
+        raise _not_a_time(label, ISO if dtype.kind == "M" else COUNT, where)
     try:
         converted = given.astype(dtype)
         back = converted.astype(given.dtype)

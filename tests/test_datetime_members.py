@@ -1,5 +1,6 @@
 import datetime
 import textwrap
+import warnings
 
 import numpy as np
 import pytest
@@ -262,12 +263,15 @@ def test_a_member_outside_the_range_of_its_dtype_raises():
         x["9999-01-01"]
 
 
-def test_a_not_a_time_member_raises():
+@pytest.mark.parametrize("text", ["NaT", "nat"])
+def test_a_not_a_time_member_raises_and_numpy_emits_no_warning(text):
     m = Model("rt")
     T = Set("T", stamps("ns"))
     x = m.var("x", (T,))
-    with pytest.raises(ValueError, match="is not a time at dimension"):
-        x["NaT"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        with pytest.raises(ValueError, match="is not a time at dimension"):
+            x[text]
 
 
 def test_an_inline_set_entry_missing_members_names_the_key():
@@ -354,5 +358,6 @@ def test_an_inline_integer_against_a_datetime_dtype_raises():
 
 def test_an_inline_set_entry_with_an_unknown_key_raises():
     text = INLINE_SET % "timedelta64[h]"
-    with pytest.raises(ValueError, match="unknown keys"):
+    message = "contains the unknown key 'labels'; write only 'dtype', 'members'"
+    with pytest.raises(ValueError, match=message):
         loads(text.replace("members:", "labels:"))

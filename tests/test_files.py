@@ -481,3 +481,13 @@ def test_the_block_is_ascii_comment_lines():
     assert lines and all(line.startswith("#") for line in lines)
     assert INSTRUCTIONS.endswith("\n")
     assert INSTRUCTIONS.isascii()
+
+
+def test_an_unknown_key_is_written_as_text():
+    text = "version: 3\nname: m\nsense: min\nextra: 1\nother: 2\n"
+    with pytest.raises(
+        ValueError,
+        match="a model file contains the unknown keys 'extra', 'other'; "
+        "write only 'version', 'name', 'sense'",
+    ):
+        loads(text)

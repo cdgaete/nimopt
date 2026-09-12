@@ -12,6 +12,13 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Fixed
+
+- A set member written as `NaT` raises `ValueError` with no numpy
+  `DeprecationWarning` before it.
+- The message for an unknown key in a model file writes the unknown keys and
+  the accepted keys as quoted names separated by commas.
+
 ### Changed
 
 - The package requires numpy 2.5. numpy raises `OverflowError` for an

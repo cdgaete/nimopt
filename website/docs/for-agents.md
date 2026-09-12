@@ -178,7 +178,7 @@ beside it.
 | `ValueError` | term 'x' already sums over ['T']; sum over each dimension once | [/reference/expression](/reference/expression) |
 | `ValueError` | constraint 'cap' gives where= a domain with no name; declare its members as a parameter and refer to that parameter | [/reference/files](/reference/files) |
 | `ValueError` | parameter 'c' is given columns ['value', 'S']; a table lists the dimensions then value: ['S', 'value'] | [/reference/files](/reference/files) |
-| `ValueError` | variable 'x' contains the unknown keys ['bound']; write only ('sets', 'subset', 'lower', 'upper', 'integer') | [/reference/files](/reference/files) |
+| `ValueError` | variable 'x' contains the unknown key 'bound'; write only 'sets', 'subset', 'lower', 'upper', 'integer' | [/reference/files](/reference/files) |
 | `ValueError` | constraint 'cap' has no row at {'P': 'p3'}; read `absent('cap')` for the rule that dropped it | [/reference/inspection](/reference/inspection) |
 | `ValueError` | parameter 'cost': label column 'P' has length 1 and the value column has length 2; pass columns of equal length | [/reference/param](/reference/param) |
 | `TypeError` | parameter 'price' is over ('G',) and expresses no coefficient until it is read; read it at its sets as price[G] | [/reference/param](/reference/param) |

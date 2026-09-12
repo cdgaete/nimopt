@@ -107,7 +107,7 @@ loads(
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: variable 'x' contains the unknown keys ['bound']; write only ('sets', 'subset', 'lower', 'upper', 'integer')
+ValueError: variable 'x' contains the unknown key 'bound'; write only 'sets', 'subset', 'lower', 'upper', 'integer'
 ```
 
 </details>
