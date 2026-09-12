@@ -12,6 +12,13 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Changed
+
+- The package requires numpy 2.5. numpy raises `OverflowError` for an
+  overflowing datetime64 unit conversion from that version, so a set member
+  outside the range of its dimension's dtype reports that range on every
+  supported numpy.
+
 ## 0.2.3 - 2026-09-11
 
 ### Fixed
