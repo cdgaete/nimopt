@@ -19,6 +19,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   continuous and one integer variable per segment. The `tangent` method
   generates one row per segment for convex or concave points. `active=` sets
   the curve to zero for the incremental method.
+- `Definition.piecewise` declares the same relation, and `build` generates
+  its declarations.
 
 ### Fixed
 

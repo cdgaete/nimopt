@@ -15,6 +15,7 @@ from nimopt.explanation import (
     objective_constant,
     objective_text,
     param_shape,
+    piecewise_shape,
     set_shape,
     variable_shape,
 )
@@ -306,6 +307,9 @@ class Model:
             columns=self._n_columns,
             rows=self._n_rows,
             nonzeros=self.nnz,
+            piecewise=tuple(
+                piecewise_shape(d) for d in self.piecewise_declarations.values()
+            ),
         )
 
     def to_yaml(self, inline: bool = False, instructions: bool = False) -> str:

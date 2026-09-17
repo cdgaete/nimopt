@@ -53,6 +53,18 @@ class ConstraintShape:
 
 
 @dataclass(frozen=True)
+class PiecewiseShape:
+    """A piecewise declaration, its sets, its method and what it generated."""
+
+    name: str
+    free: tuple[str, ...]
+    method: str
+    sign: str
+    breakpoints: str
+    generated: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Explanation:
     """What is declared, and for a built model what was built from it.
 
@@ -73,6 +85,7 @@ class Explanation:
     nonzeros: int | None
     objective_constant: float = 0.0
     aliases: tuple[tuple[str, str], ...] = ()
+    piecewise: tuple[PiecewiseShape, ...] = ()
 
     def __repr__(self) -> str:
         return "\n".join(self._lines())
@@ -96,6 +109,8 @@ class Explanation:
             lines.insert(2, f"  aliases     {named}")
         for constraint in self.constraints:
             lines.append("  constraint  " + _constraint(constraint))
+        for shape in self.piecewise:
+            lines.append("  piecewise   " + _piecewise(shape))
         if self.objective is not None:
             lines.append(f"  objective   {self.sense}  {self.objective}")
         return lines
@@ -126,6 +141,15 @@ def _constraint(shape: ConstraintShape) -> str:
     return f"{shape.name} ({free})  {shape.relation}{built}"
 
 
+def _piecewise(shape: PiecewiseShape) -> str:
+    free = ",".join(shape.free)
+    rule = f"{shape.method} {shape.sign} over {shape.breakpoints}"
+    head = f"{shape.name} ({free})  {rule}"
+    if not shape.generated:
+        return head
+    return f"{head}  generates {', '.join(shape.generated)}"
+
+
 def set_shape(dimension: Any, size: int | None) -> SetShape:
     """Return the shape of a dimension, with `size` for a bound dimension."""
     return SetShape(dimension.name, size)
@@ -148,6 +172,19 @@ def variable_shape(
         _bound(variable.lower),
         _bound(variable.upper),
         variable.integer,
+    )
+
+
+def piecewise_shape(declaration: Any) -> PiecewiseShape:
+    """Return the shape of a piecewise declaration and what it generated."""
+    generated = declaration.generated
+    return PiecewiseShape(
+        declaration.name,
+        declaration.x.frame,
+        declaration.method,
+        declaration.sign,
+        declaration.breakpoints,
+        generated["variables"] + generated["constraints"],
     )
 
 

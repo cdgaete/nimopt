@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 
@@ -365,3 +367,101 @@ def test_a_fixed_member_in_the_objective_is_checked_when_the_set_binds():
     missing = dict(stock_data(), T=np.array(["t1", "t2"]))
     with pytest.raises(ValueError, match="variable 'x' is read at member 't0'"):
         d.build(missing)
+
+
+def curve():
+    """A least-cost split of a demand across two piecewise cost curves."""
+    d = Definition("curve", sense="min")
+    G, T, B = d.set("G"), d.set("T"), d.set("B")
+    xp, yp = d.param("xp", (G, B)), d.param("yp", (G, B))
+    demand = d.param("demand", (T,))
+    p = d.var("p", (G, T))
+    c = d.var("c", (G, T))
+    d.constraint("balance", Sum(G, p[G, T]) == demand[T])
+    d.piecewise(
+        "cost",
+        x=p[G, T],
+        x_points=xp[G, B],
+        y=c[G, T],
+        y_points=yp[G, B],
+        sign=">=",
+        method="incremental",
+    )
+    d.set_objective(Sum(G, T, c[G, T]))
+    return d
+
+
+def curve_data(xs=(0.0, 10.0, 20.0, 30.0, 0.0, 10.0, 20.0)):
+    # b has no fourth breakpoint
+    labels = {
+        "G": np.array(["a", "a", "a", "a", "b", "b", "b"]),
+        "B": np.array(["b0", "b1", "b2", "b3", "b0", "b1", "b2"]),
+    }
+    return {
+        "G": np.array(["a", "b"]),
+        "T": np.array(["t0", "t1"]),
+        "B": np.array(["b0", "b1", "b2", "b3"]),
+        "xp": (labels, np.array(xs)),
+        "yp": (labels, np.array([0.0, 5.0, 30.0, 35.0, 0.0, 20.0, 30.0])),
+        "demand": np.array([25.0, 40.0]),
+    }
+
+
+def test_a_definition_registers_a_piecewise_declaration_and_generates_nothing():
+    d = curve()
+    assert list(d.piecewise_declarations) == ["cost"]
+    assert d.piecewise_declarations["cost"].generated_names() == frozenset()
+    assert list(d.variables) == ["p", "c"]
+    assert list(d.constraints) == ["balance"]
+
+
+def test_build_generates_the_piecewise_declarations():
+    d = curve()
+    m = d.build(curve_data())
+    assert m.solve().objective == pytest.approx(85.0)
+    assert m.piecewise_declarations["cost"].generated["variables"] == (
+        "cost_fill",
+        "cost_order",
+    )
+    assert d.piecewise_declarations["cost"].generated_names() == frozenset()
+
+
+def test_build_checks_the_breakpoints():
+    d = curve()
+    with pytest.raises(ValueError, match="not strictly monotonic at {'G': 'a'}"):
+        d.build(curve_data(xs=(0.0, 20.0, 10.0, 30.0, 0.0, 10.0, 20.0)))
+
+
+def test_a_generated_name_the_definition_declares_raises():
+    d = Definition("d")
+    G, B = d.set("G"), d.set("B")
+    xp = d.param("xp", (G, B))
+    x = d.var("x", (G,))
+    d.var("cost_order", (G,))
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "piecewise 'cost' generates ['cost_order'], already declared in "
+            "definition 'd'; rename the piecewise declaration"
+        ),
+    ):
+        d.piecewise("cost", x[G], xp[G, B], x[G], xp[G, B], "==", "incremental")
+
+
+def test_a_piecewise_name_declared_twice_raises():
+    d = curve()
+    G, B, T = d.sets["G"], d.sets["B"], d.sets["T"]
+    p, xp = d.variables["p"], d.parameters["xp"]
+    with pytest.raises(ValueError, match="piecewise 'cost' is already declared"):
+        d.piecewise("cost", p[G, T], xp[G, B], p[G, T], xp[G, B], "==", "tangent")
+
+
+def test_build_checks_a_member_a_piecewise_expression_fixes():
+    d = Definition("d")
+    G, T, B = d.set("G"), d.set("T"), d.set("B")
+    xp = d.param("xp", (G, B))
+    p = d.var("p", (G, T))
+    d.piecewise("cost", p[G, "t9"], xp[G, B], p[G, "t9"], xp[G, B], "==", "incremental")
+    data = curve_data()
+    with pytest.raises(ValueError, match="read at member 't9' of dimension 'T'"):
+        d.build({k: data[k] for k in ("G", "T", "B", "xp")})

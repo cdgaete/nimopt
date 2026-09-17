@@ -17,11 +17,13 @@ from nimopt.explanation import (
     objective_constant,
     objective_text,
     param_shape,
+    piecewise_shape,
     set_shape,
     variable_shape,
 )
 from nimopt.model import Model
 from nimopt.param import Param
+from nimopt.piecewise import KINDS, Piecewise
 from nimopt.progress import reporter
 from nimopt.sets import Alias, Set, check_members
 from nimopt.symbol import read_at_its_sets
@@ -49,6 +51,7 @@ class Definition:
         self.parameters = {}
         self.variables = {}
         self.constraints = {}
+        self.piecewise_declarations = {}
         self.objective = None
 
     @property
@@ -151,6 +154,52 @@ class Definition:
         name = self._fresh(name, self.constraints, "constraint")
         self.constraints[name] = (relation, where, over)
 
+    def piecewise(
+        self,
+        name: str,
+        x: Any,
+        x_points: Any,
+        y: Any,
+        y_points: Any,
+        sign: str,
+        method: str,
+        active: Any = None,
+    ) -> Piecewise:
+        """Declare a piecewise-linear relation of `y` to `x`, generated in `build`.
+
+        The arguments are those of `Model.piecewise`. The breakpoint checks
+        run in `build`, when the data is bound. Raises ValueError for a name
+        already declared, for a generated name this definition declares and
+        for an argument `Piecewise` rejects.
+        """
+        name = str(name)
+        if name in self.piecewise_declarations:
+            raise ValueError(
+                f"piecewise {name!r} is already declared; declare another name"
+            )
+        declaration = Piecewise(name, x, x_points, y, y_points, sign, method, active)
+        names = declaration.names()
+        registries = (
+            self.sets,
+            self.aliases,
+            self.parameters,
+            self.variables,
+            self.constraints,
+        )
+        taken = [
+            generated
+            for kind in KINDS
+            for generated in names[kind]
+            if any(generated in registry for registry in registries)
+        ]
+        if taken:
+            raise ValueError(
+                f"piecewise {name!r} generates {taken}, already declared in "
+                f"definition {self.name!r}; rename the piecewise declaration"
+            )
+        self.piecewise_declarations[name] = declaration
+        return declaration
+
     def explain(self) -> Explanation:
         """Return what this definition declares, with nothing bound."""
         return Explanation(
@@ -179,6 +228,9 @@ class Definition:
             columns=None,
             rows=None,
             nonzeros=None,
+            piecewise=tuple(
+                piecewise_shape(d) for d in self.piecewise_declarations.values()
+            ),
         )
 
     def to_yaml(self, instructions: bool = False) -> str:
@@ -200,7 +252,9 @@ class Definition:
         are copied before they are bound, and the definition is unchanged.
 
         `progress=` reports each constraint as it is measured. The count is
-        the number of constraints.
+        the number of constraints. Each piecewise declaration generates its
+        declarations after the constraints, and its breakpoint checks run
+        there.
         """
         declared = {**self.sets, **self.parameters}
         missing = [name for name in declared if name not in data]
@@ -235,6 +289,10 @@ class Definition:
                 held.step(at, name)
         if held is not None:
             held.done()
+        for d in bound.piecewise_declarations.values():
+            model.piecewise(
+                d.name, d.x, d.x_points, d.y, d.y_points, d.sign, d.method, d.active
+            )
         if bound.objective is not None:
             model.set_objective(bound.objective)
         return model
@@ -308,6 +366,9 @@ def _fixed_members(
     rhs = [relation.rhs for relation, _, _ in definition.constraints.values()]
     if definition.objective is not None:
         expressions.append(definition.objective)
+    for d in definition.piecewise_declarations.values():
+        expressions.extend(e for e in (d.x, d.y, d.active) if e is not None)
+        rhs.extend((d.x_points, d.y_points))
     for expression in expressions:
         for term in expression.terms:
             if term.fixed:

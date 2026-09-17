@@ -157,3 +157,37 @@ def test_a_built_explanation_spells_its_relations_beside_its_counts():
     lines = repr(m.explain()).splitlines()
     assert lines[-2] == "  constraint  cap (P)  one[P] * x[P] + 1 <= 5  2 rows  2 nz"
     assert lines[-1] == "  objective   min  Sum(P, x[P]) + 7"
+
+
+GENERATED = (
+    "cost_fill",
+    "cost_order",
+    "cost_x",
+    "cost_y",
+    "cost_order_bound",
+    "cost_fill_order",
+    "cost_order_link",
+)
+
+
+def test_a_built_model_explains_what_a_piecewise_declaration_generated():
+    from test_definition import curve, curve_data
+
+    e = curve().build(curve_data()).explain()
+    assert [(s.name, s.free, s.method, s.sign, s.breakpoints) for s in e.piecewise] == [
+        ("cost", ("G", "T"), "incremental", ">=", "B")
+    ]
+    assert e.piecewise[0].generated == GENERATED
+    assert "cost_fill" in [v.name for v in e.variables]
+    line = "  piecewise   cost (G,T)  incremental >= over B  generates " + ", ".join(
+        GENERATED
+    )
+    assert line in repr(e).splitlines()
+
+
+def test_a_definition_explains_a_piecewise_declaration_with_nothing_generated():
+    from test_definition import curve
+
+    e = curve().explain()
+    assert e.piecewise[0].generated == ()
+    assert "  piecewise   cost (G,T)  incremental >= over B" in repr(e).splitlines()
