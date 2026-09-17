@@ -14,16 +14,24 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Added
 
-- `Model.piecewise` declares a piecewise-linear relation of one expression to
-  another through breakpoints. The `incremental` method generates one
-  continuous and one integer variable per segment. The `tangent` method
-  generates one row per segment for convex or concave points. `active=` sets
-  the curve to zero for the incremental method.
-- `Definition.piecewise` declares the same relation, and `build` generates
-  its declarations.
-- `save`, `Model.to_yaml` and `Definition.to_yaml` take `version=3` or
-  `version=4`.
-- `Piecewise` is exported.
+- `Model.piecewise` and `Definition.piecewise` declare a piecewise-linear
+  relation of one expression to another through breakpoints. `x` is on the
+  curve through `x_points` and `y_points`, and `sign` compares `y` with the
+  curve. The declaration generates the sets, parameters, variables and
+  constraints of its method under names that begin with its own.
+- The `incremental` method generates one continuous and one integer variable
+  per segment, and is exact for breakpoints that are strictly increasing or
+  strictly decreasing. The `tangent` method generates one row per segment for
+  points that are convex under `>=` or concave under `<=`.
+- `active=` takes an expression over the sets of `x`. Where it is 0, `x` is 0
+  and `y` is compared with 0. The `incremental` method supports it.
+- A model generates the declarations when `piecewise` is called. A definition
+  stores the declaration, and `build` generates it once the data is bound.
+- `Piecewise` is exported. `Model.piecewise_declarations` and
+  `Definition.piecewise_declarations` contain each declaration by name.
+  `Explanation.piecewise` reports each one with the names it generated.
+- `save`, `Model.to_yaml` and `Definition.to_yaml` take `version=4` or
+  `version=3`.
 
 ### Fixed
 
@@ -40,13 +48,15 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Changed
 
-- The package requires numpy 2.5. numpy raises `OverflowError` for an
-  overflowing datetime64 unit conversion from that version, so a set member
+- The model file format is version 4. A piecewise declaration is written under
+  the key `piecewise`, and the sets, parameters, variables and constraints it
+  generated are not written. Loading the file generates them again. Files of
+  version 2 and 3 load. `version=3` writes the generated declarations in place
+  of the piecewise declaration.
+- The package requires numpy 2.5. From that version numpy raises
+  `OverflowError` for an overflowing datetime64 unit conversion. A set member
   outside the range of its dimension's dtype reports that range on every
   supported numpy.
-- The model file format is version 4. It stores piecewise declarations under
-  the key `piecewise`. Files of version 2 and 3 still load. `version=3`
-  writes the declarations a piecewise declaration generated in its place.
 
 ## 0.2.3 - 2026-09-11
 
