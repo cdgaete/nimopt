@@ -48,6 +48,7 @@ HOME = {
     "Absence": "inspection",
     "Model": "model",
     "Assembled": "model",
+    "Piecewise": "model",
     "Set": "sets",
     "Alias": "sets",
     "product": "sets",

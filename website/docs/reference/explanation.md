@@ -19,6 +19,7 @@ too. A reader takes a field and parses no rendered text.
 | `parameters` | one `ParamShape` per parameter |
 | `variables` | one `VariableShape` per variable |
 | `constraints` | one `ConstraintShape` per equation |
+| `piecewise` | one `PiecewiseShape` per piecewise declaration |
 | `objective` | the objective expression, or `None` |
 | `columns`, `rows`, `nonzeros` | the model's shape, or `None` |
 
@@ -32,6 +33,7 @@ count.
 | `ParamShape` | `name`, `dims`, `entries` |
 | `VariableShape` | `name`, `dims`, `members`, `columns`, `lower`, `upper`, `integer` |
 | `ConstraintShape` | `name`, `free`, `sense`, `rows`, `nonzeros`, `relation` |
+| `PiecewiseShape` | `name`, `free`, `method`, `sign`, `breakpoints`, `generated` |
 
 `VariableShape.members` identifies the parameter a sparse variable took its
 members from, and is `None` for one over the full product. Columns are absent
@@ -75,3 +77,7 @@ transport  min  not built
 
 </details>
 <!-- /output -->
+
+`PiecewiseShape.generated` lists the variables and constraints a model
+generated for the declaration. A definition generates none, and the tuple is
+empty.

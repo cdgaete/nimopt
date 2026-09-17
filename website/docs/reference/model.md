@@ -19,6 +19,7 @@ an objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
 | --- | --- |
 | `var(name, sets, subset=None, lower=0.0, upper=inf, integer=False)` | a `Variable` occupying the next range of columns |
 | `constraint(name, relation, where=None, over=None)` | a `Constraint` occupying the next range of rows |
+| `piecewise(name, x, x_points, y, y_points, sign, method, active=None)` | a `Piecewise`; declares the variables and constraints of its method |
 | `set_objective(expression)` | nothing; sets the objective |
 | `sense` | `"min"` or `"max"`, as declared |
 | `solve(solver="highs", options=None)` | a `Solution` |
@@ -29,6 +30,7 @@ an objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
 | `objective_coefficients()` | one coefficient per column |
 | `explain()` | an `Explanation` of what the model built |
 | `to_yaml(inline=False, instructions=False, version=4)` | the text of this model's file, with its data inline where asked and the comment block that describes the format where asked; `version=3` writes the declarations a piecewise declaration generated in its place |
+| `piecewise_declarations` | the piecewise declarations, keyed by name |
 | `objective` | the objective expression, or `None` |
 
 Declaring costs shapes, not blocks: `n_rows` and `nnz` are known when a
@@ -62,6 +64,63 @@ print(m.objective_coefficients())
 
 </details>
 <!-- /output -->
+
+## `Piecewise`
+
+```
+Model.piecewise(name, x, x_points, y, y_points, sign, method, active=None)
+Definition.piecewise(name, x, x_points, y, y_points, sign, method, active=None)
+```
+
+A piecewise-linear relation of the expression `y` to the expression `x`.
+`x` is on the curve through `x_points` and `y_points`. `sign` compares `y`
+with the curve: `"=="`, `"<="` or `">="`. The two points are parameters read
+at their sets. Each is over some or all of the sets of `x` and over one
+breakpoint set, the one set `x` is not over. An entity lists its first
+breakpoints, and its last breakpoints may be absent. An entity with no
+breakpoint has no generated rows and no generated columns.
+
+| `method` | Generates | Requires |
+| --- | --- | --- |
+| `"incremental"` | per segment, one continuous and one integer column and their rows | breakpoints strictly increasing or strictly decreasing |
+| `"tangent"` | one row per segment, and two rows that keep `x` between the first and the last breakpoint | points convex under `>=`, concave under `<=`; no `active`; no `==` |
+
+`active` is an expression over the sets of `x`. Where it is 0, `x` is 0 and
+`y` is compared with 0. `Model.piecewise` generates the declarations at
+once. `Definition.piecewise` stores the declaration, and `build` generates
+them. A generated name is `name`, an underscore and a suffix:
+
+| `method` | Sets | Parameters | Variables | Constraints |
+| --- | --- | --- | --- | --- |
+| `"incremental"` | `segment` | `members`, `x_step`, `y_step`, `x_first`, `y_first` | `fill`, `order` | `x`, `y`, `order_bound`, `fill_order`, `order_link`, `active` |
+| `"tangent"` | `segment` | `slope`, `intercept`, `x_low`, `x_high` | none | `tangent`, `x_min`, `x_max` |
+
+`{name}_active` exists only where `active` is given. The members of
+`{name}_segment` are the breakpoint set's members without the first. A
+segment is identified by its end breakpoint.
+
+| Member | Contains |
+| --- | --- |
+| `name`, `x`, `x_points`, `y`, `y_points`, `sign`, `method`, `active` | the arguments |
+| `breakpoints` | the name of the breakpoint set |
+| `names()` | the names the declaration generates, keyed by `"sets"`, `"parameters"`, `"variables"` and `"constraints"` |
+| `generated` | the names a model generated, keyed the same way; empty on a definition |
+| `generated_names()` | every generated name, as a frozenset |
+
+An argument error raises when the declaration is made. `TypeError` is
+raised for an `x`, `y` or `active` that is not an expression, and for points
+that are not a parameter read at its sets. `ValueError` is raised for a name
+that is not a Python identifier, an unknown `method` or `sign`, expressions
+over different sets, points without exactly one breakpoint set, points over
+different sets, `"tangent"` with `"=="` or with `active`, and a generated
+name the model or definition declares.
+
+A breakpoint error raises `ValueError` when the data is bound, before any
+declaration, and identifies the first entity at fault: points with no
+breakpoint, points present at different breakpoints, an entity with one
+breakpoint, an absent breakpoint before a present one, a value that is not
+finite, breakpoints that are not strictly monotonic, and, for `"tangent"`,
+points whose curvature does not match `sign`.
 
 ## `Assembled`
 

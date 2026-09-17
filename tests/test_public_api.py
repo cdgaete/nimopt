@@ -19,6 +19,7 @@ def test_the_module_exports_what_a_model_is_stated_with():
         "Model",
         "Option",
         "Param",
+        "Piecewise",
         "Relation",
         "Row",
         "Session",

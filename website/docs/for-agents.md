@@ -57,7 +57,7 @@ members through `array(values)` and `identity(into, coord, start)`.
 <!-- surface -->
 | From | Names |
 | --- | --- |
-| `nimopt` | `COLUMN`, `ROW`, `Absence`, `Alias`, `Assembled`, `Coefficient`, `Constraint`, `Definition`, `Diagnosis`, `Explanation`, `Expression`, `Model`, `Option`, `Param`, `Relation`, `Row`, `Session`, `Set`, `Solution`, `Sum`, `Term`, `Variable`, `available`, `capabilities`, `load`, `loads`, `options`, `product`, `save`, `subset`, `subset_of` |
+| `nimopt` | `COLUMN`, `ROW`, `Absence`, `Alias`, `Assembled`, `Coefficient`, `Constraint`, `Definition`, `Diagnosis`, `Explanation`, `Expression`, `Model`, `Option`, `Param`, `Piecewise`, `Relation`, `Row`, `Session`, `Set`, `Solution`, `Sum`, `Term`, `Variable`, `available`, `capabilities`, `load`, `loads`, `options`, `product`, `save`, `subset`, `subset_of` |
 | `nimblend` | `Array`, `DenseArray`, `Domain`, `EntryBuffer`, `SparseArray`, `combined_dims`, `from_long`, `from_dense`, `is_canonical`, `StoredCoord`, `ProductCoord`, `SubsetCoord` |
 <!-- /surface -->
 
@@ -157,6 +157,7 @@ beside it.
 | `ValueError` | a lag is a whole number of members; got 1.7 | [/guides/lags](/guides/lags) |
 | `ValueError` | a sum is over the members of ['T'] and takes the set, not a lag of it; write the lag at the variable's reference | [/guides/lags](/guides/lags) [/reference/expression](/reference/expression) |
 | `ValueError` | parameter 'rate' is read at a lag ['T']; write the lag at the variable's reference | [/guides/lags](/guides/lags) |
+| `ValueError` | piecewise 'fuel' has points that are not convex, required by sign '>=' at {'G': 'a'}; use method 'incremental' | [/guides/piecewise](/guides/piecewise) |
 | `ValueError` | 'max(gen[G, T]) <= 10': the syntax supports one call; write Sum | [/guides/saving-and-loading](/guides/saving-and-loading) |
 | `ValueError` | member '2030-01-01T00:30' does not convert exactly to datetime64[h] at dimension 'T' of variable 'gen'; write a member in the unit of that dimension | [/guides/saving-and-loading](/guides/saving-and-loading) |
 | `ValueError` | capital does not fall from base to what follows it; pass a capital cost that falls across the merit order | [/models/expansion](/models/expansion) |

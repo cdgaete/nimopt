@@ -9,6 +9,7 @@ from nimopt.files import load, loads, save
 from nimopt.model import Assembled, Model
 from nimopt.names import COLUMN, ROW
 from nimopt.param import Param
+from nimopt.piecewise import Piecewise
 from nimopt.row import Row
 from nimopt.session import Diagnosis, Session
 from nimopt.sets import Alias, Set, product, subset, subset_of
@@ -34,6 +35,7 @@ __all__ = [
     "Model",
     "Option",
     "Param",
+    "Piecewise",
     "Relation",
     "Row",
     "Session",

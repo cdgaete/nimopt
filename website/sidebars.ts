@@ -28,6 +28,7 @@ const sidebars: SidebarsConfig = {
         "guides/fixed-members",
         "guides/bounds-from-parameters",
         "guides/coefficient-arithmetic",
+        "guides/piecewise",
         "guides/at-scale",
         "guides/highs-methods",
         "guides/saving-and-loading",

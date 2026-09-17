@@ -23,6 +23,7 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   its declarations.
 - `save`, `Model.to_yaml` and `Definition.to_yaml` take `version=3` or
   `version=4`.
+- `Piecewise` is exported.
 
 ### Fixed
 
