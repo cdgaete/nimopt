@@ -14,6 +14,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Fixed
 
+- An expression builds its rows where a coefficient introduces a set that
+  another term is not over.
 - A set member written as `NaT` raises `ValueError` with no numpy
   `DeprecationWarning` before it.
 - The message for an unknown key in a model file writes the unknown keys and

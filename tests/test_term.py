@@ -204,3 +204,18 @@ def test_a_dimension_the_coefficient_introduces_can_be_summed_away():
     inc = Param.from_dense("inc", (B, L, T), np.zeros((2, 1, 2)))
     expression = Sum(L, inc[B, L, T] * p[L, T])
     assert expression.frame == ("B", "T")
+
+
+def test_a_term_repeats_over_a_set_only_another_terms_coefficient_reads():
+    # c introduces K; y is repeated over K, one row per (G, K)
+    G = Set("G", np.array(["g0", "g1"]))
+    K = Set("K", np.array(["k0", "k1", "k2"]))
+    m = Model()
+    x = m.var("x", (G,))
+    y = m.var("y", (G,))
+    c = Param.from_dense("c", (G, K), np.arange(6.0).reshape(2, 3) + 1.0)
+    rows = m.constraint("r", y[G] - c[G, K] * x[G] >= 0.0)
+    assert rows.frame == ("G", "K")
+    assert rows.n_rows == 6
+    # row (g0, k1): -2 at x[g0], column 0, and 1 at y[g0], column 2
+    assert m.assemble().to_dense()[1].tolist() == [-2.0, 0.0, 1.0, 0.0]

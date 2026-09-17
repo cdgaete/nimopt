@@ -425,11 +425,14 @@ class Expression:
 
     @property
     def coords(self) -> dict[str, Any]:
-        """Return each dimension's coordinate, from the sets its variable is over."""
+        """Return each dimension's coordinate, from its variables and coefficients."""
         found = {}
         for t in self.terms:
             for s in t.variable.sets:
                 found[s.name] = s.coord
+            if t.coefficient is not None:
+                for s in t.coefficient.sets:
+                    found.setdefault(s.name, s.coord)
         return found
 
     def materialise(
