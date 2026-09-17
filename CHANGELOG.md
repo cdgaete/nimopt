@@ -12,6 +12,14 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Added
+
+- `Model.piecewise` declares a piecewise-linear relation of one expression to
+  another through breakpoints. The `incremental` method generates one
+  continuous and one integer variable per segment. The `tangent` method
+  generates one row per segment for convex or concave points. `active=` sets
+  the curve to zero for the incremental method.
+
 ### Fixed
 
 - An expression builds its rows where a coefficient introduces a set that

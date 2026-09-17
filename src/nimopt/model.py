@@ -20,6 +20,7 @@ from nimopt.explanation import (
 )
 from nimopt.names import COLUMN, ROW
 from nimopt.param import Param
+from nimopt.piecewise import Piecewise, generate
 from nimopt.progress import reporter
 from nimopt.sets import Alias
 from nimopt.symbol import read_at_its_sets
@@ -83,6 +84,7 @@ class Model:
         self._sense = sense
         self.variables = {}
         self.constraints = {}
+        self.piecewise_declarations = {}
         self._objective = None
         self._n_columns = 0
         self._n_rows = 0
@@ -184,6 +186,44 @@ class Model:
         self.constraints[name] = constraint
         self._n_rows += constraint.n_rows
         return constraint
+
+    def piecewise(
+        self,
+        name: str,
+        x: Any,
+        x_points: Any,
+        y: Any,
+        y_points: Any,
+        sign: str,
+        method: str,
+        active: Any = None,
+    ) -> Piecewise:
+        """Declare a piecewise-linear relation of `y` to `x` and its rows.
+
+        `x` lies on the curve through `x_points` and `y_points`, and `sign`
+        relates `y` to the curve. `method` is "incremental" or "tangent".
+        `active` scales the curve of the incremental method to zero. The
+        generated variables and constraints are declarations of this model.
+        The checks run before any declaration. Raises ValueError for a name
+        already declared, for a generated name the model declares, for an
+        argument `Piecewise` rejects and for breakpoints that fail a check.
+        """
+        name = str(name)
+        if name in self.piecewise_declarations:
+            raise ValueError(
+                f"piecewise {name!r} is already declared; declare another name"
+            )
+        declaration = Piecewise(name, x, x_points, y, y_points, sign, method, active)
+        generate(self, declaration)
+        self.piecewise_declarations[name] = declaration
+        return declaration
+
+    def _generated(self) -> frozenset[str]:
+        """Return every name this model's piecewise declarations generated."""
+        names = set()
+        for declaration in self.piecewise_declarations.values():
+            names |= declaration.generated_names()
+        return frozenset(names)
 
     def set_objective(self, expression: Any) -> None:
         """Set the objective the model's sense optimizes.
