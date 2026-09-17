@@ -6,7 +6,15 @@ import numpy as np
 import pytest
 
 from nimopt import Definition, Model, Param, Set, Sum, load, loads, save, subset
-from nimopt.files import CONSTRAINT_KEYS, INSTRUCTIONS, KEYS, VARIABLE_KEYS, dumps
+from nimopt.files import (
+    CONSTRAINT_KEYS,
+    INSTRUCTIONS,
+    INSTRUCTIONS_V3,
+    KEYS,
+    PIECEWISE_KEYS,
+    VARIABLE_KEYS,
+    dumps,
+)
 from nimopt.models import MODELS
 from nimopt.models import transport as worked_transport
 from reference import dense_matrix
@@ -18,7 +26,7 @@ def module(name):
 
 DISPATCH = textwrap.dedent(
     """\
-    version: 3
+    version: 4
     name: dispatch
     sense: min
     sets: [G, T]
@@ -113,7 +121,7 @@ def test_a_model_writes_its_structure_in_order_of_first_appearance():
     m.constraint("cap", Sum(P, cost[P] * x[P]) <= 3.0)
     assert m.to_yaml() == textwrap.dedent(
         """\
-        version: 3
+        version: 4
         name: m
         sense: max
         sets: [P]
@@ -415,7 +423,8 @@ def test_an_objective_over_no_dimension_survives_the_file():
 
 
 def test_dumps_prefixes_the_block_where_instructions_is_asked():
-    assert dumps({"version": 2}, instructions=True) == INSTRUCTIONS + "version: 2\n"
+    assert dumps({"version": 2}, instructions=True) == INSTRUCTIONS_V3 + "version: 2\n"
+    assert dumps({"version": 4}, instructions=True) == INSTRUCTIONS + "version: 4\n"
     assert dumps({"version": 2}) == "version: 2\n"
 
 
@@ -430,7 +439,7 @@ def test_a_model_writes_the_block_above_its_inline_data():
     text = m.to_yaml(inline=True, instructions=True)
     assert text == INSTRUCTIONS + m.to_yaml(inline=True)
     block, head, data = (
-        text.index(s) for s in ("Reading this file", "version: 3", "data:")
+        text.index(s) for s in ("Reading this file", "version: 4", "data:")
     )
     assert block < head < data
 
@@ -470,17 +479,18 @@ def test_a_saved_model_with_the_block_loads_and_saves_to_the_same_file(tmp_path)
 
 def test_the_block_names_every_key_of_the_format():
     # a key added to the format without a line in the block fails here
-    for key in (*KEYS, *VARIABLE_KEYS, *CONSTRAINT_KEYS):
+    for key in (*KEYS, *VARIABLE_KEYS, *CONSTRAINT_KEYS, *PIECEWISE_KEYS):
         assert re.search(rf"\b{key}\b", INSTRUCTIONS), key
 
 
 def test_the_block_is_ascii_comment_lines():
     # every line is a YAML comment, and the loader ignores it; the text is
     # ASCII and the file is written the same under any locale
-    lines = INSTRUCTIONS.splitlines()
-    assert lines and all(line.startswith("#") for line in lines)
-    assert INSTRUCTIONS.endswith("\n")
-    assert INSTRUCTIONS.isascii()
+    for block in (INSTRUCTIONS, INSTRUCTIONS_V3):
+        lines = block.splitlines()
+        assert lines and all(line.startswith("#") for line in lines)
+        assert block.endswith("\n")
+        assert block.isascii()
 
 
 def test_an_unknown_key_is_written_as_text():
@@ -491,3 +501,166 @@ def test_an_unknown_key_is_written_as_text():
         "write only 'version', 'name', 'sense'",
     ):
         loads(text)
+
+
+CURVE = textwrap.dedent(
+    """\
+    version: 4
+    name: curve
+    sense: min
+    sets: [G, T, B]
+    parameters:
+      xp: [G, B]
+      yp: [G, B]
+      demand: [T]
+    variables:
+      p:
+        sets: [G, T]
+      c:
+        sets: [G, T]
+    constraints:
+      balance:
+        relation: Sum(G, p[G, T]) == demand[T]
+    piecewise:
+      cost:
+        x: p[G, T]
+        x_points: xp[G, B]
+        y: c[G, T]
+        y_points: yp[G, B]
+        sign: '>='
+        method: incremental
+    objective: Sum(G, T, c[G, T])
+    """
+)
+
+
+def test_a_definition_writes_its_piecewise_declaration():
+    from test_definition import curve
+
+    assert curve().to_yaml() == CURVE
+
+
+def test_a_piecewise_declaration_reads_back_to_the_same_file():
+    d = loads(CURVE)
+    assert list(d.piecewise_declarations) == ["cost"]
+    assert d.to_yaml() == CURVE
+
+
+def test_an_active_expression_reads_back_to_the_same_file():
+    d = Definition("d")
+    G, B = d.set("G"), d.set("B")
+    xp = d.param("xp", (G, B))
+    x, y = d.var("x", (G,)), d.var("y", (G,))
+    u = d.var("u", (G,), upper=1.0, integer=True)
+    d.piecewise("cost", x[G], xp[G, B], y[G], xp[G, B], "==", "incremental", u[G])
+    text = d.to_yaml()
+    assert "    active: u[G]\n" in text
+    assert loads(text).to_yaml() == text
+
+
+def test_a_model_saves_its_piecewise_declaration_as_version_four(tmp_path):
+    from test_definition import curve, curve_data
+
+    save(curve().build(curve_data()), tmp_path / "m.yaml")
+    text = (tmp_path / "m.yaml").read_text()
+    assert text.startswith("version: 4\n")
+    assert "  cost:\n    x: p[G, T]\n" in text
+    assert "cost_" not in text
+    back = load(tmp_path / "m.yaml")
+    assert list(back.piecewise_declarations) == ["cost"]
+    assert back.solve().objective == pytest.approx(85.0)
+    save(back, tmp_path / "again.yaml")
+    again = (tmp_path / "again.yaml").read_text()
+    assert again == text.replace("data: m.npz", "data: again.npz")
+
+
+def test_a_model_saves_the_generated_declarations_as_version_three(tmp_path):
+    from test_definition import curve, curve_data
+
+    save(curve().build(curve_data()), tmp_path / "m.yaml", version=3)
+    text = (tmp_path / "m.yaml").read_text()
+    assert text.startswith("version: 3\n")
+    assert "piecewise" not in text
+    assert "    subset: cost_members\n" in text
+    assert "xp" not in text
+    back = load(tmp_path / "m.yaml")
+    assert back.piecewise_declarations == {}
+    assert back.solve().objective == pytest.approx(85.0)
+
+
+@pytest.mark.parametrize("version", [3, 4])
+def test_a_model_with_a_piecewise_declaration_round_trips_inline(version):
+    from test_definition import curve, curve_data
+
+    text = curve().build(curve_data()).to_yaml(inline=True, version=version)
+    back = loads(text)
+    assert back.solve().objective == pytest.approx(85.0)
+    assert back.to_yaml(inline=True, version=version) == text
+
+
+def test_a_definition_with_a_piecewise_declaration_is_not_written_as_version_three(
+    tmp_path,
+):
+    from test_definition import curve
+
+    message = (
+        "definition 'curve' contains piecewise 'cost'; write version 4 or "
+        "build the model first"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        curve().to_yaml(version=3)
+    with pytest.raises(ValueError, match=re.escape(message)):
+        save(curve(), tmp_path / "d.yaml", version=3)
+
+
+def test_a_definition_without_one_is_written_as_version_three():
+    text = dispatch().to_yaml(version=3)
+    assert text == DISPATCH.replace("version: 4\n", "version: 3\n")
+    assert loads(text).to_yaml() == DISPATCH
+
+
+@pytest.mark.parametrize("version", [2, 5, "4", True])
+def test_a_file_is_written_only_as_version_three_or_four(version):
+    with pytest.raises(
+        ValueError,
+        match=re.escape(f"a file is written in version 3 or 4; got {version!r}"),
+    ):
+        dispatch().to_yaml(version=version)
+
+
+def test_the_version_three_block_is_written_above_a_version_three_file():
+    text = dispatch().to_yaml(instructions=True, version=3)
+    assert text == INSTRUCTIONS_V3 + dispatch().to_yaml(version=3)
+    assert "piecewise" not in INSTRUCTIONS_V3
+    assert "format version 3" in INSTRUCTIONS_V3
+
+
+def test_a_version_three_file_with_piecewise_raises():
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "the file declares version 3 and contains piecewise; declare version 4"
+        ),
+    ):
+        loads(CURVE.replace("version: 4\n", "version: 3\n"))
+
+
+def test_an_unknown_key_in_a_piecewise_entry_raises():
+    text = CURVE.replace(
+        "    method: incremental\n", "    method: incremental\n    segments: 3\n"
+    )
+    with pytest.raises(
+        ValueError, match="piecewise 'cost' contains the unknown key 'segments'"
+    ):
+        loads(text)
+
+
+def test_a_piecewise_entry_without_a_required_key_raises():
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "piecewise 'cost' declares no 'method'; write 'x', 'x_points', "
+            "'y', 'y_points', 'sign', 'method'"
+        ),
+    ):
+        loads(CURVE.replace("    method: incremental\n", ""))

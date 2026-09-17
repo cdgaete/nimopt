@@ -29,7 +29,7 @@ print(d.to_yaml())
 <summary>Output</summary>
 
 ```text
-version: 3
+version: 4
 name: dispatch
 sense: min
 sets: [G, T]
@@ -373,10 +373,10 @@ print(loads(text).to_yaml(instructions=True) == text)
 
 ```text
 # --- Reading this file --------------------------------------------------
-# A nimopt model file, format version 3. The keys are written in this
+# A nimopt model file, format version 4. The keys are written in this
 # order, and no other key is accepted: version, name, sense, sets,
-# aliases, parameters, variables, constraints, objective, data. Only
-# version, name and sense are required.
+# aliases, parameters, variables, constraints, piecewise, objective,
+# data. Only version, name and sense are required.
 True
 True
 ```

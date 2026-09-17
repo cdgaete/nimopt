@@ -312,19 +312,22 @@ class Model:
             ),
         )
 
-    def to_yaml(self, inline: bool = False, instructions: bool = False) -> str:
+    def to_yaml(
+        self, inline: bool = False, instructions: bool = False, version: int = 4
+    ) -> str:
         """Return this model as file text, with its data inline where asked.
 
         The text contains the structure alone, or the structure and an inline
         data block. `save` writes a sidecar and the line that refers to it.
         This method writes no file. `instructions=True` prefixes the comment
-        block that explains the format.
+        block that explains the format. `version` is 4 or 3. Version 3 writes
+        the declarations a piecewise declaration generated in its place.
         """
         from nimopt.files import dumps, structure, to_inline
 
-        mapping = structure(self)
+        mapping = structure(self, version)
         if inline:
-            mapping["data"] = to_inline(self)
+            mapping["data"] = to_inline(self, version)
         return dumps(mapping, instructions)
 
     def _variable(self, name: str, other: str | None = None) -> Variable:
@@ -399,11 +402,13 @@ class Model:
         narrow(constraint, record)
         return record.absence(name)
 
-    def _parameters(self) -> tuple[Param, ...]:
+    def _parameters(self, as_declared: bool = False) -> tuple[Param, ...]:
         """Return every parameter this model reads, in order of first appearance.
 
         A derived coefficient is walked into. An objective over an arithmetic
         of two parameters reports both, with the sets they introduce.
+        `as_declared=True` skips what the piecewise declarations generated and
+        reads the parameters of each piecewise declaration.
         """
         found = {}
 
@@ -419,16 +424,29 @@ class Model:
                         f"{parameter.name!r}; declare one parameter per name"
                     )
 
-        for variable in self.variables.values():
+        skip = self._generated() if as_declared else frozenset()
+        for name, variable in self.variables.items():
+            if name in skip:
+                continue
             for held in (variable.lower, variable.upper, variable.subset):
                 take(held)
-        for constraint in self.constraints.values():
+        for name, constraint in self.constraints.items():
+            if name in skip:
+                continue
             for term in constraint.expression.terms:
                 if term.coefficient is not None:
                     take(term.coefficient)
             take(constraint.rhs)
             take(constraint.where)
             take(constraint.over)
+        if as_declared:
+            for declaration in self.piecewise_declarations.values():
+                for expression in (declaration.x, declaration.y, declaration.active):
+                    for term in () if expression is None else expression.terms:
+                        if term.coefficient is not None:
+                            take(term.coefficient)
+                take(declaration.x_points)
+                take(declaration.y_points)
         if self._objective is not None:
             for term in self._objective.terms:
                 if term.coefficient is not None:
@@ -436,7 +454,7 @@ class Model:
         return tuple(found.values())
 
     def _dimensions(
-        self, parameters: Iterable[Param]
+        self, parameters: Iterable[Param], as_declared: bool = False
     ) -> tuple[tuple[Any, ...], tuple[Alias, ...]]:
         """Return the sets and the aliases this model is declared over, in order.
 
@@ -444,7 +462,8 @@ class Model:
         parameters are walked beside the variables. An alias reads a set's
         members and has none of its own. The two are reported apart, and a
         file contains data for a set alone. The base set of an alias is taken
-        with the alias.
+        with the alias. `as_declared=True` skips the variables the piecewise
+        declarations generated.
         """
         found = {}
 
@@ -457,7 +476,10 @@ class Model:
                     f"{dimension.name!r}; declare one set per name"
                 )
 
-        for variable in self.variables.values():
+        skip = self._generated() if as_declared else frozenset()
+        for name, variable in self.variables.items():
+            if name in skip:
+                continue
             for dimension in variable.sets:
                 take(dimension)
         for parameter in parameters:

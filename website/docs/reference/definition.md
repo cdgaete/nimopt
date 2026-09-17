@@ -29,7 +29,7 @@ beside it. `sense` is `"min"` or `"max"`, set once here.
 | `constraint(name, relation, where=None, over=None)` | nothing; registers the constraint |
 | `build(data)` | a `Model` over the declarations, bound to `data` |
 | `explain()` | an `Explanation` of what is declared |
-| `to_yaml(instructions=False)` | the text of this definition's file, structure and no data; `instructions=True` adds the comment block that describes the format |
+| `to_yaml(instructions=False, version=4)` | the text of this definition's file, structure and no data; `instructions=True` adds the comment block that describes the format; `version=3` raises `ValueError` for a definition with a piecewise declaration |
 | `set_objective(expression)` | nothing; sets the objective |
 | `sense` | `"min"` or `"max"`, as declared |
 | `sets`, `aliases`, `parameters`, `variables`, `constraints` | the registries, keyed by name |

@@ -110,8 +110,8 @@ def test_an_inline_timedelta_set_is_written_as_its_dtype_and_its_counts():
     assert "members: [1, 2, 3]" in block
 
 
-def test_a_saved_file_declares_version_three():
-    assert "version: 3\n" in model(stamps("ns"), False).to_yaml()
+def test_a_saved_file_declares_version_four():
+    assert "version: 4\n" in model(stamps("ns"), False).to_yaml()
 
 
 VERSION_TWO = textwrap.dedent(

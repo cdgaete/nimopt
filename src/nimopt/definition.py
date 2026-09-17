@@ -233,15 +233,16 @@ class Definition:
             ),
         )
 
-    def to_yaml(self, instructions: bool = False) -> str:
+    def to_yaml(self, instructions: bool = False, version: int = 4) -> str:
         """Return this definition as file text, its structure and no data.
 
         `instructions=True` prefixes the comment block that explains the
-        format.
+        format. `version` is 4 or 3. Version 3 raises ValueError for a
+        definition with a piecewise declaration.
         """
         from nimopt.files import dumps, structure
 
-        return dumps(structure(self), instructions)
+        return dumps(structure(self, version), instructions)
 
     def build(self, data: Mapping[str, Any], progress: Any = False) -> "Model":
         """Return a model over this definition's declarations, bound to `data`.

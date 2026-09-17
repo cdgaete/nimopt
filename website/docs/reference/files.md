@@ -11,14 +11,23 @@ description: The file a definition or a model writes, the meaning of each key, t
 | --- | --- |
 | `load(path, data=None)` | reads a file; returns a `Definition`, or a `Model` where the file contains data or `data=` gives it |
 | `loads(text, data=None)` | the same over text; a sidecar name in text raises `ValueError`. Text has no directory |
-| `save(what, path, inline=False, instructions=False)` | writes a definition's file, or a model's with an `.npz` beside it, or one file with an inline block when `inline=True`; `instructions=True` writes the comment block that describes the format at the top of the file |
+| `save(what, path, inline=False, instructions=False, version=4)` | writes a definition's file, or a model's with an `.npz` beside it, or one file with an inline block when `inline=True`; `instructions=True` writes the comment block that describes the format at the top of the file; `version` is `4` or `3` |
 
 `data=` is the mapping `build` takes or the path of an `.npz`. A file that
 contains data and a `data=` together raises `ValueError`.
 
-`Definition.to_yaml(instructions=False)` and `Model.to_yaml(inline=False,
-instructions=False)` return the text `save` writes, without a sidecar line:
-only `save` writes a sidecar and the line that identifies it.
+`Definition.to_yaml(instructions=False, version=4)` and
+`Model.to_yaml(inline=False, instructions=False, version=4)` return the text
+`save` writes, without a sidecar line: only `save` writes a sidecar and the
+line that identifies it.
+
+`version=4` writes each piecewise declaration under `piecewise`, and omits
+the sets, parameters, variables and constraints it generated. `version=3`
+writes a model's generated declarations as ordinary declarations, and omits
+the piecewise declarations and any parameter only they read. A model loaded
+from that file contains the same rows and no piecewise declaration. A
+definition with a piecewise declaration raises `ValueError` at version 3. Any
+other version raises `ValueError`.
 
 With `instructions=True`, every writer puts a fixed comment block at the top
 of the text. The block describes the format: the keys and their order, the
@@ -32,13 +41,14 @@ load to the same model.
 
 | Key | Contains |
 | --- | --- |
-| `version` | `3`; a file of version `2` also loads; any other value raises `ValueError` and reports the versions this reader accepts |
+| `version` | `4`, or `3` where the caller asks for it; files of version `2` and `3` also load; any other value raises `ValueError` and reports the versions this reader accepts |
 | `name`, `sense` | the model's |
 | `sets` | a list of names |
 | `aliases` | each alias to its base set; absent where the model declares none |
 | `parameters` | each name to its dimensions |
 | `variables` | each name to `sets`, and to `subset`, `lower`, `upper`, `integer` where they differ from no subset, `0`, infinity and `false` |
 | `constraints` | each name to `relation`, and to `where` or `over` where given |
+| `piecewise` | each name to `x`, `x_points`, `y`, `y_points`, `sign`, `method`, and to `active` where given; version 4 only; absent where the model declares none |
 | `objective` | the objective expression; absent where the model declares none |
 | `data` | an inline mapping, or the name of an `.npz` beside the file |
 
@@ -70,7 +80,7 @@ print(loads(text).to_yaml() == text)
 <summary>Output</summary>
 
 ```text
-version: 3
+version: 4
 name: d
 sense: min
 sets: [S]

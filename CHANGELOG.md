@@ -21,6 +21,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   the curve to zero for the incremental method.
 - `Definition.piecewise` declares the same relation, and `build` generates
   its declarations.
+- `save`, `Model.to_yaml` and `Definition.to_yaml` take `version=3` or
+  `version=4`.
 
 ### Fixed
 
@@ -37,6 +39,9 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   overflowing datetime64 unit conversion from that version, so a set member
   outside the range of its dimension's dtype reports that range on every
   supported numpy.
+- The model file format is version 4. It stores piecewise declarations under
+  the key `piecewise`. Files of version 2 and 3 still load. `version=3`
+  writes the declarations a piecewise declaration generated in its place.
 
 ## 0.2.3 - 2026-09-11
 

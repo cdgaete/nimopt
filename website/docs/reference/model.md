@@ -28,7 +28,7 @@ an objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
 | `integrality()` | one flag per column |
 | `objective_coefficients()` | one coefficient per column |
 | `explain()` | an `Explanation` of what the model built |
-| `to_yaml(inline=False, instructions=False)` | the text of this model's file, with its data inline where asked and the comment block that describes the format where asked |
+| `to_yaml(inline=False, instructions=False, version=4)` | the text of this model's file, with its data inline where asked and the comment block that describes the format where asked; `version=3` writes the declarations a piecewise declaration generated in its place |
 | `objective` | the objective expression, or `None` |
 
 Declaring costs shapes, not blocks: `n_rows` and `nnz` are known when a

@@ -15,8 +15,9 @@ from nimopt.sets import as_members, member_text
 from nimopt.syntax import read, render
 from nimopt.term import Relation
 
-VERSION = 3
-VERSIONS = (2, 3)
+VERSION = 4
+VERSIONS = (2, 3, 4)
+WRITTEN = (3, 4)
 KEYS = (
     "version",
     "name",
@@ -26,18 +27,30 @@ KEYS = (
     "parameters",
     "variables",
     "constraints",
+    "piecewise",
     "objective",
     "data",
 )
 VARIABLE_KEYS = ("sets", "subset", "lower", "upper", "integer")
 CONSTRAINT_KEYS = ("relation", "where", "over")
+PIECEWISE_KEYS = ("x", "x_points", "y", "y_points", "sign", "method", "active")
+PIECEWISE_REQUIRED = PIECEWISE_KEYS[:-1]
 SET_KEYS = ("dtype", "members")
-INSTRUCTIONS = """\
+_HEAD_3 = """\
 # --- Reading this file --------------------------------------------------
 # A nimopt model file, format version 3. The keys are written in this
 # order, and no other key is accepted: version, name, sense, sets,
 # aliases, parameters, variables, constraints, objective, data. Only
 # version, name and sense are required.
+"""
+_HEAD_4 = """\
+# --- Reading this file --------------------------------------------------
+# A nimopt model file, format version 4. The keys are written in this
+# order, and no other key is accepted: version, name, sense, sets,
+# aliases, parameters, variables, constraints, piecewise, objective,
+# data. Only version, name and sense are required.
+"""
+_BODY = """\
 #
 # sense       'min' or 'max', applied to the objective.
 # sets        The names of the index sets. Their members are listed
@@ -100,7 +113,34 @@ INSTRUCTIONS = """\
 #   value. A term whose parameter has no entry at a coordinate removes
 #   that row.
 #
-# Expression syntax, in relation and objective:
+"""
+_PIECEWISE = """\
+# piecewise   name: {x, x_points, y, y_points, sign, method, active}
+#             A piecewise-linear relation of y to x. Loading the file
+#             generates its variables and constraints; they are not
+#             written.
+#   x         Required. An expression.
+#   x_points  Required. A parameter indexed by some or all of the
+#             index sets of x and by one breakpoint set. An absent
+#             entry is a breakpoint that does not exist; only the last
+#             breakpoints of an entity may be absent.
+#   y         Required. An expression over the index sets of x.
+#   y_points  Required. A parameter over the index sets of x_points,
+#             with entries at the same coordinates.
+#   sign      Required. <=, >= or ==: y compared with the curve. x is
+#             always on the curve.
+#   method    Required. incremental: one continuous and one integer
+#             variable per segment. tangent: one row per segment; the
+#             points are convex under >= and concave under <=.
+#   active    An expression over the index sets of x, incremental
+#             only. Where it is 0, x is 0 and y is compared with 0.
+#   The generated names are the piecewise name, an underscore and one
+#   of: segment, members, x_step, y_step, x_first, y_first, fill,
+#   order, x, y, order_bound, fill_order, order_link, active, slope,
+#   intercept, x_low, x_high, tangent, x_min, x_max.
+#
+"""
+_SYNTAX = """\
 #   Name[s, ...]           a parameter or a variable indexed by its
 #                          sets; a bare Name where it has no sets
 #   Name['label']          that index fixed at one member; a
@@ -120,6 +160,16 @@ INSTRUCTIONS = """\
 #   as a separate constraint.
 # ------------------------------------------------------------------------
 """
+INSTRUCTIONS_V3 = (
+    _HEAD_3 + _BODY + "# Expression syntax, in relation and objective:\n" + _SYNTAX
+)
+INSTRUCTIONS = (
+    _HEAD_4
+    + _BODY
+    + _PIECEWISE
+    + "# Expression syntax, in relation, objective and piecewise:\n"
+    + _SYNTAX
+)
 
 
 class _Dumper(yaml.SafeDumper):
@@ -134,11 +184,17 @@ def _sequence(dumper: Any, data: Any) -> Any:
 _Dumper.add_representer(list, _sequence)
 
 
+def instructions_for(version: Any) -> str:
+    """Return the comment block that explains a file of `version`."""
+    return INSTRUCTIONS if version == 4 else INSTRUCTIONS_V3
+
+
 def dumps(mapping: Mapping[str, Any], instructions: bool = False) -> str:
     """Return `mapping` as YAML text, its keys in the order given.
 
-    `instructions=True` prefixes the comment block that explains the format.
-    The block is a YAML comment, and the loader ignores it.
+    `instructions=True` prefixes the comment block that explains the format
+    of the mapping's version. The block is a YAML comment, and the loader
+    ignores it.
     """
     text = yaml.dump(
         mapping,
@@ -147,7 +203,19 @@ def dumps(mapping: Mapping[str, Any], instructions: bool = False) -> str:
         width=float("inf"),
         default_flow_style=False,
     )
-    return INSTRUCTIONS + text if instructions else text
+    if not instructions:
+        return text
+    return instructions_for(mapping.get("version", VERSION)) + text
+
+
+def written_version(version: Any) -> int:
+    """Return `version` as a version a file is written in.
+
+    Raises ValueError for a version other than 3 and 4.
+    """
+    if isinstance(version, bool) or version not in WRITTEN:
+        raise ValueError(f"a file is written in version 3 or 4; got {version!r}")
+    return int(version)
 
 
 def _addressable(name: str, what: str) -> None:
@@ -177,9 +245,21 @@ def _bound(bound: Any, default: float) -> str | float | None:
     return None if float(bound) == default else float(bound)
 
 
-def _parts(held: Any) -> tuple[Any, ...]:
-    """Return the sets, aliases, parameters, variables, constraints, objective."""
+def _parts(held: Any, version: int = VERSION) -> tuple[Any, ...]:
+    """Return the sets, aliases, parameters, variables, constraints, objective.
+
+    Version 4 omits what a model's piecewise declarations generated, and
+    reads the parameters of the declarations. Version 3 contains every
+    declaration of a model, and raises ValueError for a definition with a
+    piecewise declaration.
+    """
     if isinstance(held, Definition):
+        if version == 3 and held.piecewise_declarations:
+            first = next(iter(held.piecewise_declarations))
+            raise ValueError(
+                f"definition {held.name!r} contains piecewise {first!r}; "
+                f"write version 4 or build the model first"
+            )
         constraints = [
             (name, relation, where, over)
             for name, (relation, where, over) in held.constraints.items()
@@ -193,16 +273,20 @@ def _parts(held: Any) -> tuple[Any, ...]:
             held.objective,
         )
     if isinstance(held, Model):
-        parameters = held._parameters()
+        declared = version == 4
+        skip = held._generated() if declared else frozenset()
+        parameters = held._parameters(as_declared=declared)
         constraints = [
-            (name, c.relation, c.where, c.over) for name, c in held.constraints.items()
+            (name, c.relation, c.where, c.over)
+            for name, c in held.constraints.items()
+            if name not in skip
         ]
-        sets, aliases = held._dimensions(parameters)
+        sets, aliases = held._dimensions(parameters, as_declared=declared)
         return (
             sets,
             aliases,
             parameters,
-            tuple(held.variables.values()),
+            tuple(v for name, v in held.variables.items() if name not in skip),
             constraints,
             held.objective,
         )
@@ -224,13 +308,14 @@ def _long(
     return labels, array.values()
 
 
-def _arrays(model: Any) -> dict[str, npt.NDArray[Any]]:
+def _arrays(model: Any, version: int = VERSION) -> dict[str, npt.NDArray[Any]]:
     """Return every set's members and every parameter's array, keyed by name.
 
-    A parameter over its full product is a dense grid. A parameter over less
+    The sets and parameters are those a file of `version` declares. A
+    parameter over its full product is a dense grid. A parameter over less
     is a structured table of one field per dimension and a `value` field.
     """
-    sets, _, parameters, *_ = _parts(model)
+    sets, _, parameters, *_ = _parts(model, version)
     out = {s.name: np.asarray(s.labels) for s in sets}
     for parameter in parameters:
         array = parameter.materialise()
@@ -254,9 +339,29 @@ def _arrays(model: Any) -> dict[str, npt.NDArray[Any]]:
     return out
 
 
-def structure(held: Any) -> dict[str, Any]:
-    """Return the mapping of a definition's or a model's file, without data."""
-    sets, aliases, parameters, variables, constraints, objective = _parts(held)
+def _piecewise_entry(declaration: Any) -> dict[str, str]:
+    """Return the entry of one piecewise declaration."""
+    entry = {
+        "x": render(declaration.x),
+        "x_points": render(declaration.x_points),
+        "y": render(declaration.y),
+        "y_points": render(declaration.y_points),
+        "sign": declaration.sign,
+        "method": declaration.method,
+    }
+    if declaration.active is not None:
+        entry["active"] = render(declaration.active)
+    return entry
+
+
+def structure(held: Any, version: int = VERSION) -> dict[str, Any]:
+    """Return the mapping of a definition's or a model's file, without data.
+
+    Raises ValueError for a version other than 3 and 4.
+    """
+    version = written_version(version)
+    parts = _parts(held, version)
+    sets, aliases, parameters, variables, constraints, objective = parts
     for s in sets:
         _addressable(s.name, "set")
     for a in aliases:
@@ -264,7 +369,7 @@ def structure(held: Any) -> dict[str, Any]:
     for p in parameters:
         _addressable(p.name, "parameter")
     out = {
-        "version": VERSION,
+        "version": version,
         "name": held.name,
         "sense": held.sense,
         "sets": [s.name for s in sets],
@@ -296,6 +401,11 @@ def structure(held: Any) -> dict[str, Any]:
             if value is not None:
                 entry[slot] = value
         out["constraints"][name] = entry
+    declarations = held.piecewise_declarations if version == 4 else {}
+    if declarations:
+        out["piecewise"] = {
+            name: _piecewise_entry(d) for name, d in declarations.items()
+        }
     if objective is not None:
         out["objective"] = render(objective)
     return out
@@ -400,6 +510,26 @@ def _definition(spec: Mapping[str, Any]) -> Definition:
             where=_read_domain(d, entry.get("where"), f"{what} where"),
             over=_read_domain(d, entry.get("over"), f"{what} over"),
         )
+    for name, entry in (spec.get("piecewise") or {}).items():
+        what = f"piecewise {name!r}"
+        _only(entry, PIECEWISE_KEYS, what)
+        missing = [key for key in PIECEWISE_REQUIRED if key not in entry]
+        if missing:
+            raise ValueError(
+                f"{what} declares no {_names(missing)}; write "
+                f"{_names(PIECEWISE_REQUIRED)}"
+            )
+        active = entry.get("active")
+        d.piecewise(
+            name,
+            x=read(entry["x"], symbols),
+            x_points=read(entry["x_points"], symbols),
+            y=read(entry["y"], symbols),
+            y_points=read(entry["y_points"], symbols),
+            sign=entry["sign"],
+            method=entry["method"],
+            active=None if active is None else read(active, symbols),
+        )
     if "objective" in spec:
         objective = read(spec["objective"], symbols)
         if isinstance(objective, Relation):
@@ -422,6 +552,11 @@ def _spec(text: str) -> dict[str, Any]:
             f"the file declares version {version!r}; pass a file of version {accepted}"
         )
     _only(spec, KEYS, "a model file")
+    if "piecewise" in spec and version < 4:
+        raise ValueError(
+            f"the file declares version {version} and contains piecewise; "
+            f"declare version 4"
+        )
     return spec
 
 
@@ -438,10 +573,10 @@ def _written(value: Any) -> Any:
     return value.item()
 
 
-def to_inline(model: Any) -> dict[str, Any]:
-    """Return a model's data as the block its file contains."""
+def to_inline(model: Any, version: int = VERSION) -> dict[str, Any]:
+    """Return a model's data as the block its file of `version` contains."""
     out = {}
-    for name, array in _arrays(model).items():
+    for name, array in _arrays(model, version).items():
         if array.dtype.names is not None:
             columns = list(array.dtype.names)
             out[name] = {
@@ -598,13 +733,20 @@ def load(path: Any, data: Any = None) -> Any:
 
 
 def save(
-    what: Any, path: Any, inline: bool = False, instructions: bool = False
+    what: Any,
+    path: Any,
+    inline: bool = False,
+    instructions: bool = False,
+    version: int = VERSION,
 ) -> None:
     """Write `what` to `path`: a definition's file, or a model's with its data.
 
     A model's data goes to an `.npz` beside the file under the file's stem, or
     into the file itself with `inline=True`. `instructions=True` writes the
-    comment block that explains the format at the top of the file.
+    comment block that explains the format at the top of the file. `version`
+    is 4 or 3. Version 3 writes the declarations a piecewise declaration
+    generated in its place, and raises ValueError for a definition that
+    contains one.
     """
     path = Path(path)
     if isinstance(what, Definition):
@@ -613,17 +755,17 @@ def save(
                 "a definition contains no data to inline; save a model, or save "
                 "with inline=False"
             )
-        path.write_text(dumps(structure(what), instructions))
+        path.write_text(dumps(structure(what, version), instructions))
         return
     if not isinstance(what, Model):
         raise TypeError(
             f"a file contains a definition or a model; got {type(what).__name__}"
         )
-    mapping = structure(what)
+    mapping = structure(what, version)
     if inline:
-        mapping["data"] = to_inline(what)
+        mapping["data"] = to_inline(what, version)
     else:
-        arrays = _arrays(what)
+        arrays = _arrays(what, version)
         sidecar = path.with_suffix(".npz")
         mapping["data"] = sidecar.name
         write_npz(arrays, sidecar)
