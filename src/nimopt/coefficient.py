@@ -121,6 +121,12 @@ class Coefficient:
 
         other = read_bare(other)
         if isinstance(other, Expression):
+            if other.constant != 0.0:
+                raise ValueError(
+                    f"coefficient {self.name} multiplies an expression with the "
+                    f"constant {other.constant}; move the constant to the "
+                    f"right-hand side of the constraint"
+                )
             return Expression([t.with_coefficient(self) for t in other.terms])
         return None
 

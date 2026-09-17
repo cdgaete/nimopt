@@ -70,6 +70,11 @@ print(list(m.constraints))
 The generated variables and constraints are declarations of the model.
 `primal`, `dual`, `row` and `explain` read them by their names.
 
+`x` and `y` are expressions. `p[G] + 5.0` is on the curve five units above
+`p`, and the incremental method reads that constant. The tangent method
+multiplies `x` by the slope of each segment, and a constant in `x` raises
+`ValueError`. Subtract it from `x_points` instead.
+
 ## A convex curve
 
 `method="tangent"` adds no variable. It adds one row per segment, and two
@@ -139,6 +144,12 @@ ValueError: piecewise 'fuel' has points that are not convex, required by sign '>
 
 </details>
 <!-- /output -->
+
+## One curve for every entity
+
+`x_points` and `y_points` are over the breakpoint set and over as many of the
+sets of `x` as the curves differ along. Points over the breakpoint set alone
+give every entity the same curve.
 
 ## Entities with fewer breakpoints
 

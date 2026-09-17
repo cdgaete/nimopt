@@ -1787,7 +1787,7 @@ breakpoint has no generated rows and no generated columns.
 | `method` | Generates | Requires |
 | --- | --- | --- |
 | `"incremental"` | per segment, one continuous and one integer column and their rows | breakpoints strictly increasing or strictly decreasing |
-| `"tangent"` | one row per segment, and two rows that keep `x` between the first and the last breakpoint | points convex under `>=`, concave under `<=`; no `active`; no `==` |
+| `"tangent"` | one row per segment, and two rows that keep `x` between the first and the last breakpoint | points convex under `>=`, concave under `<=`; no `active`; no `==`; no constant in `x` |
 
 `active` is an expression over the sets of `x`. Where it is 0, `x` is 0 and
 `y` is compared with 0. `Model.piecewise` generates the declarations at
@@ -1816,8 +1816,9 @@ raised for an `x`, `y` or `active` that is not an expression, and for points
 that are not a parameter read at its sets. `ValueError` is raised for a name
 that is not a Python identifier, an unknown `method` or `sign`, expressions
 over different sets, points without exactly one breakpoint set, points over
-different sets, `"tangent"` with `"=="` or with `active`, and a generated
-name the model or definition declares.
+different sets, `"tangent"` with `"=="`, with `active` or with a constant in
+`x`, an `active` with a constant, and a generated name the model or definition
+declares.
 
 A breakpoint error raises `ValueError` when the data is bound, before any
 declaration, and identifies the first entity at fault: points with no
@@ -5332,6 +5333,7 @@ message that gives the form to write instead. There is no third outcome.
 | `x[P] != 1.0` | one bound per constraint |
 | `0.0 <= x[P] <= 1.0` | each bound as its own constraint |
 | `x[P] + c[P]` | a coefficient has no row until a variable multiplies it |
+| `c[P] * (x[P] + 1.0)` | a coefficient times a constant is one value per row; the constant goes to the right-hand side |
 | `abs(x[P])`, `min` and `max` | reduce with `Sum`, or bound the expression with two rows |
 | `np.sum(x[P])` | `Sum` and its sets |
 | `np.array([...]) * x[P]` | `Param.from_dense`, read at its sets |
@@ -6027,6 +6029,11 @@ Output:
 The generated variables and constraints are declarations of the model.
 `primal`, `dual`, `row` and `explain` read them by their names.
 
+`x` and `y` are expressions. `p[G] + 5.0` is on the curve five units above
+`p`, and the incremental method reads that constant. The tangent method
+multiplies `x` by the slope of each segment, and a constant in `x` raises
+`ValueError`. Subtract it from `x_points` instead.
+
 ## A convex curve
 
 `method="tangent"` adds no variable. It adds one row per segment, and two
@@ -6086,6 +6093,12 @@ Raises ValueError:
 ```text
 ValueError: piecewise 'fuel' has points that are not convex, required by sign '>=' at {'G': 'a'}; use method 'incremental'
 ```
+
+## One curve for every entity
+
+`x_points` and `y_points` are over the breakpoint set and over as many of the
+sets of `x` as the curves differ along. Points over the breakpoint set alone
+give every entity the same curve.
 
 ## Entities with fewer breakpoints
 

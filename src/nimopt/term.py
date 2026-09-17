@@ -178,7 +178,9 @@ class Term:
         onto the rows that read them. The fixed members are selected. The
         coefficient multiplies, the condition restricts and the scale
         multiplies. Each summed dimension is reduced last. A frame wider than
-        the term's own dimensions is filled by replication.
+        the term's own dimensions is filled by replication. A coefficient over
+        dimensions the variable has none of is replicated over the variable's
+        own dimensions first.
         """
         array = self.variable.terms()
         for dim, (amount, mode) in self.shifts.items():
@@ -186,7 +188,11 @@ class Term:
         if self.fixed:
             array = array.sel(self.fixed)
         if self.coefficient is not None:
-            multiplied = self.coefficient.materialise() * array
+            values = self.coefficient.materialise()
+            apart = tuple(d for d in values.dims if d not in array.dims)
+            if len(apart) == len(values.dims):
+                array = array.expand(apart, {d: coords[d] for d in apart})
+            multiplied = values * array
             if record is not None:
                 record.coefficient(self, array, multiplied)
             array = multiplied

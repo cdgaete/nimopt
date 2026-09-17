@@ -77,7 +77,7 @@ class Piecewise:
                 f"x_points exactly one set that x is not over"
             )
         self.breakpoints = outside[0]
-        if self.y_points.dims != self.x_points.dims:
+        if set(self.y_points.dims) != set(self.x_points.dims):
             raise ValueError(
                 f"y_points of piecewise {self.name!r} is over "
                 f"{self.y_points.dims} and x_points is over "
@@ -92,6 +92,18 @@ class Piecewise:
             raise ValueError(
                 f"piecewise {self.name!r} uses method 'tangent' with active; "
                 f"use method 'incremental'"
+            )
+        if method == "tangent" and self.x.constant != 0.0:
+            raise ValueError(
+                f"x of piecewise {self.name!r} has the constant "
+                f"{self.x.constant} and the method is 'tangent'; subtract the "
+                f"constant from x_points, or use method 'incremental'"
+            )
+        if self.active is not None and self.active.constant != 0.0:
+            raise ValueError(
+                f"active of piecewise {self.name!r} has the constant "
+                f"{self.active.constant}; give active as an expression with no "
+                f"constant"
             )
         self.generated = {kind: () for kind in KINDS}
 

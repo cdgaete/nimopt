@@ -262,3 +262,33 @@ def test_a_divisor_that_is_not_a_number_reports_its_type():
         gen / "a"
     with pytest.raises(TypeError, match="by a list; divide by a number"):
         gen / [1, 2]
+
+
+def test_a_coefficient_multiplying_a_constant_term_raises():
+    # a coefficient times a constant is one value per row, and an expression
+    # has one constant for every row; the constant belongs on the other side
+    G = Set("G", np.array(["g0", "g1"]))
+    m = Model("m")
+    x = m.var("x", (G,))
+    y = m.var("y", (G,))
+    k = Param.from_dense("k", (G,), np.array([2.0, 3.0]))
+    with pytest.raises(
+        ValueError,
+        match="coefficient k multiplies an expression with the constant 3.0; "
+        "move the constant to the right-hand side of the constraint",
+    ):
+        m.constraint("r", y[G] - k[G] * (x[G] + 3.0) == 0.0)
+
+
+def test_a_coefficient_multiplying_an_expression_of_no_constant_is_unchanged():
+    G = Set("G", np.array(["g0", "g1"]))
+    m = Model("m")
+    x = m.var("x", (G,))
+    y = m.var("y", (G,))
+    k = Param.from_dense("k", (G,), np.array([2.0, 3.0]))
+    rows = m.constraint("r", k[G] * (x[G] + y[G]) <= 6.0)
+    assert rows.n_rows == 2
+    assert m.assemble().to_dense().tolist() == [
+        [2.0, 0.0, 2.0, 0.0],
+        [0.0, 3.0, 0.0, 3.0],
+    ]

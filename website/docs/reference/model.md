@@ -83,7 +83,7 @@ breakpoint has no generated rows and no generated columns.
 | `method` | Generates | Requires |
 | --- | --- | --- |
 | `"incremental"` | per segment, one continuous and one integer column and their rows | breakpoints strictly increasing or strictly decreasing |
-| `"tangent"` | one row per segment, and two rows that keep `x` between the first and the last breakpoint | points convex under `>=`, concave under `<=`; no `active`; no `==` |
+| `"tangent"` | one row per segment, and two rows that keep `x` between the first and the last breakpoint | points convex under `>=`, concave under `<=`; no `active`; no `==`; no constant in `x` |
 
 `active` is an expression over the sets of `x`. Where it is 0, `x` is 0 and
 `y` is compared with 0. `Model.piecewise` generates the declarations at
@@ -112,8 +112,9 @@ raised for an `x`, `y` or `active` that is not an expression, and for points
 that are not a parameter read at its sets. `ValueError` is raised for a name
 that is not a Python identifier, an unknown `method` or `sign`, expressions
 over different sets, points without exactly one breakpoint set, points over
-different sets, `"tangent"` with `"=="` or with `active`, and a generated
-name the model or definition declares.
+different sets, `"tangent"` with `"=="`, with `active` or with a constant in
+`x`, an `active` with a constant, and a generated name the model or definition
+declares.
 
 A breakpoint error raises `ValueError` when the data is bound, before any
 declaration, and identifies the first entity at fault: points with no

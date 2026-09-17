@@ -466,3 +466,91 @@ def test_a_failed_check_leaves_the_model_unchanged():
     assert list(m.variables) == ["p", "c"]
     assert list(m.constraints) == []
     assert m.piecewise_declarations == {}
+
+
+def test_incremental_reads_a_constant_in_x():
+    # x is p + 5 with p fixed at 5, so x is 10, the second breakpoint, and
+    # the curve is 5 there
+    G, B, xp, yp, m = one_generator([0.0, 5.0, 20.0])
+    p = m.var("p", (G,), lower=5.0, upper=5.0)
+    c = m.var("c", (G,))
+    m.piecewise("curve", p[G] + 5.0, xp[G, B], c[G], yp[G, B], ">=", "incremental")
+    m.set_objective(no.Sum(G, c[G]))
+    assert m.solve().objective == pytest.approx(5.0)
+
+
+def test_tangent_with_a_constant_in_x_raises():
+    G, B, xp, yp, m = one_generator([0.0, 5.0, 20.0])
+    p = m.var("p", (G,))
+    c = m.var("c", (G,))
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "x of piecewise 'curve' has the constant 5.0 and the method is "
+            "'tangent'; subtract the constant from x_points, or use method "
+            "'incremental'"
+        ),
+    ):
+        m.piecewise("curve", p[G] + 5.0, xp[G, B], c[G], yp[G, B], ">=", "tangent")
+
+
+def test_an_active_expression_with_a_constant_raises():
+    G, B, xp, yp, m = one_generator([0.0, 5.0, 20.0])
+    p = m.var("p", (G,))
+    c = m.var("c", (G,))
+    u = m.var("u", (G,), upper=1.0, integer=True)
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "active of piecewise 'curve' has the constant 1.0; give active as "
+            "an expression with no constant"
+        ),
+    ):
+        m.piecewise(
+            "curve", p[G], xp[G, B], c[G], yp[G, B], ">=", "incremental", u[G] + 1.0
+        )
+
+
+def test_points_declared_over_the_same_sets_in_another_order_agree():
+    G, B, xp, yp, m = one_generator([0.0, 5.0, 20.0])
+    other = no.Param.from_dense("other", (B, G), [[0.0], [5.0], [20.0]])
+
+    def solved(points):
+        held = no.Model("order")
+        p = held.var("p", (G,), lower=15.0, upper=15.0)
+        c = held.var("c", (G,))
+        held.piecewise("curve", p[G], xp[G, B], c[G], points, ">=", "tangent")
+        held.set_objective(no.Sum(G, c[G]))
+        return held.solve().objective
+
+    assert solved(other[B, G]) == pytest.approx(solved(yp[G, B]))
+
+
+def test_one_curve_covers_every_entity_where_the_points_have_no_entity_set():
+    # the points are over the breakpoints alone, and both generators read the
+    # same curve: 5 at 10 and 1.5 per unit above it
+    G = no.Set("G", np.array(["a", "b"]))
+    B = no.Set("B", np.array(["b0", "b1", "b2"]))
+    xp = no.Param.from_dense("xp", (B,), [0.0, 10.0, 20.0])
+    yp = no.Param.from_dense("yp", (B,), [0.0, 5.0, 20.0])
+    m = no.Model("shared")
+    p = m.var("p", (G,), lower=15.0, upper=15.0)
+    c = m.var("c", (G,))
+    m.piecewise("curve", p[G], xp[B], c[G], yp[B], ">=", "tangent")
+    m.set_objective(no.Sum(G, c[G]))
+    assert m.solve().objective == pytest.approx(25.0)
+    assert m.constraints["curve_tangent"].n_rows == 4
+
+
+def test_a_curve_over_no_set_relates_two_scalar_variables():
+    B = no.Set("B", np.array(["b0", "b1", "b2"]))
+    xp = no.Param.from_dense("xp", (B,), [0.0, 10.0, 20.0])
+    yp = no.Param.from_dense("yp", (B,), [0.0, 5.0, 20.0])
+    for method, rows in (("tangent", 4), ("incremental", 6)):
+        m = no.Model(method)
+        x = m.var("x", (), lower=15.0, upper=15.0)
+        y = m.var("y", ())
+        m.piecewise("curve", x[()], xp[B], y[()], yp[B], ">=", method)
+        m.set_objective(y[()])
+        assert m.solve().objective == pytest.approx(12.5), method
+        assert m.n_rows == rows, method

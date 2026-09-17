@@ -28,7 +28,11 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 ### Fixed
 
 - An expression builds its rows where a coefficient introduces a set that
-  another term is not over.
+  another term is not over, including where the coefficient and the variable
+  have no set in common.
+- A coefficient multiplying an expression with a constant raises `ValueError`.
+  Such a product is one value per row, and an expression has one constant for
+  every row.
 - A set member written as `NaT` raises `ValueError` with no numpy
   `DeprecationWarning` before it.
 - The message for an unknown key in a model file writes the unknown keys and

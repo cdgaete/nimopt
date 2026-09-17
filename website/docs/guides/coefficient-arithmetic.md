@@ -200,6 +200,7 @@ message that gives the form to write instead. There is no third outcome.
 | `x[P] != 1.0` | one bound per constraint |
 | `0.0 <= x[P] <= 1.0` | each bound as its own constraint |
 | `x[P] + c[P]` | a coefficient has no row until a variable multiplies it |
+| `c[P] * (x[P] + 1.0)` | a coefficient times a constant is one value per row; the constant goes to the right-hand side |
 | `abs(x[P])`, `min` and `max` | reduce with `Sum`, or bound the expression with two rows |
 | `np.sum(x[P])` | `Sum` and its sets |
 | `np.array([...]) * x[P]` | `Param.from_dense`, read at its sets |

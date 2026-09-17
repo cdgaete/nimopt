@@ -219,3 +219,17 @@ def test_a_term_repeats_over_a_set_only_another_terms_coefficient_reads():
     assert rows.n_rows == 6
     # row (g0, k1): -2 at x[g0], column 0, and 1 at y[g0], column 2
     assert m.assemble().to_dense()[1].tolist() == [-2.0, 0.0, 1.0, 0.0]
+
+
+def test_a_coefficient_over_other_dimensions_repeats_over_the_variables_own():
+    # avail has no dimension of cap, so each of cap's columns appears once per
+    # member of T: the row (t1, g0) reads column 0 with the coefficient 0.5
+    G = Set("G", np.array(["g0", "g1"]))
+    T = Set("T", np.arange(3))
+    m = Model("m")
+    cap = m.var("cap", (G,))
+    avail = Param.from_dense("avail", (T,), np.array([0.25, 0.5, 0.75]))
+    rows = m.constraint("cap", avail[T] * cap[G] <= 10.0)
+    assert rows.frame == ("T", "G")
+    assert rows.n_rows == 6
+    assert m.assemble().to_dense()[2].tolist() == [0.5, 0.0]

@@ -73,6 +73,7 @@ REJECTED = [
     ("Sum(P, c[P])", "a variable"),
     ("c[P] <= d[P]", "a variable"),
     ("x[P] + c[P]", "a variable"),
+    ("c[P] * (x[P] + 1.0)", "move the constant to the right-hand side"),
     ("c * 2.0", "read it at its sets"),
     ("c[P] / zero[P]", "zero"),
     ("x[P] / 0.0", "zero"),
