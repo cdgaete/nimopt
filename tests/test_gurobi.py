@@ -224,3 +224,17 @@ def test_gurobi_reports_no_values_where_it_reaches_no_point():
     assert repr(solved) == "Solution('time_limit', no values)"
     with pytest.raises(ValueError, match="reports no feasible point"):
         solved.objective
+
+
+def test_a_reduced_cost_is_the_one_gurobi_reports():
+    # nimopt computes the cost less the duals of the rows, and Gurobi reports
+    # the same number in its RC attribute
+    model = dispatch.definition().build(dispatch.data(scale=SCALES["dispatch"]))
+    with model.session("gurobi") as session:
+        solved = session.solve()
+        reported = np.array(
+            [v.RC for v in session._backend.getVars()], dtype=np.float64
+        )
+    columns = model.variables["p"]
+    at = slice(columns.start, columns.start + columns.n_columns)
+    assert solved.dual("p").values() == pytest.approx(reported[at])

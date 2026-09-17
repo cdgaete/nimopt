@@ -34,7 +34,9 @@ def test_a_constraint_read_as_a_variable_raises_with_the_method_to_use():
 def test_an_unknown_constraint_raises_with_the_declared_constraints():
     m = model()
     message = "model 't' has no constraint 'nosuch'; use one of ('cap',)"
-    with raises(message):
+    with raises(
+        "model 't' has no constraint or variable 'nosuch'; use one of ('cap', 'x')"
+    ):
         m.solve().dual("nosuch")
     with raises(message):
         m.row("nosuch")
@@ -42,11 +44,11 @@ def test_an_unknown_constraint_raises_with_the_declared_constraints():
         m.absent("nosuch")
 
 
-def test_a_variable_read_as_a_constraint_raises_with_the_method_to_use():
+def test_a_variable_read_as_a_constraint_reads_its_reduced_costs():
     m = model()
-    with raises("'x' is a variable, not a constraint; read it with primal()"):
-        m.solve().dual("x")
-    # row and absent have no counterpart for a variable
+    # dual() takes a constraint or a variable; row and absent take a
+    # constraint alone
+    assert m.solve().dual("x").dims == ("P",)
     with raises("'x' is a variable, not a constraint; use one of ('cap',)"):
         m.row("x", P="a")
     with raises("'x' is a variable, not a constraint; use one of ('cap',)"):
@@ -69,7 +71,10 @@ def test_an_unknown_name_raises_before_the_status_is_checked():
     assert s.status == "infeasible"
     with raises("model 'short' has no variable 'y'; use one of ('x',)"):
         s.primal("y")
-    with raises("model 'short' has no constraint 'y'; use one of ('cap', 'need')"):
+    with raises(
+        "model 'short' has no constraint or variable 'y'; use one of "
+        "('cap', 'need', 'x')"
+    ):
         s.dual("y")
 
 

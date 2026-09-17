@@ -41,6 +41,7 @@ class Solution:
         bound: float | None,
         col_value: npt.NDArray[np.float64],
         row_dual: npt.NDArray[np.float64] | None,
+        col_dual: npt.NDArray[np.float64] | None,
         rows_of: Mapping[str, Any],
         solver: str,
     ) -> None:
@@ -52,6 +53,7 @@ class Solution:
         self._bound = bound
         self._col_value = col_value
         self._row_dual = row_dual
+        self._col_dual = col_dual
         self._rows_of = rows_of
         self._variables = frozenset(model.variables)
 
@@ -136,7 +138,12 @@ class Solution:
             )
         self._require_feasible()
         at = slice(variable.start, variable.start + variable.n_columns)
-        values = self._col_value[at]
+        return self._over_variable(variable, self._col_value[at])
+
+    def _over_variable(
+        self, variable: Any, values: npt.NDArray[np.float64]
+    ) -> DenseArray | SparseArray:
+        """Return one value per column, read back onto the variable's sets."""
         if variable.subset is None:
             shape = tuple(len(s) for s in variable.sets)
             return DenseArray(
@@ -144,29 +151,53 @@ class Solution:
             )
         return variable.domain().array(values.copy(), absence="unknown")
 
-    def dual(self, name: str) -> DenseArray | SparseArray:
-        """Return the named constraint's duals over its free sets.
-
-        Raises KeyError for a name that is not a declared constraint, and for
-        a constraint declared after the solve. Raises ValueError where `status`
-        is not `optimal`. Raises ValueError for a model with integer columns.
-        """
-        constraint = self.model._constraint(name, "read it with primal()")
-        if name not in self._rows_of:
-            raise KeyError(
-                f"constraint {name!r} is not in the solved matrix; solve the model "
-                f"again"
-            )
+    def _require_dual(self) -> None:
+        """Raise ValueError where the solve defines no dual value to read."""
         if self.status != "optimal":
             raise ValueError(
                 f"status is {self.status!r}; duals are defined at status 'optimal' only"
             )
-        if self._row_dual is None:
+        if self._row_dual is None or self._col_dual is None:
             raise ValueError(
                 f"model {self.model.name!r} has integer columns and "
                 f"{self.solver!r} reports no duals for it; read primal values "
                 f"only"
             )
+
+    def dual(self, name: str) -> DenseArray | SparseArray:
+        """Return a constraint's duals over its free sets, or a variable's
+        reduced costs over its own sets.
+
+        A reduced cost is the variable's objective coefficient less the duals
+        of the rows it appears in, weighted by its coefficients in them, in
+        the model's own objective. Raises KeyError for a name that is neither
+        a declared constraint nor a declared variable, and for one declared
+        after the solve. Raises ValueError where `status` is not `optimal`,
+        and for a model with integer columns.
+        """
+        if name in self.model.variables:
+            variable = self.model.variables[name]
+            if name not in self._variables:
+                raise KeyError(
+                    f"variable {name!r} is not in the solved matrix; solve the "
+                    f"model again"
+                )
+            self._require_dual()
+            at = slice(variable.start, variable.start + variable.n_columns)
+            return self._over_variable(variable, self._col_dual[at])
+        if name not in self.model.constraints:
+            valid = tuple(self.model.constraints) + tuple(self.model.variables)
+            raise KeyError(
+                f"model {self.model.name!r} has no constraint or variable "
+                f"{name!r}; use one of {valid}"
+            )
+        constraint = self.model.constraints[name]
+        if name not in self._rows_of:
+            raise KeyError(
+                f"constraint {name!r} is not in the solved matrix; solve the model "
+                f"again"
+            )
+        self._require_dual()
         rows = constraint.rows
         values = self._row_dual[self._rows_of[name]]
         if rows.is_full:

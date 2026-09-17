@@ -148,3 +148,94 @@ def test_every_status_highs_can_report_is_either_named_or_refused():
     reported = {n for n in dir(highspy.HighsModelStatus) if n.startswith("k")}
     unaccounted = reported - set(highs.OUTCOME) - set(highs.FAILED)
     assert unaccounted == set(), unaccounted
+
+
+def capped_transport(sense="min"):
+    """Transport with a cap on each route, so a route stays off the basis."""
+    m = Model("capped", sense=sense)
+    P = Set("P", np.array(["p1", "p2"]))
+    W = Set("W", np.array(["w1", "w2"]))
+    x = m.var("x", (P, W), upper=7.0)
+    cost = Param.from_dense("c", (P, W), np.array([[1.0, 4.0], [3.0, 2.0]]))
+    supply = Param.from_dense("supply", (P,), np.array([10.0, 10.0]))
+    demand = Param.from_dense("demand", (W,), np.array([6.0, 8.0]))
+    m.constraint("supply", Sum(W, x[P, W]) <= supply[P])
+    m.constraint("demand", Sum(P, x[P, W]) >= demand[W])
+    m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
+    return m
+
+
+def test_a_variables_reduced_cost_is_its_cost_less_the_duals_of_its_rows():
+    # each route caps at 7, so w2 takes 7 from p2 at 2 and its last unit
+    # from p1 at 4: the demand duals are 1 and 4, and the supply duals are 0.
+    # Route (p2, w1) then costs 3 - 1 = 2 above the optimum and route
+    # (p2, w2) costs 2 - 4 = 2 below it
+    solved = capped_transport().solve()
+    assert solved.objective == pytest.approx(24.0)
+    assert solved.primal("x").to_dense().tolist() == [[6.0, 1.0], [0.0, 7.0]]
+    assert solved.dual("demand").to_dense().tolist() == [1.0, 4.0]
+    assert solved.dual("x").to_dense().tolist() == [[0.0, 0.0], [2.0, -2.0]]
+
+
+def test_a_reduced_cost_matches_the_one_the_solver_reports():
+    for sense in ("min", "max"):
+        model = capped_transport(sense)
+        with model.session("highs") as session:
+            solved = session.solve()
+            reported = np.asarray(
+                session._backend.getSolution().col_dual, dtype=np.float64
+            )
+        assert solved.dual("x").to_dense().reshape(-1).tolist() == pytest.approx(
+            reported.tolist()
+        ), sense
+
+
+def test_a_reduced_cost_is_labeled_by_the_variables_own_sets():
+    array = capped_transport().solve().dual("x")
+    assert array.dims == ("P", "W")
+    assert array.absence == "unknown"
+    assert array.shape == (2, 2)
+    assert array.sel({"P": "p2", "W": "w2"}).to_dense().tolist() == -2.0
+
+
+def test_a_variable_over_a_subset_reads_its_reduced_costs_at_its_members():
+    from nimopt.sets import subset
+
+    P = Set("P", np.array(["p1", "p2"]))
+    W = Set("W", np.array(["w1", "w2"]))
+    arcs = subset((P, W), {"P": np.array(["p1", "p2"]), "W": np.array(["w1", "w2"])})
+    m = Model("sparse")
+    x = m.var("x", (P, W), subset=arcs, upper=7.0)
+    cost = Param.from_dense("c", (P, W), np.array([[1.0, 4.0], [3.0, 2.0]]))
+    m.constraint("demand", Sum(P, W, x[P, W]) >= 6.0)
+    m.set_objective(Sum(P, W, cost[P, W] * x[P, W]))
+    solved = m.solve()
+    costs = solved.dual("x")
+    assert costs.nnz == 2
+    assert costs.values().tolist() == pytest.approx([0.0, 1.0])
+
+
+def test_a_mixed_integer_model_reports_no_reduced_cost():
+    m = capped_transport()
+    m.var("k", (Set("K", np.array(["k1"])),), upper=1.0, integer=True)
+    solved = m.solve()
+    with pytest.raises(ValueError, match="has integer columns"):
+        solved.dual("x")
+
+
+def test_a_name_that_is_neither_a_constraint_nor_a_variable_raises():
+    solved = capped_transport().solve()
+    with pytest.raises(KeyError, match="has no constraint or variable 'q'"):
+        solved.dual("q")
+
+
+def test_a_reduced_cost_is_read_at_status_optimal_only():
+    m = Model("infeasible")
+    P = Set("P", np.array(["p1"]))
+    x = m.var("x", (P,), upper=1.0)
+    m.constraint("floor", Sum(P, x[P]) >= 2.0)
+    m.set_objective(Sum(P, x[P]))
+    solved = m.solve()
+    assert solved.status == "infeasible"
+    with pytest.raises(ValueError, match="duals are defined at status 'optimal' only"):
+        solved.dual("x")

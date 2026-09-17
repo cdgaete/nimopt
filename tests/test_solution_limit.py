@@ -78,6 +78,7 @@ def solution_over(model, status, feasible, objective, bound):
         bound,
         np.zeros(assembled.n_cols),
         None,
+        None,
         rows_of,
         "highs",
     )

@@ -32,6 +32,10 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   `Explanation.piecewise` reports each one with the names it generated.
 - `save`, `Model.to_yaml` and `Definition.to_yaml` take `version=4` or
   `version=3`.
+- `Solution.dual` takes a variable and returns its reduced costs over the
+  variable's own sets: the objective coefficient less the duals of the rows
+  the variable appears in, weighted by its coefficients in them. HiGHS,
+  Gurobi and Mosek report the same values for the same solve.
 
 ### Fixed
 

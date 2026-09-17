@@ -13,7 +13,10 @@ them as arrays over the sets each variable and constraint was declared on.
 
 `solution.primal(name)` returns a variable's values over its sets.
 `solution.dual(name)` returns a constraint's dual values over its frame: for
-the demand constraint, one value per warehouse.
+the demand constraint, one value per warehouse. `dual` also takes a
+variable, and returns its reduced costs: the cost of the variable less the
+duals of the rows it appears in. A route with no shipment at the optimum
+reports the amount by which its cost exceeds those duals.
 
 ```python
 import numpy as np

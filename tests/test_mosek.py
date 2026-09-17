@@ -354,3 +354,22 @@ def test_the_mosek_bound_at_an_optimum_is_the_objective_without_a_relaxation():
 
     assert mosek._bound(backend, NoRelaxation(), True, "optimal", 12.0) == 12.0
     assert mosek._bound(backend, NoRelaxation(), True, "node_limit", 12.0) is None
+
+
+@licensed
+def test_a_reduced_cost_is_the_one_mosek_reports():
+    # Mosek reports the dual of each bound; their difference is the cost less
+    # the duals of the rows, which is what nimopt computes
+    import mosek as backend
+
+    model = dispatch.definition().build(dispatch.data(scale=SCALES["dispatch"]))
+    with model.session("mosek") as session:
+        solved = session.solve()
+        task = session._backend
+        lower = np.zeros(model.n_columns)
+        upper = np.zeros(model.n_columns)
+        task.getslx(backend.soltype.bas, lower)
+        task.getsux(backend.soltype.bas, upper)
+    columns = model.variables["p"]
+    at = slice(columns.start, columns.start + columns.n_columns)
+    assert solved.dual("p").values() == pytest.approx((lower - upper)[at], abs=1e-9)

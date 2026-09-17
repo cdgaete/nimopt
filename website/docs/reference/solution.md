@@ -18,7 +18,7 @@ they were declared over.
 | `bound` | the bound on the optimal objective the solver proved, or `None` |
 | `gap` | the relative distance from the objective to the bound, or `None` |
 | `primal(name)` | the named variable's values over its own sets |
-| `dual(name)` | the named constraint's duals over its free sets |
+| `dual(name)` | a constraint's duals over its free sets, or a variable's reduced costs over its own sets |
 
 `status` and `feasible` are readable whatever the solver reported.
 `objective` and `primal` raise `ValueError` where `feasible` is False. They
@@ -30,9 +30,17 @@ point, and those reads then return it. `dual` raises `ValueError` where
 `status` is not `optimal`. Read `status` first.
 
 `primal` and `dual` raise `KeyError` for a name the model does not declare.
-The message lists the declared names of that kind, or reports that the name
-is the other kind and which method reads it. They also raise `KeyError` for a
-name declared after the solve.
+`primal` takes a variable, and its message reports a constraint name as one
+`dual` reads. `dual` takes either, and its message lists the declared
+constraints and variables. Both raise `KeyError` for a name declared after
+the solve.
+
+`dual` returns a reduced cost for a variable: its objective coefficient less
+the duals of the rows it appears in, weighted by its coefficients in them,
+in the model's own objective under either sense. HiGHS, Gurobi and Mosek
+report the same values for the same solve. A reduced cost follows the
+variable's members by the rule `primal` follows: a `DenseArray` over a full
+product, a `SparseArray` over a subset.
 
 `bound` is a lower bound on the optimal objective under sense `min` and an
 upper bound under sense `max`. It is `None` where the solver reports none.
