@@ -27,7 +27,7 @@ beside it. `sense` is `"min"` or `"max"`, set once here.
 | `param(name, sets)` | a declared `Param`, whose values arrive with the data |
 | `var(name, sets, subset=None, lower=0.0, upper=inf, integer=False)` | a declared `Variable` |
 | `constraint(name, relation, where=None, over=None)` | nothing; registers the constraint |
-| `piecewise(name, x, x_points, y, y_points, sign, method, active=None)` | a `Piecewise`; `build` generates its declarations and checks its breakpoints |
+| `piecewise(name, x, x_points, y, y_points, sign, method, active=None, relaxed=False, where=None)` | a `Piecewise`; `build` generates its declarations and checks its breakpoints |
 | `build(data)` | a `Model` over the declarations, bound to `data` |
 | `explain()` | an `Explanation` of what is declared |
 | `to_yaml(instructions=False, version=4)` | the text of this definition's file, structure and no data; `instructions=True` adds the comment block that describes the format; `version=3` raises `ValueError` for a definition with a piecewise declaration |

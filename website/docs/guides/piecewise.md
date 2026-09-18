@@ -261,6 +261,82 @@ print(s.primal("p").to_dense())
 In `t0` the demand of 5 is below the minimum output of 10, and the unit is
 off.
 
+## A declaration over some of the entities
+
+`where` restricts a declaration to some entities of its breakpoints. It is
+a parameter, a tuple of sets or a domain over the sets of `x_points` other
+than the breakpoint set, the form of `where` on `Model.constraint`. The
+breakpoint checks, the generated columns and the generated rows cover the
+entities at its coordinates. `x`, `y` and `active` are compared at those
+coordinates only.
+
+Two declarations can share the breakpoints and split the entities. In the
+example, `a` has a status variable and points that are not convex, `b` has
+convex points, and `c` has no curve. `on` declares the curve of `a` with the
+incremental method and `active`. `free` declares the curve of `b` with the
+tangent method. A linear term prices the output of `c`. The variable `fuel`
+is declared over the entities with a curve, and `p` over every entity.
+
+```python
+import numpy as np
+from nimopt import Model, Param, Set, Sum, subset
+
+G = Set("G", np.array(["a", "b", "c"]))
+T = Set("T", np.array(["t0", "t1"]))
+B = Set("B", np.array(["b0", "b1", "b2"]))
+points = {
+    "G": np.array(["a", "a", "a", "b", "b", "b"]),
+    "B": np.array(["b0", "b1", "b2", "b0", "b1", "b2"]),
+}
+power = Param.from_long("power", (G, B), points, [10.0, 20.0, 30.0, 0.0, 10.0, 20.0])
+cost = Param.from_long("cost", (G, B), points, [10.0, 25.0, 30.0, 0.0, 10.0, 30.0])
+committed = Param.from_long("committed", (G,), {"G": np.array(["a"])}, [1.0])
+flexible = Param.from_long("flexible", (G,), {"G": np.array(["b"])}, [1.0])
+price = Param.from_long("price", (G,), {"G": np.array(["c"])}, [3.0])
+demand = Param.from_dense("demand", (T,), [5.0, 25.0])
+curves = subset(
+    (G, T),
+    {"G": np.array(["a", "a", "b", "b"]), "T": np.array(["t0", "t1", "t0", "t1"])},
+)
+status = subset((G, T), {"G": np.array(["a", "a"]), "T": np.array(["t0", "t1"])})
+
+m = Model("split")
+p = m.var("p", (G, T))
+fuel = m.var("fuel", (G, T), subset=curves)
+u = m.var("u", (G, T), subset=status, upper=1.0, integer=True)
+m.constraint("balance", Sum(G, p[G, T]) == demand[T])
+m.piecewise(
+    "on", p[G, T], power[G, B], fuel[G, T], cost[G, B], ">=", "incremental",
+    active=u[G, T], where=committed,
+)
+m.piecewise(
+    "free", p[G, T], power[G, B], fuel[G, T], cost[G, B], ">=", "tangent",
+    where=flexible,
+)
+m.set_objective(
+    Sum(G, T, fuel[G, T]) + Sum(G, T, price[G] * p[G, T]) + 2.0 * Sum(G, T, u[G, T])
+)
+
+s = m.solve()
+print(s.objective)
+print(m.variables["on_fill"].n_columns, m.constraints["free_tangent"].n_rows)
+```
+
+<!-- output -->
+<details open>
+<summary>Output</summary>
+
+```text
+34.5
+4 4
+```
+
+</details>
+<!-- /output -->
+
+`on_fill` has one column per segment of `a` and timestep. `free_tangent`
+has one row per segment of `b` and timestep.
+
 ## Saving a piecewise declaration
 
 A model file of version 4 contains the declaration under `piecewise`. The

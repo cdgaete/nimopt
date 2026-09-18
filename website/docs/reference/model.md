@@ -19,7 +19,7 @@ an objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
 | --- | --- |
 | `var(name, sets, subset=None, lower=0.0, upper=inf, integer=False)` | a `Variable` occupying the next range of columns |
 | `constraint(name, relation, where=None, over=None)` | a `Constraint` occupying the next range of rows |
-| `piecewise(name, x, x_points, y, y_points, sign, method, active=None, relaxed=False)` | a `Piecewise`; declares the variables and constraints of its method |
+| `piecewise(name, x, x_points, y, y_points, sign, method, active=None, relaxed=False, where=None)` | a `Piecewise`; declares the variables and constraints of its method |
 | `set_objective(expression)` | nothing; sets the objective |
 | `sense` | `"min"` or `"max"`, as declared |
 | `solve(solver="highs", options=None)` | a `Solution` |
@@ -68,8 +68,8 @@ print(m.objective_coefficients())
 ## `Piecewise`
 
 ```
-Model.piecewise(name, x, x_points, y, y_points, sign, method, active=None, relaxed=False)
-Definition.piecewise(name, x, x_points, y, y_points, sign, method, active=None, relaxed=False)
+Model.piecewise(name, x, x_points, y, y_points, sign, method, active=None, relaxed=False, where=None)
+Definition.piecewise(name, x, x_points, y, y_points, sign, method, active=None, relaxed=False, where=None)
 ```
 
 A piecewise-linear relation of the expression `y` to the expression `x`.
@@ -79,6 +79,12 @@ at their sets. Each is over some or all of the sets of `x` and over one
 breakpoint set, the one set `x` is not over. An entity lists its first
 breakpoints, and its last breakpoints may be absent. An entity with no
 breakpoint has no generated rows and no generated columns.
+
+`where` restricts the declaration to some entities: a parameter, a tuple of
+sets or a domain over the sets of `x_points` other than the breakpoint set.
+The breakpoint checks, the generated columns and the generated rows cover
+the entities at its coordinates. `x`, `y` and `active` are compared at those
+coordinates only.
 
 | `method` | Generates | Requires |
 | --- | --- | --- |
@@ -105,7 +111,7 @@ segment is identified by its end breakpoint.
 
 | Member | Contains |
 | --- | --- |
-| `name`, `x`, `x_points`, `y`, `y_points`, `sign`, `method`, `active` | the arguments |
+| `name`, `x`, `x_points`, `y`, `y_points`, `sign`, `method`, `active`, `relaxed`, `where` | the arguments |
 | `breakpoints` | the name of the breakpoint set |
 | `names()` | the names the declaration generates, keyed by `"sets"`, `"parameters"`, `"variables"` and `"constraints"` |
 | `generated` | the names a model generated, keyed the same way; empty on a definition |
@@ -117,8 +123,9 @@ that are not a parameter read at its sets. `ValueError` is raised for a name
 that is not a Python identifier, an unknown `method` or `sign`, expressions
 over different sets, points without exactly one breakpoint set, points over
 different sets, `"tangent"` with `"=="`, with `active` or with a constant in
-`x`, an `active` with a constant, and a generated name the model or definition
-declares.
+`x`, an `active` with a constant, a `where` of another type or over other sets
+than the entity sets of `x_points`, and a generated name the model or
+definition declares.
 
 A breakpoint error raises `ValueError` when the data is bound, before any
 declaration, and identifies the first entity at fault: points with no
