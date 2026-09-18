@@ -56,6 +56,10 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - A piecewise declaration allocates nothing for a member of its sets that has
   no breakpoint. The breakpoints are read as arrays over the members that
   have one.
+- A variable or a constraint that takes a name a piecewise declaration
+  generates raises `ValueError`, in a model and in a definition. A file
+  writes a set, a parameter and a variable into one table of symbols, and one
+  name for two of them is a file that does not load.
 
 ### Changed
 

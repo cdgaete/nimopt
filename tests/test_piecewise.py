@@ -604,3 +604,28 @@ def test_a_curve_over_one_subset_is_enforced_at_every_member_of_it():
     # four member pairs, and the relation binds at each one
     solved = partial_domain_model(same_domain=True).solve()
     assert solved.objective == pytest.approx(48.0)
+
+
+@pytest.mark.parametrize(
+    "name", ["curve_segment", "curve_members", "curve_fill", "curve_x"]
+)
+def test_a_name_a_declaration_generated_is_not_declared_after_it(name):
+    # the reverse order raises already. A model file writes a set, a
+    # parameter, a variable and a constraint under four keys and reads the
+    # first three into one table of symbols, so a generated name a variable
+    # takes later is a file that cannot be read back.
+    G, B, xp, yp, m = one_generator([0.0, 10.0, 30.0])
+    p = m.var("p", (G,))
+    c = m.var("c", (G,))
+    m.piecewise("curve", p[G], xp[G, B], c[G], yp[G, B], ">=", "incremental")
+    with pytest.raises(ValueError, match=re.escape(f"{name!r}")):
+        m.var(name, (G,))
+
+
+def test_a_constraint_does_not_take_a_name_a_declaration_generated():
+    G, B, xp, yp, m = one_generator([0.0, 10.0, 30.0])
+    p = m.var("p", (G,))
+    c = m.var("c", (G,))
+    m.piecewise("curve", p[G], xp[G, B], c[G], yp[G, B], ">=", "incremental")
+    with pytest.raises(ValueError, match=re.escape("'curve_x'")):
+        m.constraint("curve_x", p[G] >= 0.0)

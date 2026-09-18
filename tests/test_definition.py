@@ -465,3 +465,17 @@ def test_build_checks_a_member_a_piecewise_expression_fixes():
     data = curve_data()
     with pytest.raises(ValueError, match="read at member 't9' of dimension 'T'"):
         d.build({k: data[k] for k in ("G", "T", "B", "xp")})
+
+
+@pytest.mark.parametrize("name", ["cost_segment", "cost_members", "cost_fill"])
+def test_a_name_a_declaration_will_generate_is_not_declared_after_it(name):
+    # the reverse order raises already. A definition that declares one of
+    # these later writes a file that build rejects, so the declaration
+    # raises where the name is taken.
+    d = Definition("d")
+    G, B = d.set("G"), d.set("B")
+    xp, yp = d.param("xp", (G, B)), d.param("yp", (G, B))
+    x, y = d.var("x", (G,)), d.var("y", (G,))
+    d.piecewise("cost", x[G], xp[G, B], y[G], yp[G, B], ">=", "incremental")
+    with pytest.raises(ValueError, match=re.escape(f"{name!r}")):
+        d.var(name, (G,))
