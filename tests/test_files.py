@@ -779,3 +779,30 @@ def test_a_declaration_with_where_saves_its_generated_rows_as_version_three(tmp_
     text = (tmp_path / "m.yaml").read_text()
     assert "piecewise" not in text
     assert load(tmp_path / "m.yaml").solve().objective == pytest.approx(34.5)
+
+
+def test_a_set_named_by_a_keyword_is_refused_when_it_is_declared():
+    d = Definition("keywords")
+    with pytest.raises(ValueError, match="'lambda'.*keyword"):
+        d.set("lambda")
+
+
+def test_a_model_with_a_set_named_by_a_keyword_is_not_written():
+    T = Set("lambda", np.array(["a"]))
+    m = Model("keywords")
+    x = m.var("x", (T,))
+    m.constraint("c", x[T] <= 1.0)
+    with pytest.raises(ValueError, match="'lambda'.*keyword"):
+        m.to_yaml()
+
+
+def test_a_model_with_one_name_for_two_kinds_is_not_written():
+    # the file has one table of symbols; loads raises on the same name
+    T = Set("T", np.array(["a", "b"]))
+    cap = Param.from_dense("cap", (T,), np.array([1.0, 2.0]))
+    m = Model("kinds")
+    x = m.var("cap", (T,), upper=cap)
+    m.constraint("c", x[T] <= 5.0)
+    message = "variable 'cap' is already declared as a parameter; declare another name"
+    with pytest.raises(ValueError, match=re.escape(message)):
+        m.to_yaml(inline=True)

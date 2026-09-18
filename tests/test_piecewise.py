@@ -244,7 +244,10 @@ def test_a_name_that_is_not_an_identifier_raises():
     B = no.Set("B", np.array(["b0", "b1"]))
     x = m.var("x", (G,))
     xp = no.Param.from_dense("xp", (G, B), [[0.0, 1.0]])
-    with pytest.raises(ValueError, match="piecewise name 'cost curve' is not"):
+    with pytest.raises(
+        ValueError,
+        match="piecewise 'cost curve' is not a name an expression can address",
+    ):
         m.piecewise("cost curve", x[G], xp[G, B], x[G], xp[G, B], "==", "incremental")
 
 
@@ -1067,3 +1070,14 @@ def test_active_reads_its_bounds_at_its_own_members():
     # b serves 15 at 10 + 5 * 2 = 20, and 2 for its status
     assert s.status == "optimal"
     assert s.objective == pytest.approx(22.0)
+
+
+def test_a_name_that_is_a_keyword_raises():
+    G = no.Set("G", np.array(["a"]))
+    B = no.Set("B", np.array(["b0", "b1"]))
+    xp = table(G, B, [("a", "b0", 0), ("a", "b1", 1)], "xp")
+    m = no.Model("keywords")
+    x = m.var("x", (G,))
+    y = m.var("y", (G,))
+    with pytest.raises(ValueError, match="'lambda'.*keyword"):
+        m.piecewise("lambda", x[G], xp[G, B], y[G], xp[G, B], "==", "incremental")

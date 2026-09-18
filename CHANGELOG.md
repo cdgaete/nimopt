@@ -26,13 +26,17 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - `Model.piecewise` reads the bounds of an `active` variable at the members
   of the variable. A bound parameter above 1 outside the variable's `subset=`
   raises no `ValueError`.
-
 - `where=`, `over=` and `subset=` raise `ValueError` for a tuple that
   contains a lagged or a cyclic set, such as `(T - 1,)`, in
   `Model.constraint`, `Model.var`, `Sum` and the `Definition` methods. A
   `Definition` raises when the declaration is made.
 - A condition that is not a parameter, a tuple of sets or a domain, such as a
   list or a string, raises `ValueError`, not `AttributeError`.
+- A set, an alias, a parameter, a variable or a piecewise declaration named by
+  a Python keyword, such as `lambda`, raises `ValueError`. A `Definition`
+  raises when the declaration is made, and a `Model` when it is written.
+- Writing a `Model` raises `ValueError` for one name given to two kinds of
+  symbol, such as a variable and a parameter. `loads` raises for such a file.
 
 ## 0.4.1 - 2026-09-18
 

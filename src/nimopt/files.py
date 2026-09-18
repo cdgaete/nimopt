@@ -10,6 +10,7 @@ import yaml
 
 from nimopt.definition import Definition
 from nimopt.model import Model
+from nimopt.names import check_addressable, check_one_kind
 from nimopt.param import Param
 from nimopt.sets import as_members, condition_name, member_text
 from nimopt.syntax import read, render
@@ -235,14 +236,6 @@ def written_version(version: Any) -> int:
     return int(version)
 
 
-def _addressable(name: str, what: str) -> None:
-    if not name.isidentifier() or name == "Sum":
-        raise ValueError(
-            f"{what} {name!r} is not a name an expression can address; "
-            f"declare a Python identifier other than Sum"
-        )
-
-
 def _domain(held: Any, owner: str, slot: str) -> Any:
     if held is None:
         return None
@@ -386,12 +379,16 @@ def structure(held: Any, version: int = VERSION) -> dict[str, Any]:
     version = written_version(version)
     parts = _parts(held, version)
     sets, aliases, parameters, variables, constraints, objective = parts
-    for s in sets:
-        _addressable(s.name, "set")
-    for a in aliases:
-        _addressable(a.name, "alias")
-    for p in parameters:
-        _addressable(p.name, "parameter")
+    symbols = (
+        ("set", {s.name for s in sets}),
+        ("alias", {a.name for a in aliases}),
+        ("parameter", {p.name for p in parameters}),
+        ("variable", {v.name for v in variables}),
+    )
+    for at, (kind, names) in enumerate(symbols):
+        for name in sorted(names):
+            check_addressable(name, kind)
+            check_one_kind(name, kind, symbols[:at])
     out = {
         "version": version,
         "name": held.name,
@@ -404,7 +401,6 @@ def structure(held: Any, version: int = VERSION) -> dict[str, Any]:
     out["variables"] = {}
     out["constraints"] = {}
     for v in variables:
-        _addressable(v.name, "variable")
         entry = {"sets": list(v.dims)}
         for slot, value in (
             ("subset", _domain(v.subset, f"variable {v.name!r}", "subset=")),
