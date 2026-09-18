@@ -367,31 +367,11 @@ def test_only_the_module_that_owns_subset_of_builds_a_coordinate_domain():
 # calls are how the same work is written one layer too high.
 REPLICATIONS = ("broadcast_to", "tile", "repeat")
 
-# `session.py` weights a row dual per coefficient of the assembled matrix.
-# That matrix is nimopt's own CSR handoff to a solver and not a nimblend
-# array, so replicating along it is this package's work and not the array
-# layer's. `test_the_reduced_cost_loop_reads_no_nimblend_array` holds it to
-# the rule that makes the exemption true.
-OWN_BUFFERS = ("session.py",)
-
-
-def test_the_reduced_cost_loop_reads_no_nimblend_array():
-    # the exemption above is load-bearing rather than permissive: it stands
-    # only while the module names nothing of nimblend at all
-    source = next(t for p, t in package_modules() if p.name == "session.py")
-    imported = {
-        alias.name
-        for node in ast.walk(source)
-        if isinstance(node, ast.ImportFrom) and (node.module or "") == "nimblend"
-        for alias in node.names
-    }
-    assert imported == set(), imported
-
 
 def test_the_package_replicates_entries_through_nimblend():
     offenders = []
     for path, tree in package_modules():
-        if path.parent.name == "models" or path.name in OWN_BUFFERS:
+        if path.parent.name == "models":
             continue
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):

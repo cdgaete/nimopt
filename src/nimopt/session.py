@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
+from nimopt.names import ROW
 from nimopt.row import Row, read, resolve
 
 if TYPE_CHECKING:
@@ -15,30 +16,15 @@ if TYPE_CHECKING:
 from nimopt.solution import Solution
 from nimopt.solvers import adapter
 
-BLOCK = 1 << 22
-
 
 def reduced_costs(assembled: Any, row_dual: Any) -> Any:
     """Return each column's cost less the duals of the rows it appears in.
 
-    The rows are read in blocks of about `BLOCK` coefficients, and no array
-    of the size of the matrix is allocated.
+    The matrix is summed over its rows, weighted by `row_dual`, with no
+    temporary of the size of the matrix.
     """
-    values = np.array(assembled.col_cost, dtype=np.float64)
-    indptr = assembled.indptr
-    counts = np.diff(indptr)
-    n_rows = counts.size
-    reached = np.searchsorted(indptr, np.arange(0, int(indptr[-1]) + BLOCK, BLOCK))
-    edges = np.unique(np.concatenate(([0], np.clip(reached, 0, n_rows), [n_rows])))
-    for first, last in zip(edges[:-1], edges[1:]):
-        at = slice(int(indptr[first]), int(indptr[last]))
-        weights = np.repeat(row_dual[first:last], counts[first:last])
-        values -= np.bincount(
-            assembled.indices[at],
-            weights=assembled.values[at] * weights,
-            minlength=values.size,
-        )
-    return values
+    weighted = assembled.matrix.weighted_sum(ROW, row_dual)
+    return assembled.col_cost - weighted.to_dense()
 
 
 @dataclass(frozen=True)
