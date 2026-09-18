@@ -12,6 +12,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+## 0.4.1 - 2026-09-18
+
 ### Fixed
 
 - `Piecewise.check_active` reads the bounds of an `active` variable at the
