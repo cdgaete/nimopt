@@ -2,7 +2,7 @@
 
 import datetime
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
-from typing import Any
+from typing import Any, Literal, get_args
 
 import numpy as np
 import numpy.typing as npt
@@ -10,6 +10,10 @@ from nimblend import Domain, StoredCoord
 
 ISO = "'2030-01-01T00:00:00'"
 COUNT = "'3 h'"
+Unit = Literal[
+    "Y", "M", "W", "D", "h", "m", "s", "ms", "us", "μs", "ns", "ps", "fs", "as"
+]
+UNITS: tuple[Unit, ...] = get_args(Unit)
 
 
 def _zoned(text: str) -> bool:
@@ -64,15 +68,32 @@ def _datetime(value: Any, where: str) -> np.datetime64:
     )
 
 
+def _unit(code: str, where: str) -> tuple[Unit, int]:
+    """Return a numpy unit code and its multiplier from text such as "15m".
+
+    The multiplier is optional and defaults to 1. Raises ValueError for any
+    other text, for a multiplier of 0 and for the "generic" unit.
+    """
+    name = code.lstrip("0123456789")
+    multiplier = int(code[: len(code) - len(name)] or 1)
+    for unit in UNITS:
+        if unit == name and multiplier > 0:
+            return unit, multiplier
+    raise ValueError(
+        f"timedelta unit {code!r} at {where} is not a numpy unit code; use one "
+        f"of {', '.join(UNITS)}, with an optional multiplier such as 15m"
+    )
+
+
 def _counted(text: str, where: str) -> np.timedelta64:
     """Return a timedelta64 from text of the form `<count> <unit>`.
 
     The unit is a numpy unit code. Raises ValueError for any other text.
     """
-    count, _, unit = text.partition(" ")
+    count, _, code = text.partition(" ")
     try:
-        return np.timedelta64(int(count), unit.strip())
-    except (ValueError, TypeError):
+        return np.timedelta64(int(count), _unit(code.strip(), where))
+    except ValueError:
         raise ValueError(
             f"member {text!r} is not a timedelta at {where}; write a count and "
             f"a numpy unit code such as {COUNT}"
@@ -90,9 +111,9 @@ def _timedelta(value: Any, dtype: np.dtype[Any], where: str) -> np.timedelta64:
     if isinstance(value, str):
         return _counted(value, where)
     if isinstance(value, datetime.timedelta):
-        return np.timedelta64(value)
+        return np.timedelta64(value, "us")
     if isinstance(value, (int, np.integer)) and not isinstance(value, bool):
-        return np.timedelta64(int(value), np.datetime_data(dtype)[0])
+        return np.timedelta64(int(value), _unit(np.datetime_data(dtype)[0], where))
     raise ValueError(
         f"member {value!r} is not a timedelta at {where}; write a count and a "
         f"numpy unit code such as {COUNT}"

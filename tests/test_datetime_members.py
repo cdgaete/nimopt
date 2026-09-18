@@ -314,6 +314,33 @@ def test_an_integer_against_a_timedelta_set_counts_its_own_unit():
     assert "x['2 h'] == 1" in m.to_yaml()
 
 
+def test_a_timedelta_text_takes_a_unit_with_a_multiplier():
+    # one step of two hours
+    m = model(spans("h"), False)
+    row = m.row("cap", T="1 2h")
+    assert row.coordinate["T"] == np.timedelta64(2, "h")
+
+
+@pytest.mark.parametrize("text", ["2 0h", "2 generic", "2 min"])
+def test_a_timedelta_text_with_a_unit_numpy_does_not_define_raises(text):
+    m = Model("rt")
+    T = Set("T", spans("h"))
+    x = m.var("x", (T,))
+    with pytest.raises(ValueError, match="is not a timedelta"):
+        x[text]
+
+
+def test_an_integer_against_a_timedelta_set_with_the_generic_unit_raises():
+    # numpy deprecates the generic unit at construction
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        T = Set("T", np.array([1, 2, 3], dtype="timedelta64"))
+    m = Model("rt")
+    x = m.var("x", (T,))
+    with pytest.raises(ValueError, match="timedelta unit 'generic'"):
+        x[2]
+
+
 INLINE_SET = textwrap.dedent(
     """\
     version: 3

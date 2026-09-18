@@ -12,6 +12,18 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Fixed
+
+- A timedelta member written with a unit multiplier of 0, such as `'2 0h'`,
+  raises `ValueError`. numpy 2.5.2 ends the Python process with a
+  floating-point exception when it converts such a unit.
+
+### Changed
+
+- A timedelta member written with the unit `generic`, and an integer member
+  of a timedelta set whose dtype has the generic unit, raise `ValueError`.
+  numpy deprecates the generic unit.
+
 ## 0.3.0 - 2026-09-17
 
 ### Added
