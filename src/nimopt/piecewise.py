@@ -92,6 +92,7 @@ class Piecewise:
                 f"x_points exactly one set that x is not over"
             )
         self.breakpoints = outside[0]
+        self.entity = tuple(d for d in self.x_points.dims if d != self.breakpoints)
         if set(self.y_points.dims) != set(self.x_points.dims):
             raise ValueError(
                 f"y_points of piecewise {self.name!r} is over "
@@ -122,13 +123,12 @@ class Piecewise:
             )
         self.where = where
         if where is not None:
-            entity = tuple(d for d in self.x_points.dims if d != self.breakpoints)
             given = condition_dims(where, f"piecewise {self.name!r}", "where")
-            if given != entity:
+            if given != self.entity:
                 raise ValueError(
                     f"where of piecewise {self.name!r} is over {given} and the "
-                    f"entities of x_points are over {entity}; give where over "
-                    f"{entity}"
+                    f"entities of x_points are over {self.entity}; give where "
+                    f"over {self.entity}"
                 )
         self.restricted_x = self._restricted(self.x)
         self.restricted_y = self._restricted(self.y)
@@ -201,20 +201,28 @@ class Piecewise:
                     f"declare {slot} and x over the same members"
                 )
 
-    def check_active(self) -> None:
+    def where_domain(self) -> Any:
+        """Return the domain of `where` over the entity sets, or None.
+
+        The domain reads the data of a parameter `where`.
+        """
+        if self.where is None:
+            return None
+        return rows_of(self.where, self.entity, f"piecewise {self.name!r}", "where")
+
+    def check_active(self, where: Any = None) -> None:
         """Raise ValueError where active is not a sum of binary variables.
 
         A value other than 0 or 1 scales every breakpoint. Every term
         requires a unit scale, no coefficient, and bounds inside 0 and 1. A
-        declaration that is not relaxed requires an integer variable. With
-        `where`, the bounds are read at its coordinates.
+        declaration that is not relaxed requires an integer variable. The
+        bounds are read at the coordinates of `where`, the domain
+        `where_domain` returns. Without it, `where_domain` is called.
         """
         if self.active is None:
             return
-        where = None
-        if self.where is not None:
-            entity = tuple(d for d in self.x_points.dims if d != self.breakpoints)
-            where = rows_of(self.where, entity, f"piecewise {self.name!r}", "where")
+        if where is None:
+            where = self.where_domain()
         for term in self.active.terms:
             variable = term.variable
             if term.coefficient is not None or term.scale != 1.0:
@@ -340,21 +348,19 @@ class _Grid:
     """
 
     def __init__(
-        self, declaration: Piecewise, sets: Mapping[str, Any], segment: str
+        self,
+        declaration: Piecewise,
+        sets: Mapping[str, Any],
+        segment: str,
+        where: Any = None,
     ) -> None:
         self.name = declaration.name
         b = declaration.breakpoints
         self.breakpoints = b
         self.sets = dict(sets)
-        self.entity = tuple(d for d in declaration.x_points.dims if d != b)
+        self.entity = declaration.entity
         self.entity_sets = tuple(self.sets[d] for d in self.entity)
-        self.where = (
-            None
-            if declaration.where is None
-            else rows_of(
-                declaration.where, self.entity, f"piecewise {self.name!r}", "where"
-            )
-        )
+        self.where = where
         order = (*self.entity, b)
         self.x = self._read(declaration.x_points, order, "x_points")
         self.y = self._read(declaration.y_points, order, "y_points")
@@ -628,7 +634,8 @@ def generate(model: Any, declaration: Piecewise) -> None:
             f"declared in model {model.name!r}; rename the piecewise declaration"
         )
     declaration.check_domain()
-    declaration.check_active()
+    where = declaration.where_domain()
+    declaration.check_active(where)
     sets = _sets_of(
         declaration.x,
         declaration.y,
@@ -636,7 +643,7 @@ def generate(model: Any, declaration: Piecewise) -> None:
         declaration.x_points,
         declaration.y_points,
     )
-    grid = _Grid(declaration, sets, names["sets"][0])
+    grid = _Grid(declaration, sets, names["sets"][0], where)
     if declaration.method == "tangent":
         grid.check_curvature(declaration.sign)
         variables, constraints = _tangent(model, declaration, grid, names)
