@@ -6275,11 +6275,24 @@ fuel = m.var("fuel", (G, T), subset=curves)
 u = m.var("u", (G, T), subset=status, upper=1.0, integer=True)
 m.constraint("balance", Sum(G, p[G, T]) == demand[T])
 m.piecewise(
-    "on", p[G, T], power[G, B], fuel[G, T], cost[G, B], ">=", "incremental",
-    active=u[G, T], where=committed,
+    "on",
+    p[G, T],
+    power[G, B],
+    fuel[G, T],
+    cost[G, B],
+    ">=",
+    "incremental",
+    active=u[G, T],
+    where=committed,
 )
 m.piecewise(
-    "free", p[G, T], power[G, B], fuel[G, T], cost[G, B], ">=", "tangent",
+    "free",
+    p[G, T],
+    power[G, B],
+    fuel[G, T],
+    cost[G, B],
+    ">=",
+    "tangent",
     where=flexible,
 )
 m.set_objective(
