@@ -664,3 +664,46 @@ def test_a_piecewise_entry_without_a_required_key_raises():
         ),
     ):
         loads(CURVE.replace("    method: incremental\n", ""))
+
+
+def relaxed_curve_model():
+    """A model whose piecewise declaration is relaxed."""
+    G = Set("G", np.array(["g0"]))
+    K = Set("K", np.arange(3))
+    xp = Param.from_dense("xp", (G, K), [[2.0, 5.0, 10.0]])
+    yp = Param.from_dense("yp", (G, K), [[20.0, 35.0, 80.0]])
+    m = Model("relaxed")
+    p = m.var("p", (G,), upper=10.0)
+    c = m.var("c", (G,), lower=-1e4)
+    u = m.var("u", (G,), upper=1.0)
+    m.piecewise(
+        "curve",
+        x=p[G],
+        x_points=xp[G, K],
+        y=c[G],
+        y_points=yp[G, K],
+        sign=">=",
+        method="incremental",
+        active=u[G],
+        relaxed=True,
+    )
+    demand = Param.from_dense("demand", (G,), np.array([0.5]))
+    m.constraint("meet", p[G] >= demand[G])
+    m.set_objective(Sum(G, c[G]))
+    return m
+
+
+def test_a_relaxed_declaration_round_trips_as_version_four(tmp_path):
+    m = relaxed_curve_model()
+    save(m, tmp_path / "m.yaml")
+    assert "relaxed: true" in (tmp_path / "m.yaml").read_text()
+    back = load(tmp_path / "m.yaml")
+    assert back.piecewise_declarations["curve"].relaxed is True
+    assert back.solve().objective == pytest.approx(3.5)
+
+
+def test_a_declaration_that_is_not_relaxed_writes_no_relaxed_key(tmp_path):
+    from test_definition import curve, curve_data
+
+    save(curve().build(curve_data()), tmp_path / "m.yaml")
+    assert "relaxed" not in (tmp_path / "m.yaml").read_text()

@@ -201,9 +201,14 @@ with an entity of one breakpoint raises `ValueError`.
 Where it is 1, `x` is on the curve. Where it is 0, `x` is 0 and `y` is
 compared with 0. The curve then starts at its first breakpoint, and a first
 breakpoint above 0 is a minimum output. `active=` is supported by
-`method="incremental"` only. A continuous variable, a variable with bounds
-outside 0 and 1, and a scaled variable raise `ValueError`: a value between 0
-and 1 scales every breakpoint.
+`method="incremental"` only. A variable with bounds outside 0 and 1 and a
+scaled variable raise `ValueError`.
+
+A continuous variable raises `ValueError` under the default. A value between
+0 and 1 scales every breakpoint, so the curve is met at a fraction of its
+first breakpoint and at a fraction of its cost. `relaxed=True` accepts that
+variable and declares the scaled curve, which is the linear relaxation of
+the switch. `relaxed=True` with no `active=` raises `ValueError`.
 
 ```python
 import numpy as np

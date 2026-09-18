@@ -33,8 +33,17 @@ KEYS = (
 )
 VARIABLE_KEYS = ("sets", "subset", "lower", "upper", "integer")
 CONSTRAINT_KEYS = ("relation", "where", "over")
-PIECEWISE_KEYS = ("x", "x_points", "y", "y_points", "sign", "method", "active")
-PIECEWISE_REQUIRED = PIECEWISE_KEYS[:-1]
+PIECEWISE_KEYS = (
+    "x",
+    "x_points",
+    "y",
+    "y_points",
+    "sign",
+    "method",
+    "active",
+    "relaxed",
+)
+PIECEWISE_REQUIRED = PIECEWISE_KEYS[:-2]
 SET_KEYS = ("dtype", "members")
 _HEAD_3 = """\
 # --- Reading this file --------------------------------------------------
@@ -115,7 +124,8 @@ _BODY = """\
 #
 """
 _PIECEWISE = """\
-# piecewise   name: {x, x_points, y, y_points, sign, method, active}
+# piecewise   name: {x, x_points, y, y_points, sign, method, active,
+#                    relaxed}
 #             A piecewise-linear relation of y to x. Loading the file
 #             generates its variables and constraints; they are not
 #             written.
@@ -132,8 +142,11 @@ _PIECEWISE = """\
 #   method    Required. incremental: one continuous and one integer
 #             variable per segment. tangent: one row per segment; the
 #             points are convex under >= and concave under <=.
-#   active    An expression over the index sets of x, incremental
-#             only. Where it is 0, x is 0 and y is compared with 0.
+#   active    A binary variable over the index sets of x, or a sum of
+#             them, incremental only. Where it is 0, x is 0 and y is
+#             compared with 0.
+#   relaxed   true accepts an active between 0 and 1, which scales the
+#             curve by its value. Absent is false.
 #   The generated names are the piecewise name, an underscore and one
 #   of: segment, members, x_step, y_step, x_first, y_first, fill,
 #   order, x, y, order_bound, fill_order, order_link, active, slope,
@@ -351,6 +364,8 @@ def _piecewise_entry(declaration: Any) -> dict[str, str]:
     }
     if declaration.active is not None:
         entry["active"] = render(declaration.active)
+    if declaration.relaxed:
+        entry["relaxed"] = True
     return entry
 
 
@@ -529,6 +544,7 @@ def _definition(spec: Mapping[str, Any]) -> Definition:
             sign=entry["sign"],
             method=entry["method"],
             active=None if active is None else read(active, symbols),
+            relaxed=bool(entry.get("relaxed", False)),
         )
     if "objective" in spec:
         objective = read(spec["objective"], symbols)

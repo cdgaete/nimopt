@@ -171,6 +171,7 @@ class Definition:
         sign: str,
         method: str,
         active: Any = None,
+        relaxed: bool = False,
     ) -> Piecewise:
         """Declare a piecewise-linear relation of `y` to `x`, generated in `build`.
 
@@ -184,7 +185,9 @@ class Definition:
             raise ValueError(
                 f"piecewise {name!r} is already declared; declare another name"
             )
-        declaration = Piecewise(name, x, x_points, y, y_points, sign, method, active)
+        declaration = Piecewise(
+            name, x, x_points, y, y_points, sign, method, active, relaxed
+        )
         names = declaration.names()
         registries = (
             self.sets,
@@ -299,7 +302,15 @@ class Definition:
             held.done()
         for d in bound.piecewise_declarations.values():
             model.piecewise(
-                d.name, d.x, d.x_points, d.y, d.y_points, d.sign, d.method, d.active
+                d.name,
+                d.x,
+                d.x_points,
+                d.y,
+                d.y_points,
+                d.sign,
+                d.method,
+                d.active,
+                d.relaxed,
             )
         if bound.objective is not None:
             model.set_objective(bound.objective)

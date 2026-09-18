@@ -671,3 +671,79 @@ def test_a_scaled_active_is_not_a_switch():
 def test_a_binary_active_switches_the_curve():
     m = curve_with_active(lambda m, G: m.var("u", (G,), upper=1.0, integer=True)[G])
     assert "curve_active" in m.piecewise_declarations["curve"].generated["constraints"]
+
+
+def relaxed_curve(integer, relaxed, demand=0.5):
+    """A curve switched by `u`, solved at `demand`.
+
+    The breakpoints are x 2, 5, 10 and y 20, 35, 80, so the first breakpoint
+    is a minimum output of 2 at a cost of 20. A binary switch meets a demand
+    of 0.5 by running at 2 and paying 20. A relaxed switch at 0.1 meets it at
+    0.5 and pays 20 * 0.1 + 15 * 0.1, which is 3.5.
+    """
+    G = no.Set("G", np.array(["g"]))
+    K = no.Set("K", np.arange(3))
+    xp = no.Param.from_dense("xp", (G, K), [[2.0, 5.0, 10.0]])
+    yp = no.Param.from_dense("yp", (G, K), [[20.0, 35.0, 80.0]])
+    m = no.Model("relaxed")
+    p = m.var("p", (G,), upper=10.0)
+    c = m.var("c", (G,), lower=-1e4)
+    u = m.var("u", (G,), upper=1.0, integer=integer)
+    m.piecewise(
+        "curve",
+        x=p[G],
+        x_points=xp[G, K],
+        y=c[G],
+        y_points=yp[G, K],
+        sign=">=",
+        method="incremental",
+        active=u[G],
+        relaxed=relaxed,
+    )
+    d = no.Param.from_dense("d", (G,), np.array([demand]))
+    m.constraint("meet", p[G] >= d[G])
+    m.set_objective(no.Sum(G, c[G]))
+    return m
+
+
+def test_a_relaxed_active_scales_the_curve():
+    solved = relaxed_curve(integer=False, relaxed=True).solve()
+    assert solved.objective == pytest.approx(3.5)
+
+
+def test_a_binary_active_under_relaxed_is_still_a_switch():
+    solved = relaxed_curve(integer=True, relaxed=True).solve()
+    assert solved.objective == pytest.approx(20.0)
+
+
+def test_a_relaxed_active_outside_the_unit_interval_raises():
+    with pytest.raises(ValueError, match="bounds"):
+        curve_with_active_relaxed(lambda m, G: m.var("u", (G,), upper=5.0)[G])
+
+
+def test_a_relaxed_active_that_is_scaled_raises():
+    with pytest.raises(ValueError, match="scales"):
+        curve_with_active_relaxed(lambda m, G: 2.0 * m.var("u", (G,), upper=1.0)[G])
+
+
+def curve_with_active_relaxed(active_of):
+    """A relaxed curve switched by `active_of(model, G)`."""
+    G, B, xp, yp, m = one_generator([20.0, 35.0, 80.0])
+    p = m.var("p", (G,), upper=20.0)
+    c = m.var("c", (G,), lower=-1e4)
+    m.piecewise(
+        "curve", p[G], xp[G, B], c[G], yp[G, B], ">=", "incremental",
+        active_of(m, G), relaxed=True,
+    )
+    return m
+
+
+def test_relaxed_without_active_raises():
+    G, B, xp, yp, m = one_generator([20.0, 35.0, 80.0])
+    p = m.var("p", (G,), upper=20.0)
+    c = m.var("c", (G,), lower=-1e4)
+    with pytest.raises(ValueError, match="relaxed"):
+        m.piecewise(
+            "curve", p[G], xp[G, B], c[G], yp[G, B], ">=", "incremental",
+            relaxed=True,
+        )

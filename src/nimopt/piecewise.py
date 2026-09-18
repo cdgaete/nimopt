@@ -26,11 +26,15 @@ class Piecewise:
     a model generated for this declaration. Each entry is empty until a model
     generates them.
 
+    `relaxed` accepts an `active` between 0 and 1, which scales the curve by
+    its value. Without it `active` requires a binary variable.
+
     Raises TypeError for an `x`, `y` or `active` that is not an expression,
     and for points that are not a coefficient. Raises ValueError for a name
     that is not an identifier, an unknown method or sign, expressions over
     different sets, points over sets other than the sets of `x` and one
-    breakpoint set, and a `tangent` declaration with sign `==` or `active`.
+    breakpoint set, a `tangent` declaration with sign `==` or `active`, and
+    `relaxed` with no `active`.
     """
 
     def __init__(
@@ -43,6 +47,7 @@ class Piecewise:
         sign: str,
         method: str,
         active: Any = None,
+        relaxed: bool = False,
     ) -> None:
         self.name = str(name)
         if not self.name.isidentifier() or self.name == "Sum":
@@ -62,7 +67,13 @@ class Piecewise:
         self.sign = sign
         self.x = self._expression(x, "x")
         self.y = self._expression(y, "y")
+        self.relaxed = bool(relaxed)
         self.active = None if active is None else self._expression(active, "active")
+        if self.relaxed and self.active is None:
+            raise ValueError(
+                f"piecewise {self.name!r} is relaxed and has no active; give "
+                f"active, or declare it without relaxed"
+            )
         self.x_points = self._points(x_points, "x_points")
         self.y_points = self._points(y_points, "y_points")
         self._same_sets(self.y, "y")
@@ -163,8 +174,8 @@ class Piecewise:
         """Raise ValueError where active is not a sum of binary variables.
 
         A value other than 0 or 1 scales every breakpoint. Every term
-        requires a unit scale, no coefficient, and a variable that is integer
-        with bounds inside 0 and 1.
+        requires a unit scale, no coefficient, and bounds inside 0 and 1. A
+        declaration that is not relaxed requires an integer variable.
         """
         if self.active is None:
             return
@@ -176,11 +187,11 @@ class Piecewise:
                     f"{variable.name!r}; give active as a sum of binary "
                     f"variables"
                 )
-            if not variable.integer:
+            if not variable.integer and not self.relaxed:
                 raise ValueError(
                     f"active of piecewise {self.name!r} contains the "
                     f"continuous variable {variable.name!r}; declare it with "
-                    f"integer=True and bounds 0 and 1"
+                    f"integer=True, or declare the piecewise with relaxed=True"
                 )
             low, high = _bounds_of(variable)
             if low < 0.0 or high > 1.0:
