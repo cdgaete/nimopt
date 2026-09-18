@@ -407,17 +407,25 @@ class Expression:
             "specify them with `Sum(I, J, expression)`"
         )
 
-    @property
-    def coords(self) -> dict[str, Any]:
-        """Return each dimension's coordinate, from its variables and coefficients."""
+    def sets_by_name(self) -> dict[str, Any]:
+        """Return the set of each dimension the terms read, keyed by its name.
+
+        The sets of the variables come before the sets of the coefficients.
+        """
         found = {}
         for t in self.terms:
             for s in t.variable.sets:
-                found[s.name] = s.coord
+                found.setdefault(s.name, s)
+        for t in self.terms:
             if t.coefficient is not None:
                 for s in t.coefficient.sets:
-                    found.setdefault(s.name, s.coord)
+                    found.setdefault(s.name, s)
         return found
+
+    @property
+    def coords(self) -> dict[str, Any]:
+        """Return each dimension's coordinate, from its variables and coefficients."""
+        return {name: s.coord for name, s in self.sets_by_name().items()}
 
     def materialise(
         self, record: Any = None, progress: Any = None

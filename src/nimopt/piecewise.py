@@ -328,12 +328,8 @@ def _sets_of(*held: Any) -> dict[str, Any]:
     found = {}
     for item in held:
         if isinstance(item, Expression):
-            for term in item.terms:
-                for s in term.variable.sets:
-                    found.setdefault(s.name, s)
-                if term.coefficient is not None:
-                    for s in term.coefficient.sets:
-                        found.setdefault(s.name, s)
+            for name, s in item.sets_by_name().items():
+                found.setdefault(name, s)
         elif isinstance(item, Coefficient):
             for s in item.sets:
                 found.setdefault(s.name, s)
