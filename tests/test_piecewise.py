@@ -629,3 +629,45 @@ def test_a_constraint_does_not_take_a_name_a_declaration_generated():
     m.piecewise("curve", p[G], xp[G, B], c[G], yp[G, B], ">=", "incremental")
     with pytest.raises(ValueError, match=re.escape("'curve_x'")):
         m.constraint("curve_x", p[G] >= 0.0)
+
+
+def curve_with_active(active_of):
+    """A curve switched by `active_of(model, G)`, over one generator."""
+    G, B, xp, yp, m = one_generator([20.0, 35.0, 80.0])
+    p = m.var("p", (G,), upper=20.0)
+    c = m.var("c", (G,), lower=-1e4)
+    m.piecewise(
+        "curve",
+        p[G],
+        xp[G, B],
+        c[G],
+        yp[G, B],
+        ">=",
+        "incremental",
+        active_of(m, G),
+    )
+    return m
+
+
+def test_a_continuous_active_is_not_a_switch():
+    # a value between 0 and 1 scales every breakpoint, so the curve is met at
+    # a fraction of its first breakpoint and at a fraction of its cost
+    with pytest.raises(ValueError, match="active"):
+        curve_with_active(lambda m, G: m.var("u", (G,), upper=1.0)[G])
+
+
+def test_an_integer_active_above_one_is_not_a_switch():
+    with pytest.raises(ValueError, match="active"):
+        curve_with_active(lambda m, G: m.var("u", (G,), upper=5.0, integer=True)[G])
+
+
+def test_a_scaled_active_is_not_a_switch():
+    with pytest.raises(ValueError, match="active"):
+        curve_with_active(
+            lambda m, G: 2.0 * m.var("u", (G,), upper=1.0, integer=True)[G]
+        )
+
+
+def test_a_binary_active_switches_the_curve():
+    m = curve_with_active(lambda m, G: m.var("u", (G,), upper=1.0, integer=True)[G])
+    assert "curve_active" in m.piecewise_declarations["curve"].generated["constraints"]

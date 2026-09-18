@@ -85,8 +85,9 @@ breakpoint has no generated rows and no generated columns.
 | `"incremental"` | per segment, one continuous and one integer column and their rows | breakpoints strictly increasing or strictly decreasing |
 | `"tangent"` | one row per segment, and two rows that keep `x` between the first and the last breakpoint | points convex under `>=`, concave under `<=`; no `active`; no `==`; no constant in `x` |
 
-`active` is an expression over the sets of `x`. Where it is 0, `x` is 0 and
-`y` is compared with 0. `Model.piecewise` generates the declarations at
+`active` is a binary variable over the sets of `x`, or a sum of them. Where
+it is 0, `x` is 0 and `y` is compared with 0. A term that is continuous,
+scaled, or bounded outside 0 and 1 raises ValueError. `Model.piecewise` generates the declarations at
 once. `Definition.piecewise` stores the declaration, and `build` generates
 them. A generated name is `name`, an underscore and a suffix:
 

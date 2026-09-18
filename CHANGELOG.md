@@ -60,6 +60,9 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   generates raises `ValueError`, in a model and in a definition. A file
   writes a set, a parameter and a variable into one table of symbols, and one
   name for two of them is a file that does not load.
+- `active=` requires a binary variable, or a sum of them. A term that is
+  continuous, scaled, or bounded outside 0 and 1 raises `ValueError`. A value
+  between 0 and 1 scales every breakpoint of the curve.
 
 ### Changed
 

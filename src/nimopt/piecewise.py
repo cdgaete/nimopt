@@ -159,6 +159,37 @@ class Piecewise:
                     f"declare {slot} and x over the same members"
                 )
 
+    def check_active(self) -> None:
+        """Raise ValueError where active is not a sum of binary variables.
+
+        A value other than 0 or 1 scales every breakpoint. Every term
+        requires a unit scale, no coefficient, and a variable that is integer
+        with bounds inside 0 and 1.
+        """
+        if self.active is None:
+            return
+        for term in self.active.terms:
+            variable = term.variable
+            if term.coefficient is not None or term.scale != 1.0:
+                raise ValueError(
+                    f"active of piecewise {self.name!r} scales variable "
+                    f"{variable.name!r}; give active as a sum of binary "
+                    f"variables"
+                )
+            if not variable.integer:
+                raise ValueError(
+                    f"active of piecewise {self.name!r} contains the "
+                    f"continuous variable {variable.name!r}; declare it with "
+                    f"integer=True and bounds 0 and 1"
+                )
+            low, high = _bounds_of(variable)
+            if low < 0.0 or high > 1.0:
+                raise ValueError(
+                    f"active of piecewise {self.name!r} contains variable "
+                    f"{variable.name!r} with bounds {low} and {high}; declare "
+                    f"it with bounds 0 and 1"
+                )
+
     def names(self) -> dict[str, tuple[str, ...]]:
         """Return the names this declaration generates, by kind."""
         n = self.name
@@ -199,6 +230,18 @@ class Piecewise:
     def generated_names(self) -> frozenset[str]:
         """Return every name a model generated for this declaration."""
         return frozenset(name for kind in KINDS for name in self.generated[kind])
+
+
+def _bounds_of(variable: Any) -> tuple[float, float]:
+    """Return the least lower bound and the greatest upper bound of `variable`."""
+    found = []
+    for held, reduce in ((variable.lower, np.min), (variable.upper, np.max)):
+        if isinstance(held, Param):
+            values = held.materialise().values()
+            found.append(float(reduce(values)) if values.size else 0.0)
+        else:
+            found.append(float(held))
+    return found[0], found[1]
 
 
 def _sets_of(*held: Any) -> dict[str, Any]:
@@ -521,6 +564,7 @@ def generate(model: Any, declaration: Piecewise) -> None:
             f"declared in model {model.name!r}; rename the piecewise declaration"
         )
     declaration.check_domain()
+    declaration.check_active()
     sets = _sets_of(
         declaration.x,
         declaration.y,

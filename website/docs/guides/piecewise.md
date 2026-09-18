@@ -197,11 +197,13 @@ with an entity of one breakpoint raises `ValueError`.
 
 ## A curve that a binary variable switches off
 
-`active=` takes an expression over the sets of `x`, usually a binary
-variable. Where it is 1, `x` is on the curve. Where it is 0, `x` is 0 and `y`
-is compared with 0. The curve then starts at its first breakpoint, and a
-first breakpoint above 0 is a minimum output. `active=` is supported by
-`method="incremental"` only.
+`active=` takes a binary variable over the sets of `x`, or a sum of them.
+Where it is 1, `x` is on the curve. Where it is 0, `x` is 0 and `y` is
+compared with 0. The curve then starts at its first breakpoint, and a first
+breakpoint above 0 is a minimum output. `active=` is supported by
+`method="incremental"` only. A continuous variable, a variable with bounds
+outside 0 and 1, and a scaled variable raise `ValueError`: a value between 0
+and 1 scales every breakpoint.
 
 ```python
 import numpy as np
