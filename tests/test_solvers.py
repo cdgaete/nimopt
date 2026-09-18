@@ -129,3 +129,24 @@ def test_a_model_the_backend_refuses_is_not_solved_on():
 
     with pytest.raises(RuntimeError, match="rejected the model"):
         highs.solve(assembled, "min")
+
+
+def test_a_bound_without_a_dual_bound_is_the_optimal_objective():
+    from nimopt.solvers.base import proved_bound
+
+    assert proved_bound("optimal", 12.0, None) == 12.0
+    assert proved_bound("time_limit", 12.0, None) is None
+
+
+def test_a_reported_dual_bound_is_the_bound_where_it_is_finite():
+    from nimopt.solvers.base import proved_bound
+
+    assert proved_bound("optimal", 12.0, 11.5) == 11.5
+    assert proved_bound("node_limit", 12.0, float("inf")) is None
+    assert proved_bound("node_limit", 12.0, float("-inf")) is None
+
+
+@pytest.mark.parametrize("name", ["highs", "gurobi", "mosek"])
+def test_an_adapter_reports_duals_for_a_model_without_integer_columns(name):
+    assert capabilities(name).reports_duals(integer=False)
+    assert not capabilities(name).reports_duals(integer=True)

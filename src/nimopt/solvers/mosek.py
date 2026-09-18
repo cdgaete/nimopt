@@ -25,7 +25,7 @@ import numpy.typing as npt
 if TYPE_CHECKING:
     from nimopt.model import Assembled
 
-from nimopt.solvers.base import Capabilities, Result
+from nimopt.solvers.base import Capabilities, Result, proved_bound
 from nimopt.solvers.options import translated
 
 BACKEND = "mosek"
@@ -203,9 +203,10 @@ def _bound(
     status `optimal` and None at any other status.
     """
     if not integer or task.getintinf(mosek.iinfitem.mio_num_relax) == 0:
-        return objective if status == "optimal" else None
-    value = float(task.getdouinf(mosek.dinfitem.mio_obj_bound))
-    return value if np.isfinite(value) else None
+        return proved_bound(status, objective, None)
+    return proved_bound(
+        status, objective, float(task.getdouinf(mosek.dinfitem.mio_obj_bound))
+    )
 
 
 def solve(
@@ -244,7 +245,7 @@ def solve(
         )
     integer = bool(assembled.integrality.any())
     duals = None
-    if not (integer and CAPABILITIES.rejects("integrality", "duals")):
+    if CAPABILITIES.reports_duals(integer):
         duals = np.zeros(assembled.n_rows, dtype=np.float64)
     which = _defined(mosek, task, integer)
     if which is None:

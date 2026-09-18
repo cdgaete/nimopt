@@ -161,3 +161,22 @@ class Capabilities:
         return tuple(sorted((one, other))) in tuple(
             tuple(sorted(pair)) for pair in self.rejected
         )
+
+    def reports_duals(self, integer: bool) -> bool:
+        """Return whether the adapter reports duals for a model.
+
+        `integer` is True for a model with integer columns.
+        """
+        return not (integer and self.rejects("integrality", "duals"))
+
+
+def proved_bound(status: str, objective: float, reported: float | None) -> float | None:
+    """Return the bound a solver proved on the optimal objective, or None.
+
+    `reported` is the solver's dual bound, or None where the solver defines
+    none. Without it, the bound is the objective at status `optimal` and None
+    at any other status. An infinite `reported` returns None.
+    """
+    if reported is None:
+        return objective if status == "optimal" else None
+    return reported if np.isfinite(reported) else None

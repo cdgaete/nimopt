@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from nimopt.model import Assembled
 
 from nimopt.row import senses
-from nimopt.solvers.base import Capabilities, Result
+from nimopt.solvers.base import Capabilities, Result, proved_bound
 from nimopt.solvers.options import translated
 
 BACKEND = "gurobipy"
@@ -133,10 +133,7 @@ def _bound(model: Any, integer: bool, status: str, objective: float) -> float | 
     `ObjBound` is not a dual bound. The bound is then the objective at status
     `optimal` and None at any other status.
     """
-    if not integer:
-        return objective if status == "optimal" else None
-    value = float(model.ObjBound)
-    return value if np.isfinite(value) else None
+    return proved_bound(status, objective, float(model.ObjBound) if integer else None)
 
 
 def solve(
@@ -189,7 +186,7 @@ def solve(
     integer = bool(assembled.integrality.any())
     status = OUTCOME[reported]
     duals = None
-    if not (integer and CAPABILITIES.rejects("integrality", "duals")):
+    if CAPABILITIES.reports_duals(integer):
         duals = np.zeros(assembled.n_rows, dtype=np.float64)
     if not model.SolCount:
         return Result(

@@ -17,7 +17,7 @@ import numpy.typing as npt
 if TYPE_CHECKING:
     from nimopt.model import Assembled
 
-from nimopt.solvers.base import Capabilities, Result
+from nimopt.solvers.base import Capabilities, Result, proved_bound
 from nimopt.solvers.options import translated
 
 BACKEND = "highspy"
@@ -132,10 +132,9 @@ def _bound(integer: bool, status: str, objective: float, info: Any) -> float | N
     HiGHS defines no dual bound. The bound is then the objective at status
     `optimal` and None at any other status.
     """
-    if not integer:
-        return objective if status == "optimal" else None
-    value = float(info.mip_dual_bound)
-    return value if np.isfinite(value) else None
+    return proved_bound(
+        status, objective, float(info.mip_dual_bound) if integer else None
+    )
 
 
 def solve(
@@ -226,7 +225,7 @@ def solve(
     solution = highs.getSolution()
     integer = bool(assembled.integrality.any())
     duals = None
-    if not (integer and CAPABILITIES.rejects("integrality", "duals")):
+    if CAPABILITIES.reports_duals(integer):
         duals = np.asarray(solution.row_dual, dtype=np.float64)
     info = highs.getInfo()
     status = OUTCOME[reported]
