@@ -5,11 +5,10 @@ from typing import Any
 
 import numpy as np
 import numpy.typing as npt
-from nimblend import Domain
 
 from nimopt.coefficient import Coefficient
 from nimopt.param import Param
-from nimopt.sets import Set, coords_of, displayed
+from nimopt.sets import Set, coords_of, displayed, subset
 from nimopt.symbol import read_at_its_sets
 from nimopt.term import Expression, Sum
 
@@ -137,6 +136,29 @@ class Piecewise:
                 f"x is over {self.x.frame}; give both over the same sets"
             )
 
+    def check_domain(self) -> None:
+        """Raise ValueError where y or active spans other coordinates than x.
+
+        The expressions materialise to compare their coordinates. Every
+        variable they read requires its columns.
+        """
+        _, rows = self.x.materialise()
+        for slot, given in (("y", self.y), ("active", self.active)):
+            if given is None:
+                continue
+            _, other = given.materialise()
+            other = other.transpose(*rows.dims)
+            differing = rows.difference(other).union(other.difference(rows))
+            if differing.size:
+                at = {
+                    name: displayed(column[0])
+                    for name, column in differing.labels().items()
+                }
+                raise ValueError(
+                    f"{slot} of piecewise {self.name!r} and x differ at {at}; "
+                    f"declare {slot} and x over the same members"
+                )
+
     def names(self) -> dict[str, tuple[str, ...]]:
         """Return the names this declaration generates, by kind."""
         n = self.name
@@ -196,33 +218,6 @@ def _sets_of(*held: Any) -> dict[str, Any]:
     return found
 
 
-def _param(
-    name: str,
-    sets: tuple[Any, ...],
-    values: npt.NDArray[np.float64],
-    present: npt.NDArray[np.bool_],
-) -> Param:
-    """Return a parameter over `sets` with `values` where `present` is True."""
-    dims = tuple(s.name for s in sets)
-    index = np.nonzero(present)
-    members = Domain.from_coordinates(dims, coords_of(sets), np.asarray(index))
-    return Param(name, sets, members.array(values[index]))
-
-
-def _broadcast(
-    grid: npt.NDArray[Any],
-    grid_dims: tuple[str, ...],
-    dims: tuple[str, ...],
-    sets: Mapping[str, Any],
-) -> npt.NDArray[Any]:
-    """Return `grid` over `grid_dims`, repeated and ordered over `dims`."""
-    missing = [d for d in dims if d not in grid_dims]
-    held = grid.reshape(grid.shape + (1,) * len(missing))
-    held_dims = (*grid_dims, *missing)
-    held = held.transpose([held_dims.index(d) for d in dims])
-    return np.broadcast_to(held, tuple(len(sets[d]) for d in dims))
-
-
 def _relation(body: Expression, sign: str, rhs: Any) -> Any:
     """Return `body` compared with `rhs` under `sign`."""
     if sign == "<=":
@@ -233,7 +228,12 @@ def _relation(body: Expression, sign: str, rhs: Any) -> Any:
 
 
 class _Grid:
-    """The breakpoints as numpy rows, one row per entity of the points' sets.
+    """The breakpoints as arrays over the entity sets and the breakpoint set.
+
+    `entities` contains one member per entity with breakpoints. `segments`
+    contains one member per pair of consecutive breakpoints, over the entity
+    sets and the generated segment set. `x_step`, `y_step`, `x_start` and
+    `y_start` contain one value per segment, in the order of `segments`.
 
     Raises ValueError for points with no breakpoint, breakpoints present at
     different coordinates, an entity with one breakpoint, an absent
@@ -246,55 +246,37 @@ class _Grid:
     ) -> None:
         self.name = declaration.name
         b = declaration.breakpoints
+        self.breakpoints = b
         self.sets = dict(sets)
         self.entity = tuple(d for d in declaration.x_points.dims if d != b)
         self.entity_sets = tuple(self.sets[d] for d in self.entity)
-        self.entity_shape = tuple(len(s) for s in self.entity_sets)
         order = (*self.entity, b)
         self.x = self._read(declaration.x_points, order, "x_points")
         self.y = self._read(declaration.y_points, order, "y_points")
-        present = ~np.isnan(self.x)
-        if not present.any():
+        present = self.x.domain(order)
+        if present.size == 0:
             raise ValueError(
                 f"piecewise {self.name!r} has no breakpoint; give two or more "
                 f"breakpoints to at least one entity"
             )
-        mismatch = np.flatnonzero((present != ~np.isnan(self.y)).any(axis=1))
-        if mismatch.size:
-            self._reject(
-                mismatch[0],
-                "has x_points and y_points present at different breakpoints",
-                "give both a value at the same breakpoints",
-            )
-        count = present.sum(axis=1)
-        single = np.flatnonzero(count == 1)
-        if single.size:
-            self._reject(single[0], "has one breakpoint", "give two or more")
-        gap = np.flatnonzero((present[:, 1:] & ~present[:, :-1]).any(axis=1))
-        if gap.size:
-            self._reject(
-                gap[0],
-                "has an absent breakpoint before a present one",
-                "leave only the last breakpoints absent",
-            )
-        self.present = present
-        self.with_points = count >= 2
-        self.on_segment = present[:, 1:] & present[:, :-1]
-        self.x_step = np.where(self.on_segment, np.diff(self.x, axis=1), 0.0)
-        self.y_step = np.where(self.on_segment, np.diff(self.y, axis=1), 0.0)
-        rising = np.where(self.on_segment, self.x_step > 0, True).all(axis=1)
-        falling = np.where(self.on_segment, self.x_step < 0, True).all(axis=1)
-        unordered = np.flatnonzero(~(rising | falling))
-        if unordered.size:
-            self._reject(
-                unordered[0],
-                "has x_points that are not strictly monotonic",
-                "give strictly increasing or strictly decreasing breakpoints; "
-                "nimopt does not support special ordered sets",
-            )
+        self._check_pairing(present, self.y.domain(order))
+        self._check_runs(present)
+        behind_x = self.x.shift({b: 1})
+        behind_y = self.y.shift({b: 1})
+        self.pairs = present.intersect(behind_x.domain(order))
+        self.x_step = (self.x - behind_x).restrict(self.pairs).values()
+        self.y_step = (self.y - behind_y).restrict(self.pairs).values()
+        self.x_start = behind_x.restrict(self.pairs).values()
+        self.y_start = behind_y.restrict(self.pairs).values()
+        self._check_monotonic()
         self.segment = Set(segment, self.sets[b].labels[1:])
         self.sets[segment] = self.segment
         self.points = (*self.entity, segment)
+        labels = self.pairs.labels()
+        columns = {d: labels[d] for d in self.entity}
+        columns[segment] = labels[b]
+        self.segments = subset((*self.entity_sets, self.segment), columns)
+        self.entities = self.x.domain(self.entity)
 
     def _read(self, points: Any, order: tuple[str, ...], slot: str) -> Any:
         array = points.materialise()
@@ -303,82 +285,132 @@ class _Grid:
                 f"{slot} of piecewise {self.name!r} contains a value that is "
                 f"not finite; give finite breakpoints"
             )
-        grid = array.transpose(*order).to_dense(fill=np.nan)
-        return grid.reshape(-1, grid.shape[-1])
+        return array.transpose(*order)
 
-    def _reject(self, row: int, condition: str, action: str) -> None:
-        at = np.unravel_index(row, self.entity_shape) if self.entity_shape else ()
+    def _at(self, index: npt.NDArray[np.int32], column: int) -> tuple[int, ...]:
+        """Return the entity positions in column `column` of `index`."""
+        return tuple(int(index[axis][column]) for axis in range(len(self.entity)))
+
+    def _reject(self, at: tuple[int, ...], condition: str, action: str) -> None:
         entity = {s.name: displayed(s.labels[k]) for s, k in zip(self.entity_sets, at)}
         raise ValueError(f"piecewise {self.name!r} {condition} at {entity}; {action}")
 
+    def _check_pairing(self, present: Any, other: Any) -> None:
+        """Raise ValueError where x_points and y_points differ in presence."""
+        differing = present.difference(other).union(other.difference(present))
+        if differing.size:
+            self._reject(
+                self._at(differing.coordinates(), 0),
+                "has x_points and y_points present at different breakpoints",
+                "give both a value at the same breakpoints",
+            )
+
+    def _check_runs(self, present: Any) -> None:
+        """Raise ValueError for an entity with one breakpoint or with a gap.
+
+        The breakpoints of an entity are the first members of the breakpoint
+        set. The count, the least position and the greatest position check
+        both conditions.
+        """
+        b = self.breakpoints
+        counted = present.array(np.ones(present.size)).sum(b)
+        count = counted.values()
+        index = counted.coordinates(self.entity)
+        single = np.flatnonzero(count == 1.0)
+        if single.size:
+            self._reject(
+                self._at(index, single[0]), "has one breakpoint", "give two or more"
+            )
+        at_b = present.array(present.coordinates()[-1].astype(np.float64))
+        gap = np.flatnonzero(
+            (at_b.min(b).values() != 0.0) | (at_b.max(b).values() != count - 1.0)
+        )
+        if gap.size:
+            self._reject(
+                self._at(index, gap[0]),
+                "has an absent breakpoint before a present one",
+                "leave only the last breakpoints absent",
+            )
+
+    def _check_monotonic(self) -> None:
+        """Raise ValueError for an entity whose x_points are not monotonic."""
+        b = self.breakpoints
+        step = self.pairs.array(self.x_step)
+        least = step.min(b)
+        greatest = step.max(b)
+        unordered = np.flatnonzero(
+            ~((least.values() > 0.0) | (greatest.values() < 0.0))
+        )
+        if unordered.size:
+            self._reject(
+                self._at(least.coordinates(self.entity), unordered[0]),
+                "has x_points that are not strictly monotonic",
+                "give strictly increasing or strictly decreasing breakpoints; "
+                "nimopt does not support special ordered sets",
+            )
+
     def slopes(self) -> npt.NDArray[np.float64]:
-        """Return the slope of each segment, zero where the segment is absent."""
-        with np.errstate(divide="ignore", invalid="ignore"):
-            return np.where(self.on_segment, self.y_step / self.x_step, 0.0)
+        """Return the slope of each segment, in the order of `segments`."""
+        return self.y_step / self.x_step
 
     def check_curvature(self, sign: str) -> None:
         """Raise ValueError for an entity whose curvature does not match `sign`."""
-        both = self.on_segment[:, 1:] & self.on_segment[:, :-1]
-        direction = np.sign(self.x_step.sum(axis=1))[:, None]
-        change = np.diff(self.slopes(), axis=1) * direction
+        b = self.breakpoints
+        slope = self.pairs.array(self.slopes())
+        behind = slope.shift({b: 1})
+        both = self.pairs.intersect(behind.domain(slope.dims))
+        totals = self.pairs.array(self.x_step).sum(b)
+        direction = self.entities.array(np.sign(totals.values()))
+        change = (slope - behind).restrict(both) * direction
         if sign == ">=":
-            wrong = np.where(both, change < -TOLERANCE, False).any(axis=1)
+            found = change.min(b)
+            wrong = np.flatnonzero(found.values() < -TOLERANCE)
             shape = "convex"
         else:
-            wrong = np.where(both, change > TOLERANCE, False).any(axis=1)
+            found = change.max(b)
+            wrong = np.flatnonzero(found.values() > TOLERANCE)
             shape = "concave"
-        at = np.flatnonzero(wrong)
-        if at.size:
+        if wrong.size:
             self._reject(
-                at[0],
+                self._at(found.coordinates(self.entity), wrong[0]),
                 f"has points that are not {shape}, required by sign {sign!r}",
                 "use method 'incremental'",
             )
 
-    def spread(
-        self,
-        name: str,
-        dims: tuple[str, ...],
-        values: npt.NDArray[np.float64],
-        grid_dims: tuple[str, ...],
-        present: npt.NDArray[np.bool_],
-    ) -> Param | float:
-        """Return a parameter over `dims` from `values` over `grid_dims`.
+    def first(self) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """Return x and y at the first breakpoint, one value per entity."""
+        at = {self.breakpoints: self.sets[self.breakpoints].labels[0]}
+        return self.x.sel(at).values(), self.y.sel(at).values()
 
-        `values` and `present` repeat over each dimension of `dims` that
-        `grid_dims` does not have. Over no dimension, the one value is
-        returned as a float.
+    def bounds(self) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """Return the least and the greatest x, one value per entity."""
+        b = self.breakpoints
+        return self.x.min(b).values(), self.x.max(b).values()
+
+    def spread(self, name: str, dims: tuple[str, ...], array: Any) -> Param | float:
+        """Return a parameter over `dims` from an array over some of them.
+
+        The array is replicated across each dimension of `dims` it does not
+        have. Over no dimension, the one value is returned as a float.
         """
         if not dims:
-            return float(values.reshape(-1)[0])
-        full = _broadcast(values, grid_dims, dims, self.sets)
-        where = _broadcast(present, grid_dims, dims, self.sets)
-        return _param(name, tuple(self.sets[d] for d in dims), full, where)
+            return float(array.values()[0])
+        missing = tuple(d for d in dims if d not in array.dims)
+        if missing:
+            array = array.expand(missing, coords_of(self.sets[d] for d in missing))
+        return Param(name, tuple(self.sets[d] for d in dims), array.transpose(*dims))
 
     def per_entity(
         self, name: str, dims: tuple[str, ...], values: npt.NDArray[np.float64]
     ) -> Param | float:
         """Return a parameter over `dims` from one value per entity."""
-        return self.spread(
-            name,
-            dims,
-            values.reshape(self.entity_shape),
-            self.entity,
-            self.with_points.reshape(self.entity_shape),
-        )
+        return self.spread(name, dims, self.entities.array(values))
 
     def per_segment(
         self, name: str, dims: tuple[str, ...], values: npt.NDArray[np.float64]
     ) -> Param | float:
         """Return a parameter over `dims` from one value per entity and segment."""
-        shape = (*self.entity_shape, len(self.segment))
-        return self.spread(
-            name,
-            dims,
-            values.reshape(shape),
-            self.points,
-            self.on_segment.reshape(shape),
-        )
+        return self.spread(name, dims, self.segments.array(values))
 
     def at(self, held: Param | float, dims: tuple[str, ...]) -> Any:
         """Return `held` read at the sets of `dims`, and a float unchanged."""
@@ -410,11 +442,10 @@ def _tangent(
     slopes = grid.slopes()
     slope = grid.per_segment(slope_name, grid.points, slopes)
     body = d.y - grid.at(slope, grid.points) * d.x
-    starts = np.where(grid.on_segment, grid.x[:, :-1], 0.0)
-    heights = np.where(grid.on_segment, grid.y[:, :-1], 0.0)
-    intercept = grid.per_segment(intercept_name, body.frame, heights - slopes * starts)
-    low = np.min(grid.x, axis=1, initial=np.inf, where=grid.present)
-    high = np.max(grid.x, axis=1, initial=-np.inf, where=grid.present)
+    intercept = grid.per_segment(
+        intercept_name, body.frame, grid.y_start - slopes * grid.x_start
+    )
+    low, high = grid.bounds()
     x_low = grid.per_entity(low_name, d.x.frame, low)
     x_high = grid.per_entity(high_name, d.x.frame, high)
     rows = (
@@ -443,22 +474,22 @@ def _incremental(
     dims = (*d.x.frame, grid.segment.name)
     columns = tuple(grid.sets[k] for k in dims)
     after = (*columns[:-1], grid.segment + 1)
-    ones = np.ones(grid.on_segment.shape)
-    members = grid.per_segment(members_name, dims, ones)
+    members = grid.per_segment(members_name, dims, np.ones(grid.segments.size))
     fill = model.var(fill_name, columns, subset=members, upper=1.0)
     order = model.var(order_name, columns, subset=members, upper=1.0, integer=True)
     x_step = grid.per_segment(x_step_name, grid.points, grid.x_step)
     y_step = grid.per_segment(y_step_name, grid.points, grid.y_step)
     x_body = d.x - Sum(grid.segment, grid.at(x_step, grid.points) * fill[columns])
     y_body = d.y - Sum(grid.segment, grid.at(y_step, grid.points) * fill[columns])
+    first_x, first_y = grid.first()
     if d.active is None:
-        x_first = grid.per_entity(x_first_name, d.x.frame, grid.x[:, 0])
-        y_first = grid.per_entity(y_first_name, d.y.frame, grid.y[:, 0])
+        x_first = grid.per_entity(x_first_name, d.x.frame, first_x)
+        y_first = grid.per_entity(y_first_name, d.y.frame, first_y)
         x_rhs = grid.at(x_first, d.x.frame)
         y_rhs = grid.at(y_first, d.y.frame)
     else:
-        x_first = grid.per_entity(x_first_name, grid.entity, grid.x[:, 0])
-        y_first = grid.per_entity(y_first_name, grid.entity, grid.y[:, 0])
+        x_first = grid.per_entity(x_first_name, grid.entity, first_x)
+        y_first = grid.per_entity(y_first_name, grid.entity, first_y)
         x_body = x_body - grid.at(x_first, grid.entity) * d.active
         y_body = y_body - grid.at(y_first, grid.entity) * d.active
         x_rhs = y_rhs = 0.0
@@ -477,9 +508,10 @@ def _incremental(
 def generate(model: Any, declaration: Piecewise) -> None:
     """Declare the sets, parameters, variables and constraints of `declaration`.
 
-    The name checks and the breakpoint checks run before any declaration.
-    Raises ValueError for a generated name the model declares and for a
-    breakpoint check that fails. Sets `declaration.generated`.
+    The name checks, the coordinate check and the breakpoint checks run
+    before any declaration. Raises ValueError for a generated name the model
+    declares, for a `y` or an `active` over other coordinates than `x`, and
+    for a breakpoint check that fails. Sets `declaration.generated`.
     """
     names = declaration.names()
     taken = _taken(model, names)
@@ -488,6 +520,7 @@ def generate(model: Any, declaration: Piecewise) -> None:
             f"piecewise {declaration.name!r} generates {taken}, already "
             f"declared in model {model.name!r}; rename the piecewise declaration"
         )
+    declaration.check_domain()
     sets = _sets_of(
         declaration.x,
         declaration.y,

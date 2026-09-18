@@ -49,6 +49,13 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   `DeprecationWarning` before it.
 - The message for an unknown key in a model file writes the unknown keys and
   the accepted keys as quoted names separated by commas.
+- A piecewise declaration whose `x`, `y` and `active` are over different
+  members raises `ValueError` and reports the first member they differ at.
+  A curve relates one column of `x` to one column of `y`, and a member that
+  one of them does not have relates a column to nothing.
+- A piecewise declaration allocates nothing for a member of its sets that has
+  no breakpoint. The breakpoints are read as arrays over the members that
+  have one.
 
 ### Changed
 

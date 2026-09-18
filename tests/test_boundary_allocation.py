@@ -6,7 +6,7 @@ import pytest
 
 from nimopt.model import Model
 from nimopt.param import Param
-from nimopt.sets import Set, product
+from nimopt.sets import Set, product, subset
 from nimopt.term import Sum
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "benchmarks"))
@@ -158,3 +158,73 @@ def test_an_incidence_allocates_nothing_per_nonzero_in_nimopt():
     # what it allocates must not track the nonzeros the incidence adds. A byte
     # an entry is already below the four an int32 column would cost.
     assert (dense["nimopt"] - sparse["nimopt"]) / added < 1.0, (dense, sparse)
+
+
+def piecewise_parts(n_units, n_points=4):
+    """Return the sets and breakpoints of a curve declared for one unit.
+
+    The breakpoint data is four entries for `u0` whatever `n_units` is, so
+    the generated model is the same at every extent. Only the extent of the
+    unit set moves.
+    """
+    U = Set("U", np.array([f"u{i}" for i in range(n_units)]))
+    K = Set("K", np.arange(n_points))
+    columns = {"U": np.array(["u0"] * n_points), "K": np.arange(n_points)}
+    x = np.linspace(0.0, 30.0, n_points)
+    xp = Param.from_long("xp", (U, K), columns, x)
+    yp = Param.from_long("yp", (U, K), columns, x * 2.0)
+    held = subset((U,), {"U": np.array(["u0"])})
+    return U, K, xp, yp, held
+
+
+def build_curve(parts, declared):
+    """A model over `parts`, with the piecewise declaration or without it."""
+    U, K, xp, yp, held = parts
+    m = Model("curve")
+    p = m.var("p", (U,), subset=held, upper=30.0)
+    c = m.var("c", (U,), subset=held, lower=-1e4)
+    if declared:
+        m.piecewise(
+            "pw",
+            x=p[U],
+            x_points=xp[U, K],
+            y=c[U],
+            y_points=yp[U, K],
+            sign=">=",
+            method="incremental",
+        )
+    m.set_objective(Sum(U, c[U]))
+    return m
+
+
+def declaration_bytes(n_units, runs=3):
+    """Return the peak the piecewise declaration adds at `n_units`.
+
+    Both sides build the same sets and the same data outside the traced call,
+    so the members of the unit set cost the same on each, and the difference
+    is the declaration alone. The least of `runs` peaks is returned on each
+    side because a peak varies between runs.
+    """
+    from ownership import peak_bytes
+
+    parts = piecewise_parts(n_units)
+    with_it = min(
+        peak_bytes(lambda: build_curve(parts, True).assemble()) for _ in range(runs)
+    )
+    without = min(
+        peak_bytes(lambda: build_curve(parts, False).assemble()) for _ in range(runs)
+    )
+    return with_it - without
+
+
+def test_a_piecewise_declaration_allocates_nothing_per_absent_member():
+    # the breakpoints are four entries for one unit at both extents, and the
+    # generated model is identical, so what the declaration costs must not
+    # track the members that have no breakpoint
+    small = build_curve(piecewise_parts(10), True).assemble()
+    large = build_curve(piecewise_parts(10000), True).assemble()
+    assert (small.n_rows, small.n_cols) == (large.n_rows, large.n_cols)
+    assert small.values.size == large.values.size
+
+    grew = declaration_bytes(10000) / declaration_bytes(10)
+    assert grew < 3.0, grew

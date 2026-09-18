@@ -554,3 +554,53 @@ def test_a_curve_over_no_set_relates_two_scalar_variables():
         m.set_objective(y[()])
         assert m.solve().objective == pytest.approx(12.5), method
         assert m.n_rows == rows, method
+
+
+def partial_domain_model(same_domain):
+    """A curve of slope 2 where y is declared over fewer members than x.
+
+    Demand of 12 in each period costs 48.0 when the relation is enforced at
+    every member of x. Where y is absent the y row is dropped and production
+    there is free.
+    """
+    G = no.Set("G", np.array(["a", "b"]))
+    T = no.Set("T", np.array(["t0", "t1"]))
+    B = no.Set("B", np.array(["b0", "b1"]))
+    xp = table(
+        G, B, [(g, b, v) for g in "ab" for b, v in (("b0", 0), ("b1", 20))], "xp"
+    )
+    yp = table(
+        G, B, [(g, b, v) for g in "ab" for b, v in (("b0", 0), ("b1", 40))], "yp"
+    )
+    demand = no.Param.from_dense("demand", (T,), np.array([12.0, 12.0]))
+    m = no.Model("partial")
+    members = {"G": np.array(["a", "a", "b"]), "T": np.array(["t0", "t1", "t0"])}
+    held = no.subset((G, T), members)
+    p = m.var("p", (G, T), subset=held if same_domain else None, upper=20.0)
+    c = m.var("c", (G, T), subset=held, lower=-1e4)
+    m.constraint("balance", no.Sum(G, p[G, T]) >= demand[T])
+    m.piecewise(
+        "curve",
+        x=p[G, T],
+        x_points=xp[G, B],
+        y=c[G, T],
+        y_points=yp[G, B],
+        sign=">=",
+        method="incremental",
+    )
+    m.set_objective(no.Sum(G, T, c[G, T]))
+    return m
+
+
+def test_a_curve_whose_y_is_over_fewer_members_than_x_raises():
+    # x has a column at (b, t1) and y has none, so the curve there relates a
+    # column to nothing. The declaration is ambiguous and is rejected.
+    with pytest.raises(ValueError, match="curve"):
+        partial_domain_model(same_domain=False)
+
+
+def test_a_curve_over_one_subset_is_enforced_at_every_member_of_it():
+    # the same declaration with x and y over the same members: three of the
+    # four member pairs, and the relation binds at each one
+    solved = partial_domain_model(same_domain=True).solve()
+    assert solved.objective == pytest.approx(48.0)

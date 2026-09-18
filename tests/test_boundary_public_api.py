@@ -339,3 +339,69 @@ def test_nothing_a_caller_reads_carries_a_backends_type():
     for one_of in held:
         for value in vars(one_of).values():
             assert type(value).__module__.split(".")[0] in allowed, (one_of, value)
+
+
+# `Domain.from_coordinates` takes an index matrix, exactly as the constructors
+# above do. `sets.py` owns the public `subset_of` that wraps it, and every
+# other module calls that wrapper instead of building positions of its own.
+COORDINATE_CONSTRUCTOR = "from_coordinates"
+OWNS_THE_WRAPPER = ("sets.py",)
+
+
+def test_only_the_module_that_owns_subset_of_builds_a_coordinate_domain():
+    offenders = []
+    for path, tree in package_modules():
+        if path.name in OWNS_THE_WRAPPER:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if isinstance(func, ast.Attribute) and func.attr == COORDINATE_CONSTRUCTOR:
+                offenders.append(f"{path.name}:{node.lineno} .{func.attr}")
+    assert offenders == [], offenders
+
+
+# replication of entries across the extent of a dimension is
+# `SparseArray.expand`, and an axis reorder is `transpose`. These three numpy
+# calls are how the same work is written one layer too high.
+REPLICATIONS = ("broadcast_to", "tile", "repeat")
+
+# `session.py` weights a row dual per coefficient of the assembled matrix.
+# That matrix is nimopt's own CSR handoff to a solver and not a nimblend
+# array, so replicating along it is this package's work and not the array
+# layer's. `test_the_reduced_cost_loop_reads_no_nimblend_array` holds it to
+# the rule that makes the exemption true.
+OWN_BUFFERS = ("session.py",)
+
+
+def test_the_reduced_cost_loop_reads_no_nimblend_array():
+    # the exemption above is load-bearing rather than permissive: it stands
+    # only while the module names nothing of nimblend at all
+    source = next(t for p, t in package_modules() if p.name == "session.py")
+    imported = {
+        alias.name
+        for node in ast.walk(source)
+        if isinstance(node, ast.ImportFrom) and (node.module or "") == "nimblend"
+        for alias in node.names
+    }
+    assert imported == set(), imported
+
+
+def test_the_package_replicates_entries_through_nimblend():
+    offenders = []
+    for path, tree in package_modules():
+        if path.parent.name == "models" or path.name in OWN_BUFFERS:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and func.attr in REPLICATIONS
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "np"
+            ):
+                offenders.append(f"{path.name}:{node.lineno} np.{func.attr}")
+    assert offenders == [], offenders
