@@ -23,8 +23,27 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   per segment, and is exact for breakpoints that are strictly increasing or
   strictly decreasing. The `tangent` method generates one row per segment for
   points that are convex under `>=` or concave under `<=`.
-- `active=` takes an expression over the sets of `x`. Where it is 0, `x` is 0
-  and `y` is compared with 0. The `incremental` method supports it.
+- `active=` takes a binary variable, or a sum of them, over the sets of `x`.
+  Where it is 0, `x` is 0 and `y` is compared with 0. The `incremental`
+  method supports it. A term that is scaled or bounded outside 0 and 1 raises
+  `ValueError`, and so does a continuous term under the default.
+- `Model.piecewise` and `Definition.piecewise` take `relaxed=`. `True`
+  accepts a continuous `active` between 0 and 1 and declares the scaled
+  curve, the linear relaxation of the switch. A value between 0 and 1 scales
+  every breakpoint of the curve. `relaxed=True` with no `active=` raises
+  `ValueError`. A model file writes the key `relaxed` under a declaration
+  that sets it.
+- A piecewise declaration whose `x`, `y` and `active` are over different
+  members raises `ValueError` and reports the first member they differ at.
+  A curve relates one column of `x` to one column of `y`, and a member that
+  one of them does not have relates a column to nothing.
+- A variable or a constraint that takes a name a piecewise declaration
+  generates raises `ValueError`, in a model and in a definition. A file
+  writes a set, a parameter and a variable into one table of symbols, and one
+  name for two of them is a file that does not load.
+- A piecewise declaration allocates nothing for a member of its sets that has
+  no breakpoint. The breakpoints are read as arrays over the members that
+  have one.
 - A model generates the declarations when `piecewise` is called. A definition
   stores the declaration, and `build` generates it once the data is bound.
 - `Piecewise` is exported. `Model.piecewise_declarations` and
@@ -36,6 +55,10 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   variable's own sets: the objective coefficient less the duals of the rows
   the variable appears in, weighted by its coefficients in them. nimopt
   derives the value, so the convention does not vary by solver.
+- `Solution.dual` takes `kind="constraint"` or `kind="variable"`. A model
+  declares its constraints and its variables in two registries, and a name
+  that identifies one of each raises `ValueError` with no `kind`. The message
+  for an unknown name lists each declared name once.
 
 ### Fixed
 
@@ -49,30 +72,6 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   `DeprecationWarning` before it.
 - The message for an unknown key in a model file writes the unknown keys and
   the accepted keys as quoted names separated by commas.
-- A piecewise declaration whose `x`, `y` and `active` are over different
-  members raises `ValueError` and reports the first member they differ at.
-  A curve relates one column of `x` to one column of `y`, and a member that
-  one of them does not have relates a column to nothing.
-- A piecewise declaration allocates nothing for a member of its sets that has
-  no breakpoint. The breakpoints are read as arrays over the members that
-  have one.
-- A variable or a constraint that takes a name a piecewise declaration
-  generates raises `ValueError`, in a model and in a definition. A file
-  writes a set, a parameter and a variable into one table of symbols, and one
-  name for two of them is a file that does not load.
-- `active=` requires a binary variable, or a sum of them. A term that is
-  scaled or bounded outside 0 and 1 raises `ValueError`, and so does a
-  continuous term under the default. A value between 0 and 1 scales every
-  breakpoint of the curve.
-- `Model.piecewise` and `Definition.piecewise` take `relaxed=`. `True`
-  accepts a continuous `active` between 0 and 1 and declares the scaled
-  curve, the linear relaxation of the switch. `relaxed=True` with no
-  `active=` raises `ValueError`. A model file writes the key `relaxed` under
-  a declaration that sets it.
-- `Solution.dual` takes `kind="constraint"` or `kind="variable"`. A model
-  declares its constraints and its variables in two registries, and a name
-  that identifies one of each raises `ValueError` with no `kind`. The message
-  for an unknown name lists each declared name once.
 
 ### Changed
 
