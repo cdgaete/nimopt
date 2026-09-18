@@ -12,6 +12,12 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Fixed
+
+- `Piecewise.check_active` reads the bounds of an `active` variable at the
+  coordinates of `where`. An upper bound above 1 outside `where`, such as the
+  status of a modular unit that counts modules, raises no `ValueError`.
+
 ## 0.4.0 - 2026-09-18
 
 ### Added

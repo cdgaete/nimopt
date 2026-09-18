@@ -206,10 +206,15 @@ class Piecewise:
 
         A value other than 0 or 1 scales every breakpoint. Every term
         requires a unit scale, no coefficient, and bounds inside 0 and 1. A
-        declaration that is not relaxed requires an integer variable.
+        declaration that is not relaxed requires an integer variable. With
+        `where`, the bounds are read at its coordinates.
         """
         if self.active is None:
             return
+        where = None
+        if self.where is not None:
+            entity = tuple(d for d in self.x_points.dims if d != self.breakpoints)
+            where = rows_of(self.where, entity, f"piecewise {self.name!r}", "where")
         for term in self.active.terms:
             variable = term.variable
             if term.coefficient is not None or term.scale != 1.0:
@@ -224,7 +229,7 @@ class Piecewise:
                     f"continuous variable {variable.name!r}; declare it with "
                     f"integer=True, or declare the piecewise with relaxed=True"
                 )
-            low, high = _bounds_of(variable)
+            low, high = _bounds_of(variable, where)
             if low < 0.0 or high > 1.0:
                 raise ValueError(
                     f"active of piecewise {self.name!r} contains variable "
@@ -274,12 +279,19 @@ class Piecewise:
         return frozenset(name for kind in KINDS for name in self.generated[kind])
 
 
-def _bounds_of(variable: Any) -> tuple[float, float]:
-    """Return the least lower bound and the greatest upper bound of `variable`."""
+def _bounds_of(variable: Any, where: Any = None) -> tuple[float, float]:
+    """Return the least lower bound and the greatest upper bound of `variable`.
+
+    A bound parameter over every dimension of `where` is read at the
+    coordinates of `where` only.
+    """
     found = []
     for held, reduce in ((variable.lower, np.min), (variable.upper, np.max)):
         if isinstance(held, Param):
-            values = held.materialise().values()
+            array = held.materialise()
+            if where is not None and set(where.dims) <= set(held.dims):
+                array = array.restrict(where)
+            values = array.values()
             found.append(float(reduce(values)) if values.size else 0.0)
         else:
             found.append(float(held))

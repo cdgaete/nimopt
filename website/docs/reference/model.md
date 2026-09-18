@@ -94,7 +94,7 @@ coordinates only.
 `active` is a binary variable over the sets of `x`, or a sum of them. Where
 it is 0, `x` is 0 and `y` is compared with 0. A term that is scaled or
 bounded outside 0 and 1 raises ValueError, and so does a continuous term
-under the default. `relaxed=True` accepts a continuous `active` between 0
+under the default. With `where`, the bounds are read at its coordinates. `relaxed=True` accepts a continuous `active` between 0
 and 1 and scales the curve by its value, which is the linear relaxation of
 the switch. `relaxed=True` with no `active` raises ValueError. `Model.piecewise` generates the declarations at
 once. `Definition.piecewise` stores the declaration, and `build` generates

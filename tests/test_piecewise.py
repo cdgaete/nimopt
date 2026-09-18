@@ -999,3 +999,48 @@ def test_where_on_a_term_that_is_already_restricted_raises():
         m.piecewise(
             "curve", x, xp[G, B], y[G], yp[G, B], ">=", "incremental", where=(G,)
         )
+
+
+def modules_model(ceiling_values):
+    # u counts modules at a; b has a curve and a status
+    G = no.Set("G", np.array(["a", "b"]))
+    B = no.Set("B", np.array(["b0", "b1", "b2"]))
+    xp, yp = split_points(G, B)
+    ceiling = no.Param.from_dense("ceiling", (G,), np.array(ceiling_values))
+    price = no.Param.from_long("price", (G,), {"G": np.array(["a"])}, np.array([3.0]))
+    m = no.Model("modules")
+    p = m.var("p", (G,))
+    y = m.var("y", (G,), subset=no.subset((G,), {"G": np.array(["b"])}))
+    u = m.var("u", (G,), upper=ceiling, integer=True)
+    m.constraint("meet", no.Sum(G, p[G]) == 15.0)
+    m.piecewise(
+        "curve",
+        p[G],
+        xp[G, B],
+        y[G],
+        yp[G, B],
+        ">=",
+        "incremental",
+        active=u[G],
+        where=members(G, "curved", ["b"]),
+    )
+    m.set_objective(
+        no.Sum(G, y[G]) + no.Sum(G, price[G] * p[G]) + 2.0 * no.Sum(G, u[G])
+    )
+    return m
+
+
+def test_active_reads_its_bounds_at_the_coordinates_of_where():
+    # b serves 15 at 10 + 5 * 2 = 20, and 2 for its status; a would cost 45
+    s = modules_model([np.inf, 1.0]).solve()
+    assert s.status == "optimal"
+    assert s.objective == pytest.approx(22.0)
+
+
+def test_an_active_bound_above_one_inside_where_raises():
+    message = (
+        "active of piecewise 'curve' contains variable 'u' with bounds 0.0 and "
+        "2.0; declare it with bounds 0 and 1"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        modules_model([1.0, 2.0])
