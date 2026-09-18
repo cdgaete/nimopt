@@ -90,3 +90,18 @@ def test_the_two_routes_carry_the_same_labels():
     named = np.array(["p1", "p2"])
     assert np.array_equal(dense.coords["P"].to_index(np.arange(2)), named)
     assert np.array_equal(sparse.coords["P"].to_index(np.arange(2)), named)
+
+
+def test_a_subset_that_covers_the_product_reads_back_dense():
+    # a primal follows the members of its variable by the rule a dual follows
+    m = Model("t")
+    T = Set("T", np.array(["t1", "t2"]))
+    from nimopt import product
+
+    x = m.var("x", (T,), subset=product((T,)), upper=1.0)
+    m.set_objective(Sum(T, x[T]))
+    m.constraint("floor", x[T] >= 0.5)
+    sol = m.solve()
+    assert isinstance(sol.primal("x"), DenseArray)
+    assert isinstance(sol.dual("x"), DenseArray)
+    assert isinstance(sol.dual("floor"), DenseArray)

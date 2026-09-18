@@ -12,6 +12,13 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Changed
+
+- A primal or a reduced cost of a variable whose `subset=` covers the product
+  of its sets is a `DenseArray`. A primal and a dual follow one rule: a
+  `DenseArray` where the members cover the product, and a `SparseArray`
+  otherwise.
+
 ### Added
 
 - `Variable.bound_array(which)` returns the lower or the upper bound at each

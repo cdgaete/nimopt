@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import numpy.typing as npt
-from nimblend import DenseArray, SparseArray
+from nimblend import DenseArray, Domain, SparseArray
 
 if TYPE_CHECKING:
     from nimopt.model import Model
@@ -143,12 +143,7 @@ class Solution:
         self, variable: Any, values: npt.NDArray[np.float64]
     ) -> DenseArray | SparseArray:
         """Return one value per column, read back onto the variable's sets."""
-        if variable.subset is None:
-            shape = tuple(len(s) for s in variable.sets)
-            return DenseArray(
-                values.reshape(shape), variable.coords, variable.dims, absence="unknown"
-            )
-        return variable.domain().array(values.copy(), absence="unknown")
+        return _on_members(variable.domain(), values)
 
     @property
     def has_duals(self) -> bool:
@@ -238,13 +233,22 @@ class Solution:
                 f"again"
             )
         row_dual, _ = self._require_dual()
-        rows = constraint.rows
-        values = row_dual[self._rows_of[name]]
-        if rows.is_full:
-            return DenseArray(
-                values.reshape(rows.shape),
-                rows.coords,
-                rows.dims,
-                absence="unknown",
-            )
-        return rows.array(values.copy(), absence="unknown")
+        return _on_members(constraint.rows, row_dual[self._rows_of[name]])
+
+
+def _on_members(
+    members: Domain, values: npt.NDArray[np.float64]
+) -> DenseArray | SparseArray:
+    """Return one value per member of `members`, as an array of absence unknown.
+
+    A domain that covers its product returns a `DenseArray`, and any other
+    domain a `SparseArray`.
+    """
+    if members.is_full:
+        return DenseArray(
+            values.reshape(members.shape),
+            members.coords,
+            members.dims,
+            absence="unknown",
+        )
+    return members.array(values.copy(), absence="unknown")
