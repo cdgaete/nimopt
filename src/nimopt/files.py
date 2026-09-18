@@ -42,8 +42,9 @@ PIECEWISE_KEYS = (
     "method",
     "active",
     "relaxed",
+    "where",
 )
-PIECEWISE_REQUIRED = PIECEWISE_KEYS[:-2]
+PIECEWISE_REQUIRED = PIECEWISE_KEYS[:-3]
 SET_KEYS = ("dtype", "members")
 _HEAD_3 = """\
 # --- Reading this file --------------------------------------------------
@@ -125,7 +126,7 @@ _BODY = """\
 """
 _PIECEWISE = """\
 # piecewise   name: {x, x_points, y, y_points, sign, method, active,
-#                    relaxed}
+#                    relaxed, where}
 #             A piecewise-linear relation of y to x. Loading the file
 #             generates its variables and constraints; they are not
 #             written.
@@ -147,6 +148,9 @@ _PIECEWISE = """\
 #             compared with 0.
 #   relaxed   true accepts an active between 0 and 1, which scales the
 #             curve by its value. Absent is false.
+#   where     The entities the declaration covers: a parameter name or
+#             a list of set names, over the sets of x_points other than
+#             the breakpoint set. Absent is every entity.
 #   The generated names are the piecewise name, an underscore and one
 #   of: segment, members, x_step, y_step, x_first, y_first, fill,
 #   order, x, y, order_bound, fill_order, order_link, active, slope,
@@ -352,7 +356,7 @@ def _arrays(model: Any, version: int = VERSION) -> dict[str, npt.NDArray[Any]]:
     return out
 
 
-def _piecewise_entry(declaration: Any) -> dict[str, str | bool]:
+def _piecewise_entry(declaration: Any) -> dict[str, Any]:
     """Return the entry of one piecewise declaration."""
     entry = {
         "x": render(declaration.x),
@@ -366,6 +370,10 @@ def _piecewise_entry(declaration: Any) -> dict[str, str | bool]:
         entry["active"] = render(declaration.active)
     if declaration.relaxed:
         entry["relaxed"] = True
+    if declaration.where is not None:
+        entry["where"] = _domain(
+            declaration.where, f"piecewise {declaration.name!r}", "where="
+        )
     return entry
 
 
@@ -545,6 +553,7 @@ def _definition(spec: Mapping[str, Any]) -> Definition:
             method=entry["method"],
             active=None if active is None else read(active, symbols),
             relaxed=bool(entry.get("relaxed", False)),
+            where=_read_domain(d, entry.get("where"), f"{what} where"),
         )
     if "objective" in spec:
         objective = read(spec["objective"], symbols)

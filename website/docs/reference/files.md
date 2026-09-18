@@ -48,7 +48,7 @@ load to the same model.
 | `parameters` | each name to its dimensions |
 | `variables` | each name to `sets`, and to `subset`, `lower`, `upper`, `integer` where they differ from no subset, `0`, infinity and `false` |
 | `constraints` | each name to `relation`, and to `where` or `over` where given |
-| `piecewise` | each name to `x`, `x_points`, `y`, `y_points`, `sign`, `method`, and to `active` where given; version 4 only; absent where the model declares none |
+| `piecewise` | each name to `x`, `x_points`, `y`, `y_points`, `sign`, `method`, and to `active`, `relaxed` and `where` where given; version 4 only; absent where the model declares none |
 | `objective` | the objective expression; absent where the model declares none |
 | `data` | an inline mapping, or the name of an `.npz` beside the file |
 

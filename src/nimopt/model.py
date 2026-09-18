@@ -471,6 +471,7 @@ class Model:
                             take(term.coefficient)
                 take(declaration.x_points)
                 take(declaration.y_points)
+                take(declaration.where)
         if self._objective is not None:
             for term in self._objective.terms:
                 if term.coefficient is not None:

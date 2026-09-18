@@ -707,3 +707,75 @@ def test_a_declaration_that_is_not_relaxed_writes_no_relaxed_key(tmp_path):
 
     save(curve().build(curve_data()), tmp_path / "m.yaml")
     assert "relaxed" not in (tmp_path / "m.yaml").read_text()
+
+
+def test_a_where_parameter_round_trips_as_version_four(tmp_path):
+    from test_definition import split, split_data
+
+    save(split().build(split_data()), tmp_path / "m.yaml")
+    text = (tmp_path / "m.yaml").read_text()
+    assert "    where: committed\n" in text
+    assert "    where: flexible\n" in text
+    back = load(tmp_path / "m.yaml")
+    assert back.piecewise_declarations["on"].where.name == "committed"
+    assert back.solve().objective == pytest.approx(34.5)
+    save(back, tmp_path / "again.yaml")
+    again = (tmp_path / "again.yaml").read_text()
+    assert again == text.replace("data: m.npz", "data: again.npz")
+
+
+def test_a_where_of_sets_is_written_as_their_names(tmp_path):
+    # a: 10 at slope 1 and 5 at slope 2; b's slope is 2 throughout
+    G = Set("G", np.array(["a", "b"]))
+    K = Set("K", np.arange(3))
+    xp = Param.from_dense("xp", (G, K), [[0.0, 10.0, 20.0], [0.0, 10.0, 20.0]])
+    yp = Param.from_dense("yp", (G, K), [[0.0, 10.0, 30.0], [0.0, 20.0, 40.0]])
+    m = Model("sets")
+    p = m.var("p", (G,))
+    c = m.var("c", (G,))
+    m.constraint("meet", Sum(G, p[G]) == 15.0)
+    m.piecewise("curve", p[G], xp[G, K], c[G], yp[G, K], ">=", "tangent", where=(G,))
+    m.set_objective(Sum(G, c[G]))
+    save(m, tmp_path / "m.yaml")
+    assert "    where: [G]\n" in (tmp_path / "m.yaml").read_text()
+    assert load(tmp_path / "m.yaml").solve().objective == pytest.approx(20.0)
+
+
+def test_a_declaration_without_where_writes_no_where_key(tmp_path):
+    from test_definition import curve, curve_data
+
+    save(curve().build(curve_data()), tmp_path / "m.yaml")
+    assert "where:" not in (tmp_path / "m.yaml").read_text()
+
+
+def test_a_where_that_identifies_an_undeclared_parameter_raises():
+    from test_definition import split
+
+    text = split().to_yaml().replace("where: committed", "where: nowhere")
+    message = (
+        "piecewise 'on' where refers to the undeclared parameter 'nowhere'; "
+        "declare it under parameters"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        loads(text)
+
+
+def test_a_where_domain_with_no_name_raises_on_save(tmp_path):
+    from test_piecewise import forms_model
+
+    m = forms_model(lambda G, B: subset((G,), {"G": np.array(["b"])}))
+    message = (
+        "piecewise 'curve' gives where= a domain with no name; declare its "
+        "members as a parameter and refer to that parameter"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        save(m, tmp_path / "m.yaml")
+
+
+def test_a_declaration_with_where_saves_its_generated_rows_as_version_three(tmp_path):
+    from test_definition import split, split_data
+
+    save(split().build(split_data()), tmp_path / "m.yaml", version=3)
+    text = (tmp_path / "m.yaml").read_text()
+    assert "piecewise" not in text
+    assert load(tmp_path / "m.yaml").solve().objective == pytest.approx(34.5)

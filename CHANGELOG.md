@@ -20,6 +20,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   generated rows cover the entities at its coordinates. `x`, `y` and
   `active` are compared at those coordinates only. Two declarations can
   share breakpoints and split the entities.
+- A model file writes the key `where` under a piecewise declaration that sets
+  it: a parameter's name or a list of set names. The format version is 4.
 
 ## 0.3.1 - 2026-09-17
 
