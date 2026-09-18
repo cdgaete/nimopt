@@ -14,7 +14,6 @@ import tracemalloc
 import numpy as np
 
 from nimopt.models import transport
-from nimopt.solvers import highs
 
 
 def network(n_plants, n_warehouses, arcs_per_plant, seed=0):
@@ -79,7 +78,8 @@ def measure(n_plants, n_warehouses, arcs_per_plant, solve=False, seed=0):
     tracemalloc.start()
     started = time.perf_counter()
     model = build(n_plants, n_warehouses, arcs_per_plant, arc_index, unit_cost)
-    assembled = model.assemble()
+    session = model.session()
+    assembled = session.assembled
     elapsed = time.perf_counter() - started
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
@@ -96,10 +96,11 @@ def measure(n_plants, n_warehouses, arcs_per_plant, solve=False, seed=0):
     }
     if solve:
         started = time.perf_counter()
-        result = highs.solve(assembled, model.sense)
+        solution = session.solve()
         got["solve_ms"] = (time.perf_counter() - started) * 1e3
-        got["status"] = result.status
-        got["objective"] = result.objective
+        got["status"] = solution.status
+        got["objective"] = solution.objective
+    session.close()
     return got
 
 

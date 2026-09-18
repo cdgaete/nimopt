@@ -16,7 +16,6 @@ import numpy as np
 
 from nimopt.models import storage
 from nimopt.models.storage import CHARGE_EFFICIENCY, DISCHARGE_EFFICIENCY
-from nimopt.solvers import highs
 
 UNIT_MW = 100.0
 STORE_MW = 50.0
@@ -80,7 +79,8 @@ def measure(n_generators, n_storage, n_hours, solve=False, seed=0):
     tracemalloc.start()
     started = time.perf_counter()
     model = build(n_generators, n_storage, n_hours, availability, demand, price)
-    assembled = model.assemble()
+    session = model.session()
+    assembled = session.assembled
     elapsed = time.perf_counter() - started
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
@@ -97,10 +97,11 @@ def measure(n_generators, n_storage, n_hours, solve=False, seed=0):
     }
     if solve:
         started = time.perf_counter()
-        result = highs.solve(assembled, model.sense)
+        solution = session.solve()
         got["solve_ms"] = (time.perf_counter() - started) * 1e3
-        got["status"] = result.status
-        got["objective"] = result.objective
+        got["status"] = solution.status
+        got["objective"] = solution.objective
+    session.close()
     return got
 
 

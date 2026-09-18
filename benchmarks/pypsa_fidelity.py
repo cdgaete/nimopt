@@ -13,8 +13,6 @@ from pathlib import Path
 
 from pypsa_network import build, constant
 
-from nimopt.solvers import highs
-
 HERE = Path(__file__).resolve().parent
 DATA = HERE / "data"
 
@@ -47,7 +45,8 @@ def compare(stem="elec_s_10", root=DATA):
     root = Path(root)
     reference = json.loads((root / f"{stem}_reference.json").read_text())
     model = build(root / f"{stem}.npz")
-    assembled = model.assemble()
+    session = model.session()
+    assembled = session.assembled
 
     families = {}
     for name, want in grouped(reference).items():
@@ -73,14 +72,15 @@ def compare(stem="elec_s_10", root=DATA):
         "nnz": (int(assembled.values.size), reference["nnz"]),
     }
     if "objective" in reference:
-        result = highs.solve(assembled, model.sense)
-        if result.status != "optimal":
+        solution = session.solve()
+        if solution.status != "optimal":
             raise RuntimeError(
-                f"status is {result.status!r}; compare a network that solves to "
-                f"optimality"
+                f"status is {solution.status!r}; compare a network that solves "
+                f"to optimality"
             )
         offset = constant(root / f"{stem}.npz")
-        got["objective"] = (result.objective - offset, reference["objective"])
+        got["objective"] = (solution.objective - offset, reference["objective"])
+    session.close()
     return got
 
 

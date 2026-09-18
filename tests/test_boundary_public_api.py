@@ -405,3 +405,22 @@ def test_the_package_replicates_entries_through_nimblend():
             ):
                 offenders.append(f"{path.name}:{node.lineno} np.{func.attr}")
     assert offenders == [], offenders
+
+
+def test_a_benchmark_solves_through_a_session():
+    # an adapter's solve skips the checks a Session makes: the objective
+    # constant and a model that changed after the matrix was assembled
+    offenders = []
+    for path, tree in modules():
+        if path.parent.name not in ("benchmarks", "scripts"):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+                "nimopt.solvers"
+            ):
+                offenders.append(f"{path.name}: from {node.module} import ...")
+            if isinstance(node, ast.ImportFrom) and node.module == "nimopt":
+                offenders.extend(
+                    f"{path.name}: {a.name}" for a in node.names if a.name == "solvers"
+                )
+    assert offenders == [], offenders
