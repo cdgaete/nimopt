@@ -99,14 +99,16 @@ class Constraint:
             upper[:] = values
 
     def write_into(
-        self, buffer: EntryBuffer, row_start: int, progress: Any = None
+        self, buffer: EntryBuffer, rows: Any, row_start: int, progress: Any = None
     ) -> SparseArray:
         """Return the block over `(ROW, COLUMN)`, its entries written to `buffer`.
 
-        The block is grouped into the slice the buffer reserves, and exists as
-        no second object. The frame precedes the column dimension in canonical
-        order. The grouping reads a leading prefix, and the result is canonical
-        as written.
+        `rows` is the coordinate of every row of the model, and this
+        constraint's rows are numbered from `row_start` inside it. The block
+        is grouped into the slice the buffer reserves, and exists as no second
+        object. The frame precedes the column dimension in canonical order.
+        The grouping reads a leading prefix, and the result is canonical as
+        written.
         """
         block, _ = self.expression.materialise(progress=progress)
         n = int((self.rows.positions_of(block) >= 0).sum())
@@ -120,7 +122,8 @@ class Constraint:
             self.frame,
             into=ROW,
             domain=self.rows,
-            offset=row_start,
+            coord=rows,
+            start=row_start,
             out=buffer.reserve(n),
         )
 

@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from nimblend import EntryBuffer
+from nimblend import EntryBuffer, ProductCoord
 
 from nimopt.constraint import Constraint
 from nimopt.model import Model
@@ -76,7 +76,7 @@ def test_the_block_is_written_into_the_buffer_it_is_given():
     _, P, W, x, d, cap = model()
     c = Constraint("supply", Sum(W, d[P, W] * x[P, W]) <= cap[P])
     buffer = EntryBuffer(2, c.nnz)
-    block = c.write_into(buffer, 0)
+    block = c.write_into(buffer, ProductCoord((2,)), 0)
     assert block.dims == ("__row__", "__column__")
     assert block.to_dense().tolist() == [
         [1.0, 2.0, 3.0, 0.0, 0.0, 0.0],
@@ -90,8 +90,13 @@ def test_the_block_is_numbered_from_the_row_it_is_given():
     _, P, W, x, d, cap = model()
     c = Constraint("supply", Sum(W, d[P, W] * x[P, W]) <= cap[P])
     buffer = EntryBuffer(2, c.nnz)
-    block = c.write_into(buffer, 7)
+    block = c.write_into(buffer, ProductCoord((9,)), 7)
     assert block.coordinates()[0].tolist() == [7, 7, 7, 8, 8, 8]
+    # the rows are inside the coordinate of every row of the model
+    assert block.to_dense()[7:].tolist() == [
+        [1.0, 2.0, 3.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 4.0, 5.0, 6.0],
+    ]
 
 
 def test_a_right_hand_side_over_the_wrong_dimensions_raises():

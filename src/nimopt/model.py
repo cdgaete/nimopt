@@ -525,20 +525,18 @@ class Model:
         """
         report = _Written(reporter(progress), self.nnz, f"assembling {self.name}")
         buffer = EntryBuffer(2, self.nnz)
+        rows = ProductCoord((self._n_rows,))
         rows_of = {}
         row_start = 0
         for name, constraint in self.constraints.items():
-            constraint.write_into(buffer, row_start, report)
+            constraint.write_into(buffer, rows, row_start, report)
             report.constraint(name, constraint.nnz)
             rows_of[name] = slice(row_start, row_start + constraint.n_rows)
             row_start += constraint.n_rows
         report.close()
 
         matrix = buffer.array(
-            {
-                ROW: ProductCoord((row_start,)),
-                COLUMN: ProductCoord((self._n_columns,)),
-            },
+            {ROW: rows, COLUMN: ProductCoord((self._n_columns,))},
             (ROW, COLUMN),
         )
         indices, values, indptr = matrix.to_csr()

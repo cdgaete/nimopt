@@ -98,7 +98,7 @@ Param.from_long(
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: parameter 'cost': label column 'P' has length 1 and the value column has length 2; pass columns of equal length
+ValueError: parameter 'cost': label columns have lengths {'P': 1, 'W': 2} and the value column has length 2; pass columns of equal length
 ```
 
 </details>

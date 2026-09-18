@@ -238,7 +238,7 @@ nb.from_long(
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: label column 't' has length 2 and the value column has length 1; pass columns of equal length
+ValueError: label columns have lengths {'t': 2} and the value column has length 1; pass columns of equal length
 ```
 
 </details>

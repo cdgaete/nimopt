@@ -14,6 +14,10 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Changed
 
+- `Constraint.write_into` takes the coordinate of every row of the model, and
+  numbers the constraint's rows inside it from `row_start`. It calls the
+  nimblend `group(coord=, start=)`: nimopt requires the nimblend release that
+  contains it.
 - A primal or a reduced cost of a variable whose `subset=` covers the product
   of its sets is a `DenseArray`. A primal and a dual follow one rule: a
   `DenseArray` where the members cover the product, and a `SparseArray`

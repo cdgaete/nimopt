@@ -162,7 +162,7 @@ beside it.
 | `ValueError` | capital does not fall from base to what follows it; pass a capital cost that falls across the merit order | [/models/expansion](/models/expansion) |
 | `ValueError` | absence is 'unknown' and the array has no value at 3 of 4 coordinates; pass fill=<value> to to_dense() | [/nimblend/arrays](/nimblend/arrays) |
 | `ValueError` | frames ('P',) and ('Q',) share no dimension; pass operands that share a dimension | [/nimblend/arrays](/nimblend/arrays) |
-| `ValueError` | label column 't' has length 2 and the value column has length 1; pass columns of equal length | [/nimblend/arrays](/nimblend/arrays) |
+| `ValueError` | label columns have lengths {'t': 2} and the value column has length 1; pass columns of equal length | [/nimblend/arrays](/nimblend/arrays) |
 | `ValueError` | 3 member(s) numbered from 4 end at position 6, and dimension 'k' has extent 6; pass a smaller start or a larger coord | [/nimblend/domains](/nimblend/domains) |
 | `ValueError` | a domain of 3 member(s) requires values of shape (3,); got shape (2,) | [/nimblend/domains](/nimblend/domains) |
 | `ValueError` | constraint 'supply' has free dimensions ('P',); its right-hand side 'demand' is over ('W',) | [/reference/constraint](/reference/constraint) [/tutorial/constraints](/tutorial/constraints) |
@@ -180,7 +180,7 @@ beside it.
 | `ValueError` | parameter 'c' is given columns ['value', 'S']; a table lists the dimensions then value: ['S', 'value'] | [/reference/files](/reference/files) |
 | `ValueError` | variable 'x' contains the unknown key 'bound'; write only 'sets', 'subset', 'lower', 'upper', 'integer' | [/reference/files](/reference/files) |
 | `ValueError` | constraint 'cap' has no row at {'P': 'p3'}; read `absent('cap')` for the rule that dropped it | [/reference/inspection](/reference/inspection) |
-| `ValueError` | parameter 'cost': label column 'P' has length 1 and the value column has length 2; pass columns of equal length | [/reference/param](/reference/param) |
+| `ValueError` | parameter 'cost': label columns have lengths {'P': 1, 'W': 2} and the value column has length 2; pass columns of equal length | [/reference/param](/reference/param) |
 | `TypeError` | parameter 'price' is over ('G',) and expresses no coefficient until it is read; read it at its sets as price[G] | [/reference/param](/reference/param) |
 | `ValueError` | status is 'infeasible' and the solver reports no feasible point; read `status` before reading values | [/reference/solution](/reference/solution) [/tutorial/solving](/tutorial/solving) |
 | `ValueError` | model 'm' has integer columns and 'highs' reports no duals for it; read primal values only | [/reference/solvers](/reference/solvers) |
