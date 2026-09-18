@@ -12,6 +12,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+## 0.4.0 - 2026-09-18
+
 ### Added
 
 - `Model.piecewise` and `Definition.piecewise` take `where=`: a parameter, a

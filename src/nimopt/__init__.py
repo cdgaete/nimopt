@@ -18,7 +18,7 @@ from nimopt.solvers import Option, available, capabilities, options
 from nimopt.term import Expression, Relation, Sum, Term
 from nimopt.variable import Variable
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 __all__ = [
     "COLUMN",
