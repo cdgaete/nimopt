@@ -194,7 +194,7 @@ class Piecewise:
                 continue
             _, other = given.materialise()
             other = other.transpose(*rows.dims)
-            differing = rows.difference(other).union(other.difference(rows))
+            differing = rows.symmetric_difference(other)
             if differing.size:
                 at = {
                     name: displayed(column[0])
@@ -423,7 +423,7 @@ class _Grid:
 
     def _check_pairing(self, present: Any, other: Any) -> None:
         """Raise ValueError where x_points and y_points differ in presence."""
-        differing = present.difference(other).union(other.difference(present))
+        differing = present.symmetric_difference(other)
         if differing.size:
             self._reject(
                 self._at(differing.coordinates(), 0),
