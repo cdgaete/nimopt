@@ -8,7 +8,7 @@ import numpy.typing as npt
 
 from nimopt.coefficient import Coefficient
 from nimopt.param import Param
-from nimopt.sets import Set, coords_of, displayed, subset
+from nimopt.sets import Set, condition_dims, coords_of, displayed, rows_of, subset
 from nimopt.symbol import read_at_its_sets
 from nimopt.term import Expression, Sum
 
@@ -29,12 +29,16 @@ class Piecewise:
     `relaxed` accepts an `active` between 0 and 1, which scales the curve by
     its value. Without it `active` requires a binary variable.
 
+    `where` restricts the declaration to the entities at its coordinates: a
+    parameter, a tuple of sets or a domain over the sets of `x_points` other
+    than the breakpoint set.
+
     Raises TypeError for an `x`, `y` or `active` that is not an expression,
     and for points that are not a coefficient. Raises ValueError for a name
     that is not an identifier, an unknown method or sign, expressions over
     different sets, points over sets other than the sets of `x` and one
-    breakpoint set, a `tangent` declaration with sign `==` or `active`, and
-    `relaxed` with no `active`.
+    breakpoint set, a `tangent` declaration with sign `==` or `active`,
+    `relaxed` with no `active`, and a `where` that is not such a condition.
     """
 
     def __init__(
@@ -48,6 +52,7 @@ class Piecewise:
         method: str,
         active: Any = None,
         relaxed: bool = False,
+        where: Any = None,
     ) -> None:
         self.name = str(name)
         if not self.name.isidentifier() or self.name == "Sum":
@@ -115,6 +120,21 @@ class Piecewise:
                 f"{self.active.constant}; give active as an expression with no "
                 f"constant"
             )
+        self.where = where
+        if where is not None:
+            entity = tuple(d for d in self.x_points.dims if d != self.breakpoints)
+            given = condition_dims(where, f"piecewise {self.name!r}", "where")
+            if given != entity:
+                raise ValueError(
+                    f"where of piecewise {self.name!r} is over {given} and the "
+                    f"entities of x_points are over {entity}; give where over "
+                    f"{entity}"
+                )
+        self.restricted_x = self._restricted(self.x)
+        self.restricted_y = self._restricted(self.y)
+        self.restricted_active = (
+            None if self.active is None else self._restricted(self.active)
+        )
         self.generated: dict[str, tuple[str, ...]] = {kind: () for kind in KINDS}
 
     def __repr__(self) -> str:
@@ -147,14 +167,25 @@ class Piecewise:
                 f"x is over {self.x.frame}; give both over the same sets"
             )
 
+    def _restricted(self, given: Expression) -> Expression:
+        """Return `given` with each term restricted to the coordinates of `where`."""
+        if self.where is None:
+            return given
+        return Expression(
+            [term.restricted_to(self.where) for term in given.terms], given.constant
+        )
+
     def check_domain(self) -> None:
         """Raise ValueError where y or active spans other coordinates than x.
 
         The expressions materialise to compare their coordinates. Every
         variable they read requires its columns.
         """
-        _, rows = self.x.materialise()
-        for slot, given in (("y", self.y), ("active", self.active)):
+        _, rows = self.restricted_x.materialise()
+        for slot, given in (
+            ("y", self.restricted_y),
+            ("active", self.restricted_active),
+        ):
             if given is None:
                 continue
             _, other = given.materialise()
@@ -284,6 +315,7 @@ def _relation(body: Expression, sign: str, rhs: Any) -> Any:
 class _Grid:
     """The breakpoints as arrays over the entity sets and the breakpoint set.
 
+    With `where`, the arrays contain the entities at its coordinates only.
     `entities` contains one member per entity with breakpoints. `segments`
     contains one member per pair of consecutive breakpoints, over the entity
     sets and the generated segment set. `x_step`, `y_step`, `x_start` and
@@ -304,6 +336,13 @@ class _Grid:
         self.sets = dict(sets)
         self.entity = tuple(d for d in declaration.x_points.dims if d != b)
         self.entity_sets = tuple(self.sets[d] for d in self.entity)
+        self.where = (
+            None
+            if declaration.where is None
+            else rows_of(
+                declaration.where, self.entity, f"piecewise {self.name!r}", "where"
+            )
+        )
         order = (*self.entity, b)
         self.x = self._read(declaration.x_points, order, "x_points")
         self.y = self._read(declaration.y_points, order, "y_points")
@@ -334,6 +373,8 @@ class _Grid:
 
     def _read(self, points: Any, order: tuple[str, ...], slot: str) -> Any:
         array = points.materialise()
+        if self.where is not None:
+            array = array.restrict(self.where)
         if not np.isfinite(array.values()).all():
             raise ValueError(
                 f"{slot} of piecewise {self.name!r} contains a value that is "

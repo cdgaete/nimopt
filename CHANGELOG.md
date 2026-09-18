@@ -12,6 +12,14 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Added
+
+- `Model.piecewise` takes `where=`: a parameter, a tuple of sets or a domain
+  over the sets of `x_points` other than the breakpoint set. The breakpoint
+  checks, the generated columns and the generated rows cover the entities at
+  its coordinates. `x`, `y` and `active` are compared at those coordinates
+  only. Two declarations can share breakpoints and split the entities.
+
 ## 0.3.1 - 2026-09-17
 
 ### Fixed

@@ -760,3 +760,242 @@ def test_relaxed_without_active_raises():
             "incremental",
             relaxed=True,
         )
+
+
+def split_points(G, B):
+    """Breakpoints for a, not convex, and b, convex; c has none."""
+    xs = [
+        ("a", "b0", 10),
+        ("a", "b1", 20),
+        ("a", "b2", 30),
+        ("b", "b0", 0),
+        ("b", "b1", 10),
+        ("b", "b2", 20),
+    ]
+    ys = [
+        ("a", "b0", 10),
+        ("a", "b1", 25),
+        ("a", "b2", 30),
+        ("b", "b0", 0),
+        ("b", "b1", 10),
+        ("b", "b2", 30),
+    ]
+    return table(G, B, xs, "xp"), table(G, B, ys, "yp")
+
+
+def members(G, name, labels):
+    """A parameter over (G,) with an entry at each label."""
+    return no.Param.from_long(name, (G,), {"G": np.array(labels)}, np.ones(len(labels)))
+
+
+def split_model():
+    # a is committable, with points that are not convex; b has convex
+    # points; c has no curve and a price of 3 per unit
+    G = no.Set("G", np.array(["a", "b", "c"]))
+    T = no.Set("T", np.array(["t0", "t1"]))
+    B = no.Set("B", np.array(["b0", "b1", "b2"]))
+    xp, yp = split_points(G, B)
+    price = no.Param.from_long("price", (G,), {"G": np.array(["c"])}, np.array([3.0]))
+    demand = no.Param.from_dense("demand", (T,), np.array([5.0, 25.0]))
+    curves = no.subset(
+        (G, T),
+        {"G": np.array(["a", "a", "b", "b"]), "T": np.array(["t0", "t1", "t0", "t1"])},
+    )
+    status = no.subset((G, T), {"G": np.array(["a", "a"]), "T": np.array(["t0", "t1"])})
+    m = no.Model("split")
+    p = m.var("p", (G, T))
+    y = m.var("y", (G, T), subset=curves)
+    u = m.var("u", (G, T), subset=status, upper=1.0, integer=True)
+    m.constraint("balance", no.Sum(G, p[G, T]) == demand[T])
+    m.piecewise(
+        "on",
+        p[G, T],
+        xp[G, B],
+        y[G, T],
+        yp[G, B],
+        ">=",
+        "incremental",
+        active=u[G, T],
+        where=members(G, "committed", ["a"]),
+    )
+    m.piecewise(
+        "free",
+        p[G, T],
+        xp[G, B],
+        y[G, T],
+        yp[G, B],
+        ">=",
+        "tangent",
+        where=members(G, "flexible", ["b"]),
+    )
+    m.set_objective(
+        no.Sum(G, T, y[G, T])
+        + no.Sum(G, T, price[G] * p[G, T])
+        + 2.0 * no.Sum(G, T, u[G, T])
+    )
+    return m
+
+
+def split_reference():
+    """The model of split_model, declared with one set per group of entities."""
+    T = no.Set("T", np.array(["t0", "t1"]))
+    B = no.Set("B", np.array(["b0", "b1", "b2"]))
+    A = no.Set("A", np.array(["a"]))
+    F = no.Set("F", np.array(["b"]))
+    C = no.Set("C", np.array(["c"]))
+    xa = no.Param.from_dense("xa", (A, B), [[10.0, 20.0, 30.0]])
+    ya = no.Param.from_dense("ya", (A, B), [[10.0, 25.0, 30.0]])
+    xf = no.Param.from_dense("xf", (F, B), [[0.0, 10.0, 20.0]])
+    yf = no.Param.from_dense("yf", (F, B), [[0.0, 10.0, 30.0]])
+    demand = no.Param.from_dense("demand", (T,), [5.0, 25.0])
+    m = no.Model("reference")
+    pa, pf, pc = m.var("pa", (A, T)), m.var("pf", (F, T)), m.var("pc", (C, T))
+    ca, cf = m.var("ca", (A, T)), m.var("cf", (F, T))
+    ua = m.var("ua", (A, T), upper=1.0, integer=True)
+    m.constraint(
+        "balance",
+        no.Sum(A, pa[A, T]) + no.Sum(F, pf[F, T]) + no.Sum(C, pc[C, T]) == demand[T],
+    )
+    m.piecewise(
+        "on", pa[A, T], xa[A, B], ca[A, T], ya[A, B], ">=", "incremental", ua[A, T]
+    )
+    m.piecewise("free", pf[F, T], xf[F, B], cf[F, T], yf[F, B], ">=", "tangent")
+    m.set_objective(
+        no.Sum(A, T, ca[A, T])
+        + no.Sum(F, T, cf[F, T])
+        + 3.0 * no.Sum(C, T, pc[C, T])
+        + 2.0 * no.Sum(A, T, ua[A, T])
+    )
+    return m
+
+
+def test_two_declarations_split_by_where_solve_as_two_separate_models():
+    # t0: b serves 5 at a cost of 5; t1: a runs at 25 for 27.5 and 2 for
+    # its status. x is over a, b and c, and y over a and b.
+    assert split_reference().solve().objective == pytest.approx(34.5)
+    s = split_model().solve()
+    assert s.status == "optimal"
+    assert s.objective == pytest.approx(34.5)
+
+
+def test_where_restricts_the_generated_columns_and_rows_to_its_entities():
+    m = split_model()
+    # a has two segments in each of two periods; b is outside where
+    assert m.variables["on_fill"].n_columns == 4
+    assert m.variables["on_order"].n_columns == 4
+    assert m.constraints["on_x"].n_rows == 2
+    assert m.constraints["on_active"].n_rows == 4
+    # b has two segments in each of two periods; a is outside where
+    assert m.constraints["free_tangent"].n_rows == 4
+    assert m.constraints["free_x_min"].n_rows == 2
+
+
+def forms_model(where_of):
+    G = no.Set("G", np.array(["a", "b", "c"]))
+    B = no.Set("B", np.array(["b0", "b1", "b2"]))
+    xp, yp = split_points(G, B)
+    m = no.Model("forms")
+    p = m.var("p", (G,))
+    y = m.var("y", (G,))
+    m.piecewise(
+        "curve",
+        p[G],
+        xp[G, B],
+        y[G],
+        yp[G, B],
+        ">=",
+        "incremental",
+        where=where_of(G, B),
+    )
+    return m
+
+
+def test_tangent_checks_only_the_entities_in_where():
+    G = no.Set("G", np.array(["a", "b"]))
+    B = no.Set("B", np.array(["b0", "b1", "b2"]))
+    xp, yp = split_points(G, B)
+    m = no.Model("tangent")
+    p = m.var("p", (G,))
+    y = m.var("y", (G,))
+    message = (
+        "piecewise 'free' has points that are not convex, required by sign "
+        "'>=' at {'G': 'a'}"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        m.piecewise("free", p[G], xp[G, B], y[G], yp[G, B], ">=", "tangent")
+    m.piecewise(
+        "free",
+        p[G],
+        xp[G, B],
+        y[G],
+        yp[G, B],
+        ">=",
+        "tangent",
+        where=members(G, "flexible", ["b"]),
+    )
+    # b has two segments
+    assert m.constraints["free_tangent"].n_rows == 2
+
+
+def test_a_parameter_and_a_domain_select_the_same_entities():
+    by_parameter = forms_model(lambda G, B: members(G, "flexible", ["b"]))
+    by_domain = forms_model(lambda G, B: no.subset((G,), {"G": np.array(["b"])}))
+    # b has two segments
+    assert by_parameter.variables["curve_fill"].n_columns == 2
+    assert by_domain.variables["curve_fill"].n_columns == 2
+
+
+def test_a_tuple_of_the_entity_sets_selects_every_entity():
+    # a and b have two segments each; c has none
+    assert forms_model(lambda G, B: (G,)).variables["curve_fill"].n_columns == 4
+
+
+def test_where_over_the_breakpoint_set_raises():
+    message = (
+        "where of piecewise 'curve' is over ('B',) and the entities of "
+        "x_points are over ('G',); give where over ('G',)"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        forms_model(lambda G, B: (B,))
+
+
+def test_where_over_a_set_the_points_are_not_over_raises():
+    message = (
+        "where of piecewise 'curve' is over ('K',) and the entities of "
+        "x_points are over ('G',); give where over ('G',)"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        forms_model(lambda G, B: (no.Set("K", np.array([0])),))
+
+
+def test_where_that_is_not_a_condition_raises():
+    message = (
+        "where of piecewise 'curve' is a list; give a parameter, a tuple of "
+        "sets or a domain"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        forms_model(lambda G, B: ["G"])
+
+
+def test_where_at_entities_with_no_breakpoint_raises():
+    message = "piecewise 'curve' has no breakpoint"
+    with pytest.raises(ValueError, match=re.escape(message)):
+        forms_model(lambda G, B: members(G, "none", ["c"]))
+
+
+def test_where_on_a_term_that_is_already_restricted_raises():
+    G = no.Set("G", np.array(["a", "b"]))
+    K = no.Set("K", np.array([0, 1]))
+    B = no.Set("B", np.array(["b0", "b1", "b2"]))
+    xp, yp = split_points(G, B)
+    m = no.Model("twice")
+    q = m.var("q", (G, K))
+    y = m.var("y", (G,))
+    x = no.Sum(K, q[G, K], where=(G, K))
+    message = (
+        "term 'q' already reads a condition over ('G', 'K'); restrict the term once"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        m.piecewise(
+            "curve", x, xp[G, B], y[G], yp[G, B], ">=", "incremental", where=(G,)
+        )

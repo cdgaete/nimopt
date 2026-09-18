@@ -211,13 +211,15 @@ class Model:
         method: str,
         active: Any = None,
         relaxed: bool = False,
+        where: Any = None,
     ) -> Piecewise:
         """Declare a piecewise-linear relation of `y` to `x` and its rows.
 
         `x` lies on the curve through `x_points` and `y_points`, and `sign`
         relates `y` to the curve. `method` is "incremental" or "tangent".
         `active` scales the curve of the incremental method to zero, and
-        requires a binary variable unless `relaxed` is True. The
+        requires a binary variable unless `relaxed` is True. `where`
+        restricts the declaration to the entities at its coordinates. The
         generated variables and constraints are declarations of this model.
         The checks run before any declaration. Raises ValueError for a name
         already declared, for a generated name the model declares, for an
@@ -229,7 +231,7 @@ class Model:
                 f"piecewise {name!r} is already declared; declare another name"
             )
         declaration = Piecewise(
-            name, x, x_points, y, y_points, sign, method, active, relaxed
+            name, x, x_points, y, y_points, sign, method, active, relaxed, where
         )
         generate(self, declaration)
         self.piecewise_declarations[name] = declaration

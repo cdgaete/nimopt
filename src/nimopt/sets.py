@@ -520,3 +520,23 @@ def rows_of(given: Any, dims: tuple[str, ...] | None, owner: str, what: str) -> 
             f"{owner} has free dimensions {dims}; its {what} is over {resolved.dims}"
         )
     return resolved
+
+
+def condition_dims(given: Any, owner: str, what: str) -> tuple[str, ...]:
+    """Return the dimensions a condition is over, without reading its values.
+
+    A condition is a parameter, a tuple of sets or a domain. Raises
+    ValueError for any other value.
+    """
+    from nimopt.param import Param
+
+    if isinstance(given, Param):
+        return given.dims
+    if isinstance(given, tuple) and all(isinstance(s, (Set, Alias)) for s in given):
+        return tuple(s.name for s in given)
+    if isinstance(given, Domain):
+        return given.dims
+    raise ValueError(
+        f"{what} of {owner} is a {type(given).__name__}; give a parameter, a "
+        f"tuple of sets or a domain"
+    )
