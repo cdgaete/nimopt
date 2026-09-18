@@ -108,8 +108,8 @@ def resolve(
     columns = np.asarray(columns, dtype=np.int64)
     found = []
     for variable in model.variables.values():
-        end = variable.start + variable.n_columns
-        at = np.nonzero((columns >= variable.start) & (columns < end))[0]
+        span = variable._columns()
+        at = np.nonzero((columns >= span.start) & (columns < span.stop))[0]
         if not at.size:
             continue
         index = variable.coord.to_index(columns[at])

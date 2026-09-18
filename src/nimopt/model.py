@@ -296,8 +296,7 @@ class Model:
         flags = np.zeros(self._n_columns, dtype=np.int32)
         for variable in self.variables.values():
             if variable.integer:
-                at = slice(variable.start, variable.start + variable.n_columns)
-                flags[at] = 1
+                flags[variable._columns()] = 1
         return flags
 
     def explain(self) -> Explanation:

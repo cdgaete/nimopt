@@ -115,7 +115,7 @@ class Piecewise:
                 f"{self.active.constant}; give active as an expression with no "
                 f"constant"
             )
-        self.generated = {kind: () for kind in KINDS}
+        self.generated: dict[str, tuple[str, ...]] = {kind: () for kind in KINDS}
 
     def __repr__(self) -> str:
         return (
@@ -468,9 +468,9 @@ class _Grid:
 
     def at(self, held: Param | float, dims: tuple[str, ...]) -> Any:
         """Return `held` read at the sets of `dims`, and a float unchanged."""
-        if isinstance(held, float):
-            return held
-        return held[tuple(self.sets[d] for d in dims)]
+        if isinstance(held, Param):
+            return held[tuple(self.sets[d] for d in dims)]
+        return held
 
 
 def _taken(model: Any, names: Mapping[str, tuple[str, ...]]) -> list[str]:

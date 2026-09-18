@@ -137,8 +137,7 @@ class Solution:
                 f"variable {name!r} is not in the solved matrix; solve the model again"
             )
         self._require_feasible()
-        at = slice(variable.start, variable.start + variable.n_columns)
-        return self._over_variable(variable, self._col_value[at])
+        return self._over_variable(variable, self._col_value[variable._columns()])
 
     def _over_variable(
         self, variable: Any, values: npt.NDArray[np.float64]
@@ -151,8 +150,13 @@ class Solution:
             )
         return variable.domain().array(values.copy(), absence="unknown")
 
-    def _require_dual(self) -> None:
-        """Raise ValueError where the solve defines no dual value to read."""
+    def _require_dual(
+        self,
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """Return the row duals and the column duals.
+
+        Raises ValueError where the solve defines no dual value to read.
+        """
         if self.status != "optimal":
             raise ValueError(
                 f"status is {self.status!r}; duals are defined at status 'optimal' only"
@@ -163,6 +167,7 @@ class Solution:
                 f"{self.solver!r} reports no duals for it; read primal values "
                 f"only"
             )
+        return self._row_dual, self._col_dual
 
     def dual(self, name: str, kind: str | None = None) -> DenseArray | SparseArray:
         """Return a constraint's duals over its free sets, or a variable's
@@ -203,9 +208,8 @@ class Solution:
                     f"variable {name!r} is not in the solved matrix; solve the "
                     f"model again"
                 )
-            self._require_dual()
-            at = slice(variable.start, variable.start + variable.n_columns)
-            return self._over_variable(variable, self._col_dual[at])
+            _, col_dual = self._require_dual()
+            return self._over_variable(variable, col_dual[variable._columns()])
         if not declares_constraint:
             valid = tuple(self.model.constraints) + tuple(
                 n for n in self.model.variables if n not in self.model.constraints
@@ -220,9 +224,9 @@ class Solution:
                 f"constraint {name!r} is not in the solved matrix; solve the model "
                 f"again"
             )
-        self._require_dual()
+        row_dual, _ = self._require_dual()
         rows = constraint.rows
-        values = self._row_dual[self._rows_of[name]]
+        values = row_dual[self._rows_of[name]]
         if rows.is_full:
             return DenseArray(
                 values.reshape(rows.shape),

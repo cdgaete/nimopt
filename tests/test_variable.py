@@ -147,3 +147,14 @@ def test_a_subset_named_as_a_parameter_that_carries_nothing_yet_is_refused():
     W._bind(np.array(["w1"]))
     with pytest.raises(ValueError, match="has no values"):
         v._bind(start=0, total_columns=1)
+
+
+def test_a_variable_with_no_numbering_has_no_column_slice():
+    v = Variable("x", (Set("T", np.array(["a", "b"])),))
+    with pytest.raises(ValueError, match="has no numbering"):
+        v._columns()
+
+
+def test_a_numbered_variable_returns_its_column_slice():
+    v = Variable("x", (Set("T", np.array(["a", "b"])),), start=3, total_columns=9)
+    assert v._columns() == slice(3, 5)

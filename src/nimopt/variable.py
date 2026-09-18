@@ -137,6 +137,17 @@ class Variable(Symbol):
     def __len__(self) -> int:
         return self.n_columns
 
+    def _columns(self) -> slice:
+        """Return the slice of the column indices of this variable.
+
+        Raises ValueError for a variable with no numbering.
+        """
+        if self.start is None:
+            raise ValueError(
+                f"variable {self.name!r} has no numbering; declare it with Model.var"
+            )
+        return slice(self.start, self.start + self.n_columns)
+
     def __repr__(self) -> str:
         if self.declared:
             return f"Variable({self.name!r}, {self.dims}, declared)"

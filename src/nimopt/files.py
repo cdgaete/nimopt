@@ -352,7 +352,7 @@ def _arrays(model: Any, version: int = VERSION) -> dict[str, npt.NDArray[Any]]:
     return out
 
 
-def _piecewise_entry(declaration: Any) -> dict[str, str]:
+def _piecewise_entry(declaration: Any) -> dict[str, str | bool]:
     """Return the entry of one piecewise declaration."""
     entry = {
         "x": render(declaration.x),

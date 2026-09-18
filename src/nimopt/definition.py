@@ -1,7 +1,7 @@
 """A definition: what a model is declared from, before its data exists."""
 
 import copy
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, MutableMapping
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -351,7 +351,7 @@ def _values(name: str, sets: Any, given: Any) -> Param:
     return Param.from_dense(name, sets, np.asarray(given, dtype=np.float64))
 
 
-def _readings(coefficient: Any) -> Iterator[tuple[str, Any, Mapping[str, Any]]]:
+def _readings(coefficient: Any) -> Iterator[tuple[str, Any, MutableMapping[str, Any]]]:
     """Yield every reading of a parameter or a combination in a coefficient."""
     if isinstance(coefficient, ParamRef):
         yield (
@@ -374,7 +374,7 @@ def _readings(coefficient: Any) -> Iterator[tuple[str, Any, Mapping[str, Any]]]:
 
 def _fixed_members(
     definition: "Definition",
-) -> Iterator[tuple[str, Any, Mapping[str, Any]]]:
+) -> Iterator[tuple[str, Any, MutableMapping[str, Any]]]:
     """Yield each fixed member a definition reads, with the sets it is over.
 
     A reading with nothing fixed is skipped.
@@ -404,8 +404,8 @@ def _fixed_members(
 
 
 def _fixed(
-    readings: Iterable[tuple[str, Any, Mapping[str, Any]]],
-) -> Iterator[tuple[str, Any, Mapping[str, Any]]]:
+    readings: Iterable[tuple[str, Any, MutableMapping[str, Any]]],
+) -> Iterator[tuple[str, Any, MutableMapping[str, Any]]]:
     for owner, sets, fixed in readings:
         if fixed:
             yield owner, sets, fixed
