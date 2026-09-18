@@ -732,8 +732,15 @@ def curve_with_active_relaxed(active_of):
     p = m.var("p", (G,), upper=20.0)
     c = m.var("c", (G,), lower=-1e4)
     m.piecewise(
-        "curve", p[G], xp[G, B], c[G], yp[G, B], ">=", "incremental",
-        active_of(m, G), relaxed=True,
+        "curve",
+        p[G],
+        xp[G, B],
+        c[G],
+        yp[G, B],
+        ">=",
+        "incremental",
+        active_of(m, G),
+        relaxed=True,
     )
     return m
 
@@ -744,6 +751,12 @@ def test_relaxed_without_active_raises():
     c = m.var("c", (G,), lower=-1e4)
     with pytest.raises(ValueError, match="relaxed"):
         m.piecewise(
-            "curve", p[G], xp[G, B], c[G], yp[G, B], ">=", "incremental",
+            "curve",
+            p[G],
+            xp[G, B],
+            c[G],
+            yp[G, B],
+            ">=",
+            "incremental",
             relaxed=True,
         )

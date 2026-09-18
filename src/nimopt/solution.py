@@ -164,9 +164,7 @@ class Solution:
                 f"only"
             )
 
-    def dual(
-        self, name: str, kind: str | None = None
-    ) -> DenseArray | SparseArray:
+    def dual(self, name: str, kind: str | None = None) -> DenseArray | SparseArray:
         """Return a constraint's duals over its free sets, or a variable's
         reduced costs over its own sets.
 
@@ -182,9 +180,7 @@ class Solution:
         with integer columns.
         """
         if kind is not None and kind not in ("constraint", "variable"):
-            raise ValueError(
-                f"kind is 'constraint' or 'variable'; got {kind!r}"
-            )
+            raise ValueError(f"kind is 'constraint' or 'variable'; got {kind!r}")
         declares_variable = name in self.model.variables
         declares_constraint = name in self.model.constraints
         if kind is None:
