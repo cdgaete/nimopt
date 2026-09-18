@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 from nimblend import Domain, SparseArray
 
-from nimopt.coefficient import NOT_A_COEFFICIENT, Coefficient, Derived
+from nimopt.coefficient import NOT_A_COEFFICIENT, Coefficient, Derived, Reference
 from nimopt.names import COLUMN
 from nimopt.sets import LaggedSet, condition_dims, rows_of
 from nimopt.symbol import Symbol, read_at_its_sets, read_bare
@@ -212,45 +212,21 @@ class Term:
         return array.transpose(*frame, COLUMN)
 
 
-class ParamRef(Coefficient):
+class ParamRef(Reference):
     """A parameter read at the sets given, and at the members fixed."""
 
-    def __init__(self, param: Any, fixed: Mapping[str, Any] | None = None) -> None:
-        self.param = param
-        self.fixed = dict(fixed) if fixed else {}
-
     @property
-    def name(self) -> str:
-        """Return the parameter's name."""
-        return self.param.name
-
-    @property
-    def dims(self) -> tuple[str, ...]:
-        """Return the dimensions of this reference, without those it fixes."""
-        return tuple(d for d in self.param.dims if d not in self.fixed)
-
-    def __repr__(self) -> str:
-        return f"ParamRef({self.name!r}, {self.dims})"
-
-    @property
-    def sets(self) -> tuple[Any, ...]:
-        """Return the sets this reference's parameter is declared over."""
-        return self.param.sets
+    def param(self) -> Any:
+        """Return the parameter this reference reads."""
+        return self.target
 
     def parameters(self) -> tuple[Any, ...]:
         """Return the parameter this reference reads."""
-        return (self.param,)
+        return (self.target,)
 
     def held(self) -> Any:
         """Return the parameter's array, or None where the parameter is declared."""
-        return None if self.param.declared else self.materialise()
-
-    def materialise(self) -> Any:
-        """Return the coefficient array, read at the members this fixes."""
-        array = self.param.materialise()
-        if not self.fixed:
-            return array
-        return array.sel(self.fixed)
+        return None if self.target.declared else self.materialise()
 
 
 class Expression:

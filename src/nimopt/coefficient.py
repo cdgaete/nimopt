@@ -1,5 +1,6 @@
 """A coefficient: a parameter read at its sets, or a combination of them."""
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -297,38 +298,47 @@ class Derived(Coefficient):
         return DerivedRef(self, self._read(sets, self))
 
 
-class DerivedRef(Coefficient):
-    """A derived coefficient read at its sets, and at the members fixed."""
+class Reference(Coefficient):
+    """A parameter or a combination read at its sets, and at the members fixed."""
 
-    def __init__(self, derived: Any, fixed: dict[str, Any] | None = None) -> None:
-        self.derived = derived
+    def __init__(self, target: Any, fixed: Mapping[str, Any] | None = None) -> None:
+        self.target = target
         self.fixed = dict(fixed) if fixed else {}
 
     @property
     def name(self) -> str:
-        """Return the arithmetic of the combination this reference reads."""
-        return self.derived.name
+        """Return the name of what this reference reads."""
+        return self.target.name
 
     @property
     def dims(self) -> tuple[str, ...]:
         """Return the dimensions of this reference, without those it fixes."""
-        return tuple(d for d in self.derived.dims if d not in self.fixed)
+        return tuple(d for d in self.target.dims if d not in self.fixed)
 
     @property
     def sets(self) -> tuple[Any, ...]:
-        """Return the sets this reference's dimensions are declared over."""
-        return self.derived.sets
-
-    def parameters(self) -> tuple[Any, ...]:
-        """Return the parameters the combination this reference reads."""
-        return self.derived.parameters()
+        """Return the sets the dimensions of what this reads are declared over."""
+        return self.target.sets
 
     def __repr__(self) -> str:
-        return f"DerivedRef({self.name!r}, {self.dims})"
+        return f"{type(self).__name__}({self.name!r}, {self.dims})"
 
     def materialise(self) -> Any:
-        """Return the combination's array, read at the members this fixes."""
-        array = self.derived.materialise()
+        """Return the array of what this reads, at the members this fixes."""
+        array = self.target.materialise()
         if not self.fixed:
             return array
         return array.sel(self.fixed)
+
+
+class DerivedRef(Reference):
+    """A derived coefficient read at its sets, and at the members fixed."""
+
+    @property
+    def derived(self) -> Any:
+        """Return the combination this reference reads."""
+        return self.target
+
+    def parameters(self) -> tuple[Any, ...]:
+        """Return the parameters the combination this reference reads."""
+        return self.target.parameters()
