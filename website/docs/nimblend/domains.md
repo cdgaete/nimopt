@@ -254,10 +254,10 @@ One value per member is the whole rule. A column of another length raises
 
 ```python raises=ValueError
 import numpy as np
-import nimblend
+import nimblend as nb
 
-coords = {"t": nimblend.StoredCoord(np.array([2030, 2040, 2050]))}
-nimblend.Domain.full(("t",), coords).array(np.array([1.0, 2.0]))
+coords = {"t": nb.StoredCoord(np.array([2030, 2040, 2050]))}
+nb.Domain.full(("t",), coords).array(np.array([1.0, 2.0]))
 ```
 
 <!-- output -->
@@ -308,11 +308,11 @@ and it writes no position outside itself.
 
 ```python raises=ValueError
 import numpy as np
-import nimblend
+import nimblend as nb
 
-coords = {"t": nimblend.StoredCoord(np.array([2030, 2040, 2050]))}
-members = nimblend.Domain.full(("t",), coords)
-members.identity("k", nimblend.ProductCoord((6,)), start=4)
+coords = {"t": nb.StoredCoord(np.array([2030, 2040, 2050]))}
+members = nb.Domain.full(("t",), coords)
+members.identity("k", nb.ProductCoord((6,)), start=4)
 ```
 
 <!-- output -->

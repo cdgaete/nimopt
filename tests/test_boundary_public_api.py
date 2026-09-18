@@ -424,3 +424,18 @@ def test_a_benchmark_solves_through_a_session():
                     f"{path.name}: {a.name}" for a in node.names if a.name == "solvers"
                 )
     assert offenders == [], offenders
+
+
+def test_a_whole_module_import_carries_its_alias():
+    aliases = {"nimblend": "nb", "nimopt": "no"}
+    offenders = []
+    for where, tree in sources():
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Import):
+                continue
+            offenders.extend(
+                f"{where}: import {a.name} as {a.asname}"
+                for a in node.names
+                if a.name in aliases and a.asname != aliases[a.name]
+            )
+    assert offenders == [], offenders

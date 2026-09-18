@@ -223,11 +223,11 @@ column and both lengths.
 
 ```python raises=ValueError
 import numpy as np
-import nimblend
+import nimblend as nb
 
-nimblend.from_long(
+nb.from_long(
     ("t",),
-    {"t": nimblend.StoredCoord(np.array([2030, 2040]))},
+    {"t": nb.StoredCoord(np.array([2030, 2040]))},
     {"t": np.array([2030, 2040])},
     np.array([1.0]),
 )
@@ -307,9 +307,9 @@ Frames sharing no dimension have no common dimension to align on, and
 `combined_dims` raises. Their combination would be an outer product.
 
 ```python raises=ValueError
-import nimblend
+import nimblend as nb
 
-nimblend.combined_dims(("P",), ("Q",))
+nb.combined_dims(("P",), ("Q",))
 ```
 
 <!-- output -->
@@ -331,15 +331,15 @@ at the rest, and choosing one silently would invent a value.
 
 ```python raises=ValueError
 import numpy as np
-import nimblend
+import nimblend as nb
 
 labels = {"A": np.array(["a0", "a1"]), "B": np.array(["b0", "b1"])}
-partial = nimblend.SparseArray.from_canonical(
+partial = nb.SparseArray.from_canonical(
     np.array([[0], [0]], dtype=np.int32),
     np.array([1.0]),
     {
-        "A": nimblend.StoredCoord(labels["A"]),
-        "B": nimblend.StoredCoord(labels["B"]),
+        "A": nb.StoredCoord(labels["A"]),
+        "B": nb.StoredCoord(labels["B"]),
     },
     ("A", "B"),
     absence="unknown",
