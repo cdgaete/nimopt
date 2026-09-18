@@ -239,3 +239,52 @@ def test_a_reduced_cost_is_read_at_status_optimal_only():
     assert solved.status == "infeasible"
     with pytest.raises(ValueError, match="duals are defined at status 'optimal' only"):
         solved.dual("x")
+
+
+def shared_name_model():
+    """A model whose variable and constraint are both named `supply`.
+
+    min 3x + 5y over supply, x + y >= 10, x at most 4, y at most 20. The
+    optimum is x=4, y=6 at 42. The row's dual is 5, and the reduced costs are
+    3 - 5 and 5 - 5.
+    """
+    V = Set("V", np.array(["x", "y"]))
+    cost = Param.from_dense("cost", (V,), np.array([3.0, 5.0]))
+    ones = Param.from_dense("ones", (V,), np.ones(2))
+    upper = Param.from_dense("upper", (V,), np.array([4.0, 20.0]))
+    m = Model("shared")
+    v = m.var("supply", (V,), upper=upper)
+    m.constraint("supply", Sum(V, ones[V] * v[V]) >= 10.0)
+    m.set_objective(Sum(V, cost[V] * v[V]))
+    return m
+
+
+def test_a_name_that_is_both_a_constraint_and_a_variable_raises():
+    solved = shared_name_model().solve()
+    assert solved.objective == pytest.approx(42.0)
+    with pytest.raises(ValueError, match="both a constraint and a variable"):
+        solved.dual("supply")
+
+
+def test_a_shared_name_reads_its_constraint_duals_by_kind():
+    solved = shared_name_model().solve()
+    assert solved.dual("supply", kind="constraint").to_dense() == pytest.approx(5.0)
+
+
+def test_a_shared_name_reads_its_reduced_costs_by_kind():
+    solved = shared_name_model().solve()
+    got = solved.dual("supply", kind="variable").to_dense()
+    assert got == pytest.approx([-2.0, 0.0])
+
+
+def test_an_unknown_kind_raises():
+    solved = shared_name_model().solve()
+    with pytest.raises(ValueError, match="kind"):
+        solved.dual("supply", kind="row")
+
+
+def test_the_message_for_an_unknown_name_lists_each_name_once():
+    solved = shared_name_model().solve()
+    with pytest.raises(KeyError) as caught:
+        solved.dual("q")
+    assert str(caught.value).count("supply") == 1

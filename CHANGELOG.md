@@ -34,8 +34,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   `version=3`.
 - `Solution.dual` takes a variable and returns its reduced costs over the
   variable's own sets: the objective coefficient less the duals of the rows
-  the variable appears in, weighted by its coefficients in them. HiGHS,
-  Gurobi and Mosek report the same values for the same solve.
+  the variable appears in, weighted by its coefficients in them. nimopt
+  derives the value, so the convention does not vary by solver.
 
 ### Fixed
 
@@ -63,6 +63,10 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - `active=` requires a binary variable, or a sum of them. A term that is
   continuous, scaled, or bounded outside 0 and 1 raises `ValueError`. A value
   between 0 and 1 scales every breakpoint of the curve.
+- `Solution.dual` takes `kind="constraint"` or `kind="variable"`. A model
+  declares its constraints and its variables in two registries, and a name
+  that identifies one of each raises `ValueError` with no `kind`. The message
+  for an unknown name lists each declared name once.
 
 ### Changed
 

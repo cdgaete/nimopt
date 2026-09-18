@@ -18,7 +18,7 @@ they were declared over.
 | `bound` | the bound on the optimal objective the solver proved, or `None` |
 | `gap` | the relative distance from the objective to the bound, or `None` |
 | `primal(name)` | the named variable's values over its own sets |
-| `dual(name)` | a constraint's duals over its free sets, or a variable's reduced costs over its own sets |
+| `dual(name, kind=None)` | a constraint's duals over its free sets, or a variable's reduced costs over its own sets |
 
 `status` and `feasible` are readable whatever the solver reported.
 `objective` and `primal` raise `ValueError` where `feasible` is False. They
@@ -35,10 +35,18 @@ point, and those reads then return it. `dual` raises `ValueError` where
 constraints and variables. Both raise `KeyError` for a name declared after
 the solve.
 
+A model declares its constraints and its variables in two registries, so one
+name identifies one of each. `dual` raises `ValueError` for such a name and
+reads it under `kind="constraint"` or `kind="variable"`. Any other `kind`
+raises `ValueError`.
+
 `dual` returns a reduced cost for a variable: its objective coefficient less
 the duals of the rows it appears in, weighted by its coefficients in them,
-in the model's own objective under either sense. HiGHS, Gurobi and Mosek
-report the same values for the same solve. A reduced cost follows the
+in the model's own objective under either sense. nimopt derives the value
+from the row duals the solver reports, so the convention does not vary by
+solver. The values follow the dual solution the solver returns. A degenerate
+model has more than one such solution, and two solvers can report different
+reduced costs for it. A reduced cost follows the
 variable's members by the rule `primal` follows: a `DenseArray` over a full
 product, a `SparseArray` over a subset.
 

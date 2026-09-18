@@ -164,18 +164,43 @@ class Solution:
                 f"only"
             )
 
-    def dual(self, name: str) -> DenseArray | SparseArray:
+    def dual(
+        self, name: str, kind: str | None = None
+    ) -> DenseArray | SparseArray:
         """Return a constraint's duals over its free sets, or a variable's
         reduced costs over its own sets.
 
-        A reduced cost is the variable's objective coefficient less the duals
-        of the rows it appears in, weighted by its coefficients in them, in
-        the model's own objective. Raises KeyError for a name that is neither
-        a declared constraint nor a declared variable, and for one declared
-        after the solve. Raises ValueError where `status` is not `optimal`,
-        and for a model with integer columns.
+        A model declares its constraints and its variables in two registries,
+        and one name identifies one of each. `kind` is `"constraint"` or
+        `"variable"` and selects which to read. A reduced cost is the
+        variable's objective coefficient less the duals of the rows it
+        appears in, weighted by its coefficients in them, in the model's own
+        objective. Raises ValueError for a name that identifies both with no
+        `kind`, and for a `kind` that is neither. Raises KeyError for a name
+        the model does not declare, and for one declared after the solve.
+        Raises ValueError where `status` is not `optimal`, and for a model
+        with integer columns.
         """
-        if name in self.model.variables:
+        if kind is not None and kind not in ("constraint", "variable"):
+            raise ValueError(
+                f"kind is 'constraint' or 'variable'; got {kind!r}"
+            )
+        declares_variable = name in self.model.variables
+        declares_constraint = name in self.model.constraints
+        if kind is None:
+            if declares_variable and declares_constraint:
+                raise ValueError(
+                    f"{name!r} is both a constraint and a variable of model "
+                    f"{self.model.name!r}; pass kind='constraint' or "
+                    f"kind='variable'"
+                )
+            kind = "variable" if declares_variable else "constraint"
+        if kind == "variable":
+            if not declares_variable:
+                raise KeyError(
+                    f"model {self.model.name!r} has no variable {name!r}; use "
+                    f"one of {tuple(self.model.variables)}"
+                )
             variable = self.model.variables[name]
             if name not in self._variables:
                 raise KeyError(
@@ -185,8 +210,10 @@ class Solution:
             self._require_dual()
             at = slice(variable.start, variable.start + variable.n_columns)
             return self._over_variable(variable, self._col_dual[at])
-        if name not in self.model.constraints:
-            valid = tuple(self.model.constraints) + tuple(self.model.variables)
+        if not declares_constraint:
+            valid = tuple(self.model.constraints) + tuple(
+                n for n in self.model.variables if n not in self.model.constraints
+            )
             raise KeyError(
                 f"model {self.model.name!r} has no constraint or variable "
                 f"{name!r}; use one of {valid}"
