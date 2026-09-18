@@ -11,6 +11,7 @@ from nimopt.coefficient import Coefficient, Derived, DerivedRef
 if TYPE_CHECKING:
     from nimopt.model import Model
 
+from nimopt.constraint import check_relation
 from nimopt.explanation import (
     ConstraintShape,
     Explanation,
@@ -21,15 +22,14 @@ from nimopt.explanation import (
     set_shape,
     variable_shape,
 )
-from nimopt.model import Model
+from nimopt.model import Model, check_sense, objective_expression
 from nimopt.names import check_addressable, check_one_kind
 from nimopt.param import Param
 from nimopt.piecewise import Piecewise, check_not_generated, taken
 from nimopt.progress import reporter
 from nimopt.sets import Alias, Set, check_members, condition_dims
-from nimopt.symbol import read_at_its_sets
 from nimopt.syntax import render
-from nimopt.term import Expression, ParamRef, Relation
+from nimopt.term import ParamRef
 from nimopt.variable import Variable
 
 
@@ -43,8 +43,7 @@ class Definition:
     """
 
     def __init__(self, name: str = "definition", sense: str = "min") -> None:
-        if sense not in ("min", "max"):
-            raise ValueError(f"sense is 'min' or 'max'; got {sense!r}")
+        check_sense(sense)
         self.name = str(name)
         self._sense = sense
         self.sets = {}
@@ -140,12 +139,7 @@ class Definition:
         of this definition's sets, or one of its parameters whose coefficients
         are the coordinates. Both resolve when the declaration binds.
         """
-        if not isinstance(relation, Relation):
-            raise TypeError(
-                f"constraint {str(name)!r} takes a comparison of an "
-                f"expression, such as `expr <= rhs`; got "
-                f"{type(relation).__name__}"
-            )
+        check_relation(str(name), relation)
         name = self._fresh(name, self.constraints, "constraint")
         for held, slot in ((where, "where="), (over, "over=")):
             if held is not None:
@@ -308,18 +302,7 @@ class Definition:
 
     def set_objective(self, expression: Any) -> None:
         """Set the objective the definition's sense optimizes."""
-        expression = read_at_its_sets(expression)
-        if not isinstance(expression, Expression):
-            raise TypeError(
-                f"an objective is an expression over the model's columns; got "
-                f"{type(expression).__name__}"
-            )
-        if expression.frame:
-            raise ValueError(
-                f"objective expression has free dimensions {expression.frame}; "
-                f"sum the expression over them"
-            )
-        self.objective = expression
+        self.objective = objective_expression(expression)
 
 
 def _values(name: str, sets: Any, given: Any) -> Param:

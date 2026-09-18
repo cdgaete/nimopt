@@ -14,6 +14,15 @@ from nimopt.term import Relation
 SENSES = ("<=", ">=", "==")
 
 
+def check_relation(name: str, relation: Any) -> None:
+    """Raise TypeError for a relation that is not a comparison of an expression."""
+    if not isinstance(relation, Relation):
+        raise TypeError(
+            f"constraint {name!r} takes a comparison of an expression, such as "
+            f"`expr <= rhs`; got {type(relation).__name__}"
+        )
+
+
 class Constraint:
     """Rows over an expression's frame, bounded by a right-hand side.
 
@@ -34,12 +43,7 @@ class Constraint:
         self, name: str, relation: Any, where: Any = None, over: Any = None
     ) -> None:
         self.name = str(name)
-        if not isinstance(relation, Relation):
-            raise TypeError(
-                f"constraint {self.name!r} takes a comparison of an "
-                f"expression, such as `expr <= rhs`; got "
-                f"{type(relation).__name__}"
-            )
+        check_relation(self.name, relation)
         if relation.sense not in SENSES:
             raise ValueError(f"sense is one of {SENSES}; got {relation.sense!r}")
         self.expression = relation.expression

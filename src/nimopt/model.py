@@ -70,6 +70,32 @@ class _Written:
             self.held.done()
 
 
+def check_sense(sense: str) -> None:
+    """Raise ValueError for a sense other than "min" and "max"."""
+    if sense not in ("min", "max"):
+        raise ValueError(f"sense is 'min' or 'max'; got {sense!r}")
+
+
+def objective_expression(expression: Any) -> Expression:
+    """Return `expression` as an objective, read at its sets.
+
+    Raises TypeError for a value that is not an expression, and ValueError for
+    an expression with free dimensions.
+    """
+    expression = read_at_its_sets(expression)
+    if not isinstance(expression, Expression):
+        raise TypeError(
+            f"an objective is an expression over the model's columns; got "
+            f"{type(expression).__name__}"
+        )
+    if expression.frame:
+        raise ValueError(
+            f"objective expression has free dimensions {expression.frame}; "
+            f"sum the expression over them"
+        )
+    return expression
+
+
 class Model:
     """Variables numbered into one column space, constraints into one matrix.
 
@@ -79,8 +105,7 @@ class Model:
     """
 
     def __init__(self, name: str = "model", sense: str = "min") -> None:
-        if sense not in ("min", "max"):
-            raise ValueError(f"sense is 'min' or 'max'; got {sense!r}")
+        check_sense(sense)
         self.name = str(name)
         self._sense = sense
         self.variables = {}
@@ -242,18 +267,7 @@ class Model:
         A constant in the expression is a fixed cost. It adds no column, and
         the solved objective reports it beside the solver's value.
         """
-        expression = read_at_its_sets(expression)
-        if not isinstance(expression, Expression):
-            raise TypeError(
-                f"an objective is an expression over the model's columns; got "
-                f"{type(expression).__name__}"
-            )
-        if expression.frame:
-            raise ValueError(
-                f"objective expression has free dimensions {expression.frame}; "
-                f"sum the expression over them"
-            )
-        self._objective = expression
+        self._objective = objective_expression(expression)
 
     def objective_coefficients(self) -> npt.NDArray[np.float64]:
         """Return one cost per column, zero where the objective has no term.
