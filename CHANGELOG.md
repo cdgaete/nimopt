@@ -12,6 +12,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+## 0.3.1 - 2026-09-17
+
 ### Fixed
 
 - A timedelta member written with a unit multiplier of 0, such as `'2 0h'`,
