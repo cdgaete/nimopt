@@ -534,10 +534,8 @@ class _Grid:
         """
         if not dims:
             return float(array.values()[0])
-        missing = tuple(d for d in dims if d not in array.dims)
-        if missing:
-            array = array.expand(missing, coords_of(self.sets[d] for d in missing))
-        return Param(name, tuple(self.sets[d] for d in dims), array.transpose(*dims))
+        sets = tuple(self.sets[d] for d in dims)
+        return Param(name, sets, array.broadcast(dims, coords_of(sets)))
 
     def per_entity(
         self, name: str, dims: tuple[str, ...], values: npt.NDArray[np.float64]

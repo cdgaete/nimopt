@@ -215,11 +215,7 @@ class Variable(Symbol):
         bound = self.lower if which == "lower" else self.upper
         if not isinstance(bound, Param):
             return bound
-        array = bound.materialise()
-        missing = tuple(d for d in self.dims if d not in bound.dims)
-        if missing:
-            array = array.expand(missing, {d: self.coords[d] for d in missing})
-        array = array.transpose(*self.dims)
+        array = bound.materialise().broadcast(self.dims, self.coords)
         if self._domain is not None:
             array = array.restrict(self._domain)
         covered = array.domain(self.dims)

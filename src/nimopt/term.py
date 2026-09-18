@@ -206,10 +206,7 @@ class Term:
             array = array * self.scale
         for dim in self.summed:
             array = array.sum(dim)
-        missing = tuple(d for d in frame if d not in array.dims)
-        if missing:
-            array = array.expand(missing, {d: coords[d] for d in missing})
-        return array.transpose(*frame, COLUMN)
+        return array.broadcast((*frame, COLUMN), coords)
 
 
 class ParamRef(Reference):
