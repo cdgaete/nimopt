@@ -169,7 +169,8 @@ class Definition:
 
         The arguments are those of `Model.piecewise`. A parameter in `where` is
         a parameter of this definition. The breakpoint checks run in `build`,
-        when the data is bound. Raises ValueError for a name already declared,
+        when the data is bound. Method "auto" reserves the generated names of
+        both methods. Raises ValueError for a name already declared,
         for a generated name this definition declares and for an argument
         `Piecewise` rejects.
         """

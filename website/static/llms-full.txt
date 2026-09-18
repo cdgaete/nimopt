@@ -1794,6 +1794,11 @@ coordinates only.
 | --- | --- | --- |
 | `"incremental"` | per segment, one continuous and one integer column and their rows | breakpoints strictly increasing or strictly decreasing |
 | `"tangent"` | one row per segment, and two rows that keep `x` between the first and the last breakpoint | points convex under `>=`, concave under `<=`; no `active`; no `==`; no constant in `x` |
+| `"auto"` | the declarations of `"tangent"` where its requirements hold at every entity, and of `"incremental"` otherwise | breakpoints strictly increasing or strictly decreasing |
+
+`formulation` reports the method a model generates. For `"auto"` it is
+`None` on a definition. A definition reserves the generated names of both
+methods for an `"auto"` declaration.
 
 `active` is a binary variable over the sets of `x`, or a sum of them. Where
 it is 0, `x` is 0 and `y` is compared with 0. A term that is scaled or
@@ -1817,7 +1822,10 @@ segment is identified by its end breakpoint.
 | --- | --- |
 | `name`, `x`, `x_points`, `y`, `y_points`, `sign`, `method`, `active`, `relaxed`, `where` | the arguments |
 | `breakpoints` | the name of the breakpoint set |
-| `names()` | the names the declaration generates, keyed by `"sets"`, `"parameters"`, `"variables"` and `"constraints"` |
+| `formulation` | `"incremental"` or `"tangent"`: the method a model generates; `None` for `"auto"` before a model generates it |
+| `entity` | the dimensions of `x_points` other than the breakpoint set |
+| `where_domain()` | the domain of `where` over `entity`, or `None` |
+| `names()` | the names the declaration generates, keyed by `"sets"`, `"parameters"`, `"variables"` and `"constraints"`; both methods' names for an `"auto"` declaration before a model generates it |
 | `generated` | the names a model generated, keyed the same way; empty on a definition |
 | `generated_names()` | every generated name, as a frozenset |
 
@@ -2249,6 +2257,7 @@ they were declared over.
 | `gap` | the relative distance from the objective to the bound, or `None` |
 | `primal(name)` | the named variable's values over its own sets |
 | `dual(name, kind=None)` | a constraint's duals over its free sets, or a variable's reduced costs over its own sets |
+| `has_duals` | whether `dual` returns values: status `optimal`, and a solver that reports duals |
 
 `status` and `feasible` are readable whatever the solver reported.
 `objective` and `primal` raise `ValueError` where `feasible` is False. They
@@ -2257,7 +2266,8 @@ reports. An unbounded model has no optimal value, and `bound` and `gap` are
 `None` there.
 A solve stopped at a limit reports `feasible` True where the solver found a
 point, and those reads then return it. `dual` raises `ValueError` where
-`status` is not `optimal`. Read `status` first.
+`status` is not `optimal`, and for a model with integer columns. Read
+`status` first, or `has_duals` before `dual`.
 
 `primal` and `dual` raise `KeyError` for a name the model does not declare.
 `primal` takes a variable, and its message reports a constraint name as one
@@ -6122,6 +6132,40 @@ Raises ValueError:
 
 ```text
 ValueError: piecewise 'fuel' has points that are not convex, required by sign '>=' at {'G': 'a'}; use method 'incremental'
+```
+
+## The method from the data
+
+`method="auto"` generates the tangent rows where they describe the curve
+exactly: the sign is not `==`, no `active` is given, `x` has no constant and
+the points of every entity are convex under `>=` or concave under `<=`.
+Otherwise it generates the incremental declarations. `formulation` reports
+the method the model generated.
+
+```python
+import numpy as np
+from nimopt import Model, Param, Set, Sum
+
+G = Set("G", np.array(["a"]))
+B = Set("B", np.array(["b0", "b1", "b2"]))
+power = Param.from_dense("power", (G, B), [[0, 10, 20]])
+
+for values in ([0, 10, 30], [0, 20, 30]):
+    cost = Param.from_dense("cost", (G, B), [values])
+    m = Model("auto")
+    p = m.var("p", (G,))
+    c = m.var("c", (G,))
+    m.constraint("demand", Sum(G, p[G]) == 15.0)
+    fuel = m.piecewise("fuel", p[G], power[G, B], c[G], cost[G, B], ">=", "auto")
+    m.set_objective(Sum(G, c[G]))
+    print(fuel.formulation, m.solve().objective)
+```
+
+Output:
+
+```text
+tangent 20.0
+incremental 25.0
 ```
 
 ## One curve for every entity

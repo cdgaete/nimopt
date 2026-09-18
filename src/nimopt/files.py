@@ -143,7 +143,9 @@ _PIECEWISE = """\
 #             always on the curve.
 #   method    Required. incremental: one continuous and one integer
 #             variable per segment. tangent: one row per segment; the
-#             points are convex under >= and concave under <=.
+#             points are convex under >= and concave under <=. auto:
+#             tangent where it applies and no active is given, else
+#             incremental.
 #   active    A binary variable over the index sets of x, or a sum of
 #             them, incremental only. Where it is 0, x is 0 and y is
 #             compared with 0.

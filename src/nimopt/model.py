@@ -206,7 +206,9 @@ class Model:
         """Declare a piecewise-linear relation of `y` to `x` and its rows.
 
         `x` lies on the curve through `x_points` and `y_points`, and `sign`
-        relates `y` to the curve. `method` is "incremental" or "tangent".
+        relates `y` to the curve. `method` is "incremental", "tangent" or
+        "auto". "auto" generates "tangent" where it applies and "incremental"
+        otherwise. `Piecewise.formulation` reports the method generated.
         `active` scales the curve of the incremental method to zero, and
         requires a binary variable unless `relaxed` is True. `where`
         restricts the declaration to the entities at its coordinates. The

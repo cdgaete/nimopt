@@ -145,6 +145,45 @@ ValueError: piecewise 'fuel' has points that are not convex, required by sign '>
 </details>
 <!-- /output -->
 
+## The method from the data
+
+`method="auto"` generates the tangent rows where they describe the curve
+exactly: the sign is not `==`, no `active` is given, `x` has no constant and
+the points of every entity are convex under `>=` or concave under `<=`.
+Otherwise it generates the incremental declarations. `formulation` reports
+the method the model generated.
+
+```python
+import numpy as np
+from nimopt import Model, Param, Set, Sum
+
+G = Set("G", np.array(["a"]))
+B = Set("B", np.array(["b0", "b1", "b2"]))
+power = Param.from_dense("power", (G, B), [[0, 10, 20]])
+
+for values in ([0, 10, 30], [0, 20, 30]):
+    cost = Param.from_dense("cost", (G, B), [values])
+    m = Model("auto")
+    p = m.var("p", (G,))
+    c = m.var("c", (G,))
+    m.constraint("demand", Sum(G, p[G]) == 15.0)
+    fuel = m.piecewise("fuel", p[G], power[G, B], c[G], cost[G, B], ">=", "auto")
+    m.set_objective(Sum(G, c[G]))
+    print(fuel.formulation, m.solve().objective)
+```
+
+<!-- output -->
+<details open>
+<summary>Output</summary>
+
+```text
+tangent 20.0
+incremental 25.0
+```
+
+</details>
+<!-- /output -->
+
 ## One curve for every entity
 
 `x_points` and `y_points` are over the breakpoint set and over as many of the

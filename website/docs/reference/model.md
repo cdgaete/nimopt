@@ -90,6 +90,11 @@ coordinates only.
 | --- | --- | --- |
 | `"incremental"` | per segment, one continuous and one integer column and their rows | breakpoints strictly increasing or strictly decreasing |
 | `"tangent"` | one row per segment, and two rows that keep `x` between the first and the last breakpoint | points convex under `>=`, concave under `<=`; no `active`; no `==`; no constant in `x` |
+| `"auto"` | the declarations of `"tangent"` where its requirements hold at every entity, and of `"incremental"` otherwise | breakpoints strictly increasing or strictly decreasing |
+
+`formulation` reports the method a model generates. For `"auto"` it is
+`None` on a definition. A definition reserves the generated names of both
+methods for an `"auto"` declaration.
 
 `active` is a binary variable over the sets of `x`, or a sum of them. Where
 it is 0, `x` is 0 and `y` is compared with 0. A term that is scaled or
@@ -113,7 +118,10 @@ segment is identified by its end breakpoint.
 | --- | --- |
 | `name`, `x`, `x_points`, `y`, `y_points`, `sign`, `method`, `active`, `relaxed`, `where` | the arguments |
 | `breakpoints` | the name of the breakpoint set |
-| `names()` | the names the declaration generates, keyed by `"sets"`, `"parameters"`, `"variables"` and `"constraints"` |
+| `formulation` | `"incremental"` or `"tangent"`: the method a model generates; `None` for `"auto"` before a model generates it |
+| `entity` | the dimensions of `x_points` other than the breakpoint set |
+| `where_domain()` | the domain of `where` over `entity`, or `None` |
+| `names()` | the names the declaration generates, keyed by `"sets"`, `"parameters"`, `"variables"` and `"constraints"`; both methods' names for an `"auto"` declaration before a model generates it |
 | `generated` | the names a model generated, keyed the same way; empty on a definition |
 | `generated_names()` | every generated name, as a frozenset |
 

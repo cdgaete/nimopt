@@ -17,6 +17,12 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - `Variable.bound_array(which)` returns the lower or the upper bound at each
   member of the variable: a float, or an array over the variable's
   dimensions. The column bounds and the checks of `Model.piecewise` read it.
+- `Model.piecewise` and `Definition.piecewise` take `method="auto"`. It
+  generates `"tangent"` where the sign is not `"=="`, `active` is None, `x`
+  has no constant and the curvature of every entity matches the sign, and
+  `"incremental"` otherwise. `Piecewise.formulation` reports the method a
+  model generates. A definition reserves the generated names of both methods.
+  A model file writes `method: auto`.
 - `Solution.has_duals` returns True where `Solution.dual` returns values:
   at status `optimal`, for a solve whose solver reports duals.
 - `Piecewise.entity` returns the dimensions of `x_points` other than the

@@ -13,7 +13,7 @@ from nimopt.sets import Set, condition_dims, coords_of, displayed, rows_of, subs
 from nimopt.symbol import read_at_its_sets
 from nimopt.term import Expression, Sum
 
-METHODS = ("incremental", "tangent")
+METHODS = ("incremental", "tangent", "auto")
 SIGNS = ("==", "<=", ">=")
 KINDS = ("sets", "parameters", "variables", "constraints")
 TOLERANCE = 1e-10
@@ -33,6 +33,12 @@ class Piecewise:
     `where` restricts the declaration to the entities at its coordinates: a
     parameter, a tuple of sets or a domain over the sets of `x_points` other
     than the breakpoint set.
+
+    `method` is "incremental", "tangent" or "auto". `formulation` is the
+    method a model generates. For "auto" it is None until a model generates
+    the declaration. "auto" generates "tangent" where the sign is not "==",
+    `active` is None, `x` has no constant and the curvature of every entity
+    matches the sign, and "incremental" otherwise.
 
     Raises TypeError for an `x`, `y` or `active` that is not an expression,
     and for points that are not a coefficient. Raises ValueError for a name
@@ -66,6 +72,7 @@ class Piecewise:
                 f"sign of piecewise {self.name!r} is one of {SIGNS}; got {sign!r}"
             )
         self.method = method
+        self.formulation = None if method == "auto" else method
         self.sign = sign
         self.x = self._expression(x, "x")
         self.y = self._expression(y, "y")
@@ -243,9 +250,22 @@ class Piecewise:
                 )
 
     def names(self) -> dict[str, tuple[str, ...]]:
-        """Return the names this declaration generates, by kind."""
+        """Return the names this declaration generates, by kind.
+
+        Before a model resolves method "auto", the names of both methods are
+        returned.
+        """
+        if self.formulation is not None:
+            return self._names(self.formulation)
+        tangent, incremental = self._names("tangent"), self._names("incremental")
+        return {
+            kind: tuple(dict.fromkeys(tangent[kind] + incremental[kind]))
+            for kind in KINDS
+        }
+
+    def _names(self, formulation: str) -> dict[str, tuple[str, ...]]:
         n = self.name
-        if self.method == "tangent":
+        if formulation == "tangent":
             return {
                 "sets": (f"{n}_segment",),
                 "parameters": (
@@ -463,8 +483,26 @@ class _Grid:
         """Return the slope of each segment, in the order of `segments`."""
         return self.y_step / self.x_step
 
+    def curvature_matches(self, sign: str) -> bool:
+        """Return True where the curvature of every entity matches `sign`."""
+        return self._mismatched(sign)[1].size == 0
+
     def check_curvature(self, sign: str) -> None:
         """Raise ValueError for an entity whose curvature does not match `sign`."""
+        found, wrong, shape = self._mismatched(sign)
+        if wrong.size:
+            self._reject(
+                self._at(found.coordinates(self.entity), wrong[0]),
+                f"has points that are not {shape}, required by sign {sign!r}",
+                "use method 'incremental'",
+            )
+
+    def _mismatched(self, sign: str) -> tuple[Any, npt.NDArray[np.intp], str]:
+        """Return the change of slope, the entities that do not match and the shape.
+
+        Under `>=` the points of every entity are convex, and under `<=`
+        concave. The slope change is compared with `TOLERANCE`.
+        """
         b = self.breakpoints
         slope = self.pairs.array(self.slopes())
         behind = slope.shift({b: 1})
@@ -480,12 +518,7 @@ class _Grid:
             found = change.max(b)
             wrong = np.flatnonzero(found.values() > TOLERANCE)
             shape = "concave"
-        if wrong.size:
-            self._reject(
-                self._at(found.coordinates(self.entity), wrong[0]),
-                f"has points that are not {shape}, required by sign {sign!r}",
-                "use method 'incremental'",
-            )
+        return found, wrong, shape
 
     def first(self) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """Return x and y at the first breakpoint, one value per entity."""
@@ -631,21 +664,27 @@ def _incremental(
     return (fill.name, order.name), tuple(row.name for row in rows)
 
 
+def _resolved(declaration: Piecewise, grid: _Grid) -> str:
+    """Return the method "auto" generates for `declaration`."""
+    if (
+        declaration.sign != "=="
+        and declaration.active is None
+        and declaration.x.constant == 0.0
+        and grid.curvature_matches(declaration.sign)
+    ):
+        return "tangent"
+    return "incremental"
+
+
 def generate(model: Any, declaration: Piecewise) -> None:
     """Declare the sets, parameters, variables and constraints of `declaration`.
 
-    The name checks, the coordinate check and the breakpoint checks run
-    before any declaration. Raises ValueError for a generated name the model
-    declares, for a `y` or an `active` over other coordinates than `x`, and
-    for a breakpoint check that fails. Sets `declaration.generated`.
+    The coordinate check, the breakpoint checks and the name checks run
+    before any declaration. Raises ValueError for a `y` or an `active` over
+    other coordinates than `x`, for a breakpoint check that fails and for a
+    generated name the model declares. Sets `declaration.formulation` for
+    method "auto", and `declaration.generated`.
     """
-    names = declaration.names()
-    held = taken(names, _declared(model))
-    if held:
-        raise ValueError(
-            f"piecewise {declaration.name!r} generates {held}, already "
-            f"declared in model {model.name!r}; rename the piecewise declaration"
-        )
     declaration.check_domain()
     where = declaration.where_domain()
     declaration.check_active(where)
@@ -656,8 +695,17 @@ def generate(model: Any, declaration: Piecewise) -> None:
         declaration.x_points,
         declaration.y_points,
     )
-    grid = _Grid(declaration, sets, names["sets"][0], where)
-    if declaration.method == "tangent":
+    grid = _Grid(declaration, sets, f"{declaration.name}_segment", where)
+    if declaration.formulation is None:
+        declaration.formulation = _resolved(declaration, grid)
+    names = declaration.names()
+    held = taken(names, _declared(model))
+    if held:
+        raise ValueError(
+            f"piecewise {declaration.name!r} generates {held}, already "
+            f"declared in model {model.name!r}; rename the piecewise declaration"
+        )
+    if declaration.formulation == "tangent":
         grid.check_curvature(declaration.sign)
         variables, constraints = _tangent(model, declaration, grid, names)
     else:
