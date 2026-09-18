@@ -8,8 +8,7 @@ from nimblend import Domain, EntryBuffer, SparseArray
 
 from nimopt.coefficient import Coefficient
 from nimopt.names import ROW
-from nimopt.param import Param
-from nimopt.sets import displayed, rows_of
+from nimopt.sets import condition_dims, condition_name, displayed, rows_of
 from nimopt.term import Relation
 
 SENSES = ("<=", ">=", "==")
@@ -148,7 +147,12 @@ def narrow(
         )
         narrowed = rows.intersect(condition)
         if record is not None:
-            record.dropped(rows, narrowed, "where", _named(constraint.where))
+            record.dropped(
+                rows,
+                narrowed,
+                "where",
+                _named(constraint.where, f"constraint {constraint.name!r}"),
+            )
         rows = narrowed
     rhs = constraint.rhs
     if isinstance(rhs, Coefficient):
@@ -188,10 +192,9 @@ def narrow(
     return rows, rhs_values, int((rows.positions_of(block) >= 0).sum())
 
 
-def _named(given: Any) -> str:
+def _named(given: Any, owner: str) -> str:
     """Return the name of the object a row domain was given as."""
-    if isinstance(given, Param):
-        return given.name
-    if isinstance(given, tuple):
-        return ",".join(s.name for s in given)
-    return ",".join(given.dims)
+    name = condition_name(given, owner, "condition")
+    if isinstance(name, str):
+        return name
+    return ",".join(condition_dims(given, owner, "condition") if name is None else name)

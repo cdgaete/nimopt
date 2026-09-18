@@ -504,11 +504,12 @@ def rows_of(given: Any, dims: tuple[str, ...] | None, owner: str, what: str) -> 
     A tuple of sets resolves to their full product, a parameter to the
     coordinates of its array, and a domain to itself. `dims` are the
     dimensions the domain is required to span, or `None` where a caller has
-    already checked them. Raises ValueError where the domain spans other
-    dimensions.
+    already checked them. Raises ValueError for a value that is not a
+    condition, and where the domain spans other dimensions.
     """
     from nimopt.param import Param
 
+    condition_dims(given, owner, what)
     if isinstance(given, Param):
         resolved = given.materialise().domain(given.dims)
     elif isinstance(given, tuple):
@@ -525,18 +526,44 @@ def rows_of(given: Any, dims: tuple[str, ...] | None, owner: str, what: str) -> 
 def condition_dims(given: Any, owner: str, what: str) -> tuple[str, ...]:
     """Return the dimensions a condition is over, without reading its values.
 
-    A condition is a parameter, a tuple of sets or a domain. Raises
-    ValueError for any other value.
+    A condition is a parameter, a tuple of sets or aliases, or a domain.
+    Raises ValueError for any other value, and for a tuple that contains a
+    lagged or a cyclic set.
     """
     from nimopt.param import Param
 
-    if isinstance(given, Param):
+    if isinstance(given, (Param, Domain)):
         return given.dims
-    if isinstance(given, tuple) and all(isinstance(s, (Set, Alias)) for s in given):
+    if isinstance(given, tuple):
+        for held in given:
+            if isinstance(held, (LaggedSet, CyclicSet)):
+                raise ValueError(
+                    f"{what} of {owner} contains {held!r}; give a tuple of sets "
+                    f"with no lag"
+                )
+            if not isinstance(held, (Set, Alias)):
+                raise ValueError(
+                    f"{what} of {owner} contains a {type(held).__name__}; give "
+                    f"a parameter, a tuple of sets or a domain"
+                )
         return tuple(s.name for s in given)
-    if isinstance(given, Domain):
-        return given.dims
     raise ValueError(
         f"{what} of {owner} is a {type(given).__name__}; give a parameter, a "
         f"tuple of sets or a domain"
     )
+
+
+def condition_name(given: Any, owner: str, what: str) -> str | tuple[str, ...] | None:
+    """Return the name of a condition, or None for a domain.
+
+    A parameter returns its name and a tuple of sets returns their names.
+    Raises ValueError for a value that is not a condition.
+    """
+    from nimopt.param import Param
+
+    condition_dims(given, owner, what)
+    if isinstance(given, Param):
+        return given.name
+    if isinstance(given, tuple):
+        return tuple(s.name for s in given)
+    return None

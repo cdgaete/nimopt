@@ -11,7 +11,7 @@ import yaml
 from nimopt.definition import Definition
 from nimopt.model import Model
 from nimopt.param import Param
-from nimopt.sets import as_members, member_text
+from nimopt.sets import as_members, condition_name, member_text
 from nimopt.syntax import read, render
 from nimopt.term import Relation
 
@@ -246,10 +246,11 @@ def _addressable(name: str, what: str) -> None:
 def _domain(held: Any, owner: str, slot: str) -> Any:
     if held is None:
         return None
-    if isinstance(held, Param):
-        return held.name
-    if isinstance(held, tuple):
-        return [s.name for s in held]
+    name = condition_name(held, owner, slot)
+    if isinstance(name, str):
+        return name
+    if name is not None:
+        return list(name)
     raise ValueError(
         f"{owner} gives {slot} a domain with no name; declare its members as "
         f"a parameter and refer to that parameter"

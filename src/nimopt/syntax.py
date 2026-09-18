@@ -8,8 +8,7 @@ from typing import Any, NoReturn
 import numpy as np
 
 from nimopt.coefficient import Coefficient, Derived, DerivedRef
-from nimopt.param import Param
-from nimopt.sets import Alias, Set, shown
+from nimopt.sets import Alias, Set, condition_name, shown
 from nimopt.term import Expression, ParamRef, Relation, Sum
 
 
@@ -42,11 +41,12 @@ def _items(
 
 def _domain(held: Any) -> str:
     """Return a condition as its name: a parameter's, or a tuple of set names."""
-    if isinstance(held, Param):
-        return held.name
-    if isinstance(held, tuple):
-        names = ", ".join(s.name for s in held)
-        return f"({names},)" if len(held) == 1 else f"({names})"
+    name = condition_name(held, "a sum", "where=")
+    if isinstance(name, str):
+        return name
+    if name is not None:
+        names = ", ".join(name)
+        return f"({names},)" if len(name) == 1 else f"({names})"
     raise ValueError(
         "a condition with no name has no text form; declare its members as a "
         "parameter and use that name"

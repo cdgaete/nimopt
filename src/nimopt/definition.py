@@ -25,7 +25,7 @@ from nimopt.model import Model
 from nimopt.param import Param
 from nimopt.piecewise import KINDS, Piecewise
 from nimopt.progress import reporter
-from nimopt.sets import Alias, Set, check_members
+from nimopt.sets import Alias, Set, check_members, condition_dims
 from nimopt.symbol import read_at_its_sets
 from nimopt.syntax import render
 from nimopt.term import Expression, ParamRef, Relation
@@ -159,6 +159,9 @@ class Definition:
                 f"{type(relation).__name__}"
             )
         name = self._fresh(name, self.constraints, "constraint")
+        for held, slot in ((where, "where="), (over, "over=")):
+            if held is not None:
+                condition_dims(held, f"constraint {name!r}", slot)
         self.constraints[name] = (relation, where, over)
 
     def piecewise(

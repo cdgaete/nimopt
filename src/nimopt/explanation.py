@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from nimopt.param import Param
+from nimopt.sets import condition_name
 from nimopt.syntax import render
 
 if TYPE_CHECKING:
@@ -199,9 +200,10 @@ def objective_text(expression: Any) -> str | None:
 
 
 def _members(subset: Any) -> str | None:
-    if isinstance(subset, Param):
-        return subset.name
-    return None
+    if subset is None:
+        return None
+    name = condition_name(subset, "variable", "subset=")
+    return name if isinstance(name, str) else None
 
 
 def _bound(bound: Any) -> str:

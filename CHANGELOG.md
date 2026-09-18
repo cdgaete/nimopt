@@ -12,6 +12,15 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Fixed
+
+- `where=`, `over=` and `subset=` raise `ValueError` for a tuple that
+  contains a lagged or a cyclic set, such as `(T - 1,)`, in
+  `Model.constraint`, `Model.var`, `Sum` and the `Definition` methods. A
+  `Definition` raises when the declaration is made.
+- A condition that is not a parameter, a tuple of sets or a domain, such as a
+  list or a string, raises `ValueError`, not `AttributeError`.
+
 ## 0.4.1 - 2026-09-18
 
 ### Fixed

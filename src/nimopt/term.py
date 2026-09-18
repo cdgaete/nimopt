@@ -8,7 +8,7 @@ from nimblend import Domain, SparseArray
 
 from nimopt.coefficient import NOT_A_COEFFICIENT, Coefficient, Derived
 from nimopt.names import COLUMN
-from nimopt.sets import LaggedSet, rows_of
+from nimopt.sets import LaggedSet, condition_dims, rows_of
 from nimopt.symbol import Symbol, read_at_its_sets, read_bare
 
 
@@ -21,13 +21,6 @@ def _names(sets: Any) -> tuple[str, ...]:
             f"lag of it; write the lag at the variable's reference"
         )
     return tuple(s.name for s in given)
-
-
-def _dims_of(given: Any) -> tuple[str, ...]:
-    """Return the dimensions a condition is over."""
-    if isinstance(given, tuple):
-        return tuple(s.name for s in given)
-    return given.dims
 
 
 _EACH_BOUND = "write each bound in its own constraint"
@@ -82,7 +75,7 @@ class Term:
 
     def __repr__(self) -> str:
         name = "" if self.coefficient is None else f"{self.coefficient.name} * "
-        where = "" if self.where is None else f", where={_dims_of(self.where)}"
+        where = "" if self.where is None else f", where={self._condition_dims()}"
         return (
             f"Term({name}{self.variable.name}, summed={self.summed}, "
             f"shifts={self.shifts}{where})"
@@ -143,14 +136,23 @@ class Term:
             self.fixed,
         )
 
+    def _condition_dims(self, given: Any = None) -> tuple[str, ...]:
+        held = self.where if given is None else given
+        return condition_dims(held, f"term {self.variable.name!r}", "condition")
+
     def restricted_to(self, domain: Any) -> "Term":
-        """Return the term restricted to the coordinates of `domain`."""
+        """Return the term restricted to the coordinates of `domain`.
+
+        Raises ValueError for a `domain` that is not a condition, for a term
+        with a condition, and for a condition over a dimension the term does
+        not read.
+        """
+        given = self._condition_dims(domain)
         if self.where is not None:
             raise ValueError(
                 f"term {self.variable.name!r} already reads a condition over "
-                f"{_dims_of(self.where)}; restrict the term once"
+                f"{self._condition_dims()}; restrict the term once"
             )
-        given = _dims_of(domain)
         lacking = [d for d in given if d not in self.carried_dims]
         if lacking:
             raise ValueError(

@@ -189,3 +189,61 @@ def test_a_condition_named_as_a_parameter_restricts_a_sum():
 def test_rows_over_the_wrong_dimensions_are_refused_however_they_are_stated():
     with pytest.raises(ValueError, match="its over= is over"):
         network(lambda B, T: (T,))
+
+
+def lag_model():
+    m = Model("lags")
+    T = Set("T", np.array(["t1", "t2", "t3"]))
+    x = m.var("x", (T,))
+    return m, T, x
+
+
+@pytest.mark.parametrize("given", ["lag", "cyclic"])
+def test_a_constraint_condition_with_a_lagged_set_is_refused(given):
+    m, T, x = lag_model()
+    lagged = T - 1 if given == "lag" else T.cyclic - 1
+    with pytest.raises(ValueError, match="with no lag"):
+        m.constraint("c", x[T] <= 5.0, where=(lagged,))
+
+
+def test_rows_declared_over_a_lagged_set_are_refused():
+    m, T, x = lag_model()
+    with pytest.raises(ValueError, match="with no lag"):
+        m.constraint("c", x[T] <= 5.0, over=(T - 1,))
+
+
+def test_a_sum_condition_with_a_lagged_set_is_refused():
+    m, T, x = lag_model()
+    with pytest.raises(ValueError, match="with no lag"):
+        Sum(T, x[T], where=(T - 1,))
+
+
+def test_a_variable_subset_with_a_lagged_set_is_refused():
+    m, T, x = lag_model()
+    with pytest.raises(ValueError, match="with no lag"):
+        m.var("y", (T,), subset=(T - 1,))
+
+
+@pytest.mark.parametrize("given", ["T", ["T"], [None]])
+def test_a_condition_of_another_type_raises_value_error(given):
+    m, T, x = lag_model()
+    held = [T] if given == ["T"] else given
+    action = "give a parameter, a tuple of sets or a domain"
+    with pytest.raises(ValueError, match=action):
+        m.constraint("c", x[T] <= 5.0, where=held)
+    with pytest.raises(ValueError, match=action):
+        Sum(T, x[T], where=held)
+    with pytest.raises(ValueError, match=action):
+        m.var("y", (T,), subset=held)
+
+
+def test_a_definition_refuses_a_lagged_condition_when_it_is_declared():
+    from nimopt import Definition
+
+    d = Definition("lags")
+    T = d.set("T")
+    x = d.var("x", (T,))
+    with pytest.raises(ValueError, match="with no lag"):
+        d.constraint("c", x[T] <= 5.0, where=(T - 1,))
+    with pytest.raises(ValueError, match="with no lag"):
+        d.var("y", (T,), subset=(T - 1,))
