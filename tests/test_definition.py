@@ -479,3 +479,97 @@ def test_a_name_a_declaration_will_generate_is_not_declared_after_it(name):
     d.piecewise("cost", x[G], xp[G, B], y[G], yp[G, B], ">=", "incremental")
     with pytest.raises(ValueError, match=re.escape(f"{name!r}")):
         d.var(name, (G,))
+
+
+def split():
+    """Two piecewise declarations over shared breakpoints, split by where."""
+    d = Definition("split", sense="min")
+    G, T, B = d.set("G"), d.set("T"), d.set("B")
+    xp, yp = d.param("xp", (G, B)), d.param("yp", (G, B))
+    committed, flexible = d.param("committed", (G,)), d.param("flexible", (G,))
+    price, demand = d.param("price", (G,)), d.param("demand", (T,))
+    curves, status = d.param("curves", (G, T)), d.param("status", (G, T))
+    p = d.var("p", (G, T))
+    y = d.var("y", (G, T), subset=curves)
+    u = d.var("u", (G, T), subset=status, upper=1.0, integer=True)
+    d.constraint("balance", Sum(G, p[G, T]) == demand[T])
+    d.piecewise(
+        "on",
+        p[G, T],
+        xp[G, B],
+        y[G, T],
+        yp[G, B],
+        ">=",
+        "incremental",
+        active=u[G, T],
+        where=committed,
+    )
+    d.piecewise(
+        "free", p[G, T], xp[G, B], y[G, T], yp[G, B], ">=", "tangent", where=flexible
+    )
+    d.set_objective(
+        Sum(G, T, y[G, T]) + Sum(G, T, price[G] * p[G, T]) + 2.0 * Sum(G, T, u[G, T])
+    )
+    return d
+
+
+def split_data():
+    # a is committable, with points that are not convex; b has convex
+    # points; c has no curve and a price of 3 per unit
+    points = {
+        "G": np.array(["a", "a", "a", "b", "b", "b"]),
+        "B": np.array(["b0", "b1", "b2", "b0", "b1", "b2"]),
+    }
+    return {
+        "G": np.array(["a", "b", "c"]),
+        "T": np.array(["t0", "t1"]),
+        "B": np.array(["b0", "b1", "b2"]),
+        "xp": (points, np.array([10.0, 20.0, 30.0, 0.0, 10.0, 20.0])),
+        "yp": (points, np.array([10.0, 25.0, 30.0, 0.0, 10.0, 30.0])),
+        "committed": ({"G": np.array(["a"])}, np.array([1.0])),
+        "flexible": ({"G": np.array(["b"])}, np.array([1.0])),
+        "price": ({"G": np.array(["c"])}, np.array([3.0])),
+        "demand": np.array([5.0, 25.0]),
+        "curves": (
+            {
+                "G": np.array(["a", "a", "b", "b"]),
+                "T": np.array(["t0", "t1", "t0", "t1"]),
+            },
+            np.ones(4),
+        ),
+        "status": (
+            {"G": np.array(["a", "a"]), "T": np.array(["t0", "t1"])},
+            np.ones(2),
+        ),
+    }
+
+
+def test_build_generates_the_declarations_where_restricts():
+    # the objective of test_piecewise.split_model
+    m = split().build(split_data())
+    assert m.solve().objective == pytest.approx(34.5)
+    assert m.variables["on_fill"].n_columns == 4
+    assert m.constraints["free_tangent"].n_rows == 4
+    assert m.piecewise_declarations["on"].where.name == "committed"
+
+
+def test_a_definition_checks_the_sets_of_where_at_the_call():
+    d = Definition("d")
+    G, T, B = d.set("G"), d.set("T"), d.set("B")
+    xp = d.param("xp", (G, B))
+    x = d.var("x", (G, T))
+    message = (
+        "where of piecewise 'cost' is over ('T',) and the entities of "
+        "x_points are over ('G',); give where over ('G',)"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
+        d.piecewise(
+            "cost",
+            x[G, T],
+            xp[G, B],
+            x[G, T],
+            xp[G, B],
+            "==",
+            "incremental",
+            where=(T,),
+        )

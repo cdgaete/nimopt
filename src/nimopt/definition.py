@@ -172,13 +172,15 @@ class Definition:
         method: str,
         active: Any = None,
         relaxed: bool = False,
+        where: Any = None,
     ) -> Piecewise:
         """Declare a piecewise-linear relation of `y` to `x`, generated in `build`.
 
-        The arguments are those of `Model.piecewise`. The breakpoint checks
-        run in `build`, when the data is bound. Raises ValueError for a name
-        already declared, for a generated name this definition declares and
-        for an argument `Piecewise` rejects.
+        The arguments are those of `Model.piecewise`. A parameter in `where` is
+        a parameter of this definition. The breakpoint checks run in `build`,
+        when the data is bound. Raises ValueError for a name already declared,
+        for a generated name this definition declares and for an argument
+        `Piecewise` rejects.
         """
         name = str(name)
         if name in self.piecewise_declarations:
@@ -186,7 +188,7 @@ class Definition:
                 f"piecewise {name!r} is already declared; declare another name"
             )
         declaration = Piecewise(
-            name, x, x_points, y, y_points, sign, method, active, relaxed
+            name, x, x_points, y, y_points, sign, method, active, relaxed, where
         )
         names = declaration.names()
         registries = (
@@ -311,6 +313,7 @@ class Definition:
                 d.method,
                 d.active,
                 d.relaxed,
+                d.where,
             )
         if bound.objective is not None:
             model.set_objective(bound.objective)
