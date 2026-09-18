@@ -2188,7 +2188,10 @@ product(sets)
 
 Every member of a set product, as a domain. Passed to `over=`, it declares
 the rows of a constraint explicitly, for a constraint whose terms each cover
-some of its rows.
+some of its rows. A factor is a set or a domain: a set contributes every
+member, and a domain its own members. `product((subset((G,), columns), T))`
+is the members of `G` in `columns` crossed with every member of `T`. Two
+factors over one dimension raise `ValueError`.
 
 ## `subset`
 

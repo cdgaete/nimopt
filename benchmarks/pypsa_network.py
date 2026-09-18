@@ -10,7 +10,7 @@ checked against have the same key.
 
 import numpy as np
 
-from nimopt import Model, Param, Set, Sum, product, subset
+from nimopt import Model, Param, Set, Sum, product, subset, subset_of
 
 FREE = {"lower": -np.inf, "upper": np.inf}
 
@@ -140,13 +140,7 @@ def columns(model, data, dims):
     made["StorageUnit-spill"] = model.var(
         "StorageUnit-spill",
         (dims["U"], dims["T"]),
-        subset=member_hours(
-            dims["U"],
-            dims["T"],
-            data.storage_units_names,
-            spilling,
-            inflow.shape[1],
-        ),
+        subset=member_hours(dims["U"], dims["T"], data.storage_units_names, spilling),
         lower=0.0,
         upper=Param.from_dense("inflow", (dims["U"], dims["T"]), inflow),
     )
@@ -184,13 +178,10 @@ def nominal_bounds(model, data, dims, made):
 
 def over_grid(name, dims, keys, names, grid, keep):
     """Return a parameter over the kept members and every snapshot."""
-    rows = np.flatnonzero(keep)
-    member = np.repeat(names[rows], grid.shape[1])
-    snapshot = np.tile(np.arange(grid.shape[1]), rows.size)
-    columns = {dims[keys[0]].name: member, dims[keys[1]].name: snapshot}
-    return Param.from_long(
-        name, (dims[keys[0]], dims[keys[1]]), columns, grid[rows].ravel()
-    )
+    dim, hours_dim = dims[keys[0]], dims[keys[1]]
+    members = member_hours(dim, hours_dim, names, keep)
+    at = members.coordinates()
+    return Param(name, (dim, hours_dim), members.array(grid[at[0], at[1]]))
 
 
 def fixed_operational(model, data, dims, made):
@@ -247,12 +238,10 @@ def fixed_operational(model, data, dims, made):
             model.constraint(name, relation)
 
 
-def member_hours(dim, hours_dim, names, keep, hours):
+def member_hours(dim, hours_dim, names, keep):
     """Return the members with rows in a family, crossed with every snapshot."""
-    rows = np.flatnonzero(keep)
-    member = np.repeat(names[rows], hours)
-    snapshot = np.tile(np.arange(hours), rows.size)
-    return subset((dim, hours_dim), {dim.name: member, hours_dim.name: snapshot})
+    kept = subset((dim,), {dim.name: names[np.flatnonzero(keep)]})
+    return product((kept, hours_dim))
 
 
 def per_unit(name, dim, hours_dim, names, grid, keep):
@@ -262,17 +251,11 @@ def per_unit(name, dim, hours_dim, names, grid, keep):
     contributes no nonzero. A stored zero would contribute one nonzero that
     the PyPSA matrix does not have.
     """
-    rows = np.flatnonzero(keep)
-    member = np.repeat(names[rows], grid.shape[1])
-    snapshot = np.tile(np.arange(grid.shape[1]), rows.size)
-    values = grid[rows].ravel()
+    at = member_hours(dim, hours_dim, names, keep).coordinates()
+    values = grid[at[0], at[1]]
     live = values != 0.0
-    return Param.from_long(
-        name,
-        (dim, hours_dim),
-        {dim.name: member[live], hours_dim.name: snapshot[live]},
-        values[live],
-    )
+    members = subset_of((dim, hours_dim), at[:, live])
+    return Param(name, (dim, hours_dim), members.array(values[live]))
 
 
 def extendable_operational(model, data, dims, made):
@@ -294,7 +277,7 @@ def extendable_operational(model, data, dims, made):
         names = getattr(data, f"{component}_names")
         flag = "s_nom_extendable" if label == "Line" else f"{nom}_extendable"
         keep = getattr(data, f"{component}_{flag}").astype(bool)
-        rows = member_hours(dim, time, names, keep, hours)
+        rows = member_hours(dim, time, names, keep)
         capacity = made[f"{label}-{nom}"]
         variable = made[operating]
 
@@ -527,7 +510,7 @@ def network_rows(model, data, dims, made):
     for part in reduced[1:]:
         balance = balance + part
     load = Param.from_dense("load", (bus, time), _load_grid(data, data.buses))
-    rows = member_hours(bus, time, data.buses, attached(data), len(data.snapshots))
+    rows = member_hours(bus, time, data.buses, attached(data))
     model.constraint("Bus-nodal_balance", balance == load[bus, time], over=rows)
 
     cycles = data.cycles * (data.lines_x_pu_eff * KIRCHHOFF_SCALE)[:, None]

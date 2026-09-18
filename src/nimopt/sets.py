@@ -479,13 +479,20 @@ def subset(sets: Iterable[Any], columns: Mapping[str, npt.ArrayLike]) -> Domain:
 
 
 def product(sets: Iterable[Any]) -> Domain:
-    """Return every member of a set product, as the rows of a constraint.
+    """Return every member of a product of sets and domains.
 
-    A constraint declares its rows with this instead of deriving them from
-    its terms.
+    A set contributes every member, and a domain its own members. A
+    constraint declares its rows with this instead of deriving them from its
+    terms. Raises ValueError for two factors over one dimension.
     """
-    dims, coords = _frame(tuple(sets))
-    return Domain.full(dims, coords)
+    factors = tuple(sets)
+    if not any(isinstance(f, Domain) for f in factors):
+        dims, coords = _frame(factors)
+        return Domain.full(dims, coords)
+    first, *rest = (f if isinstance(f, Domain) else product((f,)) for f in factors)
+    for held in rest:
+        first = first.cross(held)
+    return first
 
 
 def subset_of(sets: Iterable[Any], index: npt.ArrayLike) -> Domain:

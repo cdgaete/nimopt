@@ -25,6 +25,9 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Added
 
+- `product` takes domains beside sets. A domain contributes its own members,
+  and `product((subset((G,), columns), T))` crosses a subset with a set. Two
+  factors over one dimension raise `ValueError`.
 - `Variable.bound_array(which)` returns the lower or the upper bound at each
   member of the variable: a float, or an array over the variable's
   dimensions. The column bounds and the checks of `Model.piecewise` read it.

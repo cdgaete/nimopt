@@ -87,3 +87,25 @@ def test_binding_gives_a_declared_set_its_members():
 
 def test_a_set_given_members_is_not_declared():
     assert not Set("S", np.array(["a"])).declared
+
+
+def test_a_product_crosses_a_subset_with_a_set():
+    from nimopt import product, subset
+
+    G = Set("G", np.array(["a", "b", "c"]))
+    T = Set("T", np.array(["t0", "t1"]))
+    kept = subset((G,), {"G": np.array(["a", "c"])})
+    crossed = product((kept, T))
+    assert crossed.dims == ("G", "T")
+    labels = crossed.labels()
+    assert labels["G"].tolist() == ["a", "a", "c", "c"]
+    assert labels["T"].tolist() == ["t0", "t1", "t0", "t1"]
+
+
+def test_a_product_of_sets_and_domains_over_one_dimension_twice_raises():
+    from nimopt import product, subset
+
+    G = Set("G", np.array(["a", "b"]))
+    kept = subset((G,), {"G": np.array(["a"])})
+    with pytest.raises(ValueError, match="share dimension"):
+        product((kept, G))
