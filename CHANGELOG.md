@@ -45,6 +45,9 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Fixed
 
+- A bound message writes a timedelta member as a count and a unit, such as
+  `'3 h'`, and `Diagnosis` writes a datetime coordinate as its ISO text. Every
+  message and display writes a member in the form a model file reads.
 - `Model.piecewise` reads the bounds of an `active` variable at the members
   of the variable. A bound parameter above 1 outside the variable's `subset=`
   raises no `ValueError`.

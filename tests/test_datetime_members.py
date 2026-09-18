@@ -388,3 +388,25 @@ def test_an_inline_set_entry_with_an_unknown_key_raises():
     message = "contains the unknown key 'labels'; write only 'dtype', 'members'"
     with pytest.raises(ValueError, match=message):
         loads(text.replace("members:", "labels:"))
+
+
+def test_a_bound_message_displays_a_timedelta_member_as_a_count_and_a_unit():
+    H = Set("H", np.array([1, 3], dtype="timedelta64[h]"))
+    cap = Param.from_dense("cap", (H,), np.array([1.0, np.nan]))
+    m = Model("bound")
+    m.var("x", (H,), upper=cap)
+    with pytest.raises(ValueError, match=r"at member \('3 h',\)"):
+        m.column_bounds()
+
+
+def test_a_diagnosis_displays_a_datetime_coordinate_as_its_iso_text():
+    T = Set("T", np.array(["2030-01-01T00", "2030-01-01T01"], dtype="datetime64[h]"))
+    m = Model("ray")
+    x = m.var("x", (T,), lower=-np.inf)
+    m.constraint("cap", Sum(T, x[T]) <= 1.0)
+    m.set_objective(Sum(T, x[T]))
+    with m.session() as s:
+        s.solve()
+        shown = repr(s.diagnose())
+    assert "numpy" not in shown
+    assert "T='2030-01-01T00'" in shown

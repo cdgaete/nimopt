@@ -9,6 +9,7 @@ import numpy as np
 
 from nimopt.names import ROW
 from nimopt.row import Row, read, resolve
+from nimopt.sets import shown
 
 if TYPE_CHECKING:
     from nimopt.model import Model
@@ -71,12 +72,12 @@ class Diagnosis:
         for row in self.conflict or ():
             lines.extend(repr(row).split("\n"))
         for held in self.columns:
-            at = ", ".join(f"{d}={v!r}" for d, v in held.coordinate.items())
+            at = ", ".join(f"{d}={shown(v)}" for d, v in held.coordinate.items())
             lines.append(
                 f"  bound  {held.variable}[{at}]  [{held.lower:g}, {held.upper:g}]"
             )
         for held in self.ray or ():
-            at = ", ".join(f"{d}={v!r}" for d, v in held.coordinate.items())
+            at = ", ".join(f"{d}={shown(v)}" for d, v in held.coordinate.items())
             lines.append(f"  ray    {held.variable}[{at}]  {held.direction:+g}")
         return "\n".join(lines)
 

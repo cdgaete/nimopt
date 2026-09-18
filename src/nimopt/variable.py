@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 from nimopt.names import COLUMN
 from nimopt.param import Param
-from nimopt.sets import condition_dims, coords_of, rows_of
+from nimopt.sets import condition_dims, coords_of, label_text, rows_of
 from nimopt.symbol import Symbol
 
 
@@ -241,7 +241,7 @@ class Variable(Symbol):
     ) -> None:
         """Raise ValueError for a bound that is not a number at one member."""
         labels = covered.labels()
-        named = tuple(str(labels[d][at]) for d in self.dims)
+        named = tuple(label_text(labels[d][at]) for d in self.dims)
         raise ValueError(
             f"the {which} bound {bound.name!r} is not a number at member "
             f"{named} of variable {self.name!r}; give a finite value or an "
@@ -251,7 +251,7 @@ class Variable(Symbol):
     def _reject_uncovered(self, covered: Domain, bound: Param, which: str) -> None:
         """Raise ValueError for a bound with no value at one column."""
         labels = self.domain().difference(covered).labels()
-        named = tuple(str(labels[d][0]) for d in self.dims)
+        named = tuple(label_text(labels[d][0]) for d in self.dims)
         raise ValueError(
             f"the {which} bound {bound.name!r} has no value at member "
             f"{named} of variable {self.name!r}; give the bound a value at "
