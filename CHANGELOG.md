@@ -17,6 +17,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - `Variable.bound_array(which)` returns the lower or the upper bound at each
   member of the variable: a float, or an array over the variable's
   dimensions. The column bounds and the checks of `Model.piecewise` read it.
+- `Solution.has_duals` returns True where `Solution.dual` returns values:
+  at status `optimal`, for a solve whose solver reports duals.
 - `Piecewise.entity` returns the dimensions of `x_points` other than the
   breakpoint set, and `Piecewise.where_domain()` returns the domain of
   `where` over them. `Piecewise.check_active` takes that domain as `where`.

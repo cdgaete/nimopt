@@ -288,3 +288,33 @@ def test_the_message_for_an_unknown_name_lists_each_name_once():
     with pytest.raises(KeyError) as caught:
         solved.dual("q")
     assert str(caught.value).count("supply") == 1
+
+
+def small_model(integer=False, floor=1.0):
+    m = Model("small")
+    P = Set("P", np.array(["p1", "p2"]))
+    x = m.var("x", (P,), upper=1.0, integer=integer)
+    m.constraint("floor", Sum(P, x[P]) >= floor)
+    m.set_objective(Sum(P, x[P]))
+    return m
+
+
+def test_a_linear_program_at_status_optimal_has_duals():
+    solved = small_model().solve()
+    assert solved.status == "optimal"
+    assert solved.has_duals is True
+    assert float(solved.dual("floor").to_dense()) == 1.0
+
+
+def test_a_model_with_integer_columns_has_no_duals():
+    solved = small_model(integer=True).solve()
+    assert solved.status == "optimal"
+    assert solved.has_duals is False
+    with pytest.raises(ValueError, match="reports no duals"):
+        solved.dual("floor")
+
+
+def test_an_infeasible_model_has_no_duals():
+    solved = small_model(floor=3.0).solve()
+    assert solved.status == "infeasible"
+    assert solved.has_duals is False

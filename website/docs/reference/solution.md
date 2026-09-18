@@ -19,6 +19,7 @@ they were declared over.
 | `gap` | the relative distance from the objective to the bound, or `None` |
 | `primal(name)` | the named variable's values over its own sets |
 | `dual(name, kind=None)` | a constraint's duals over its free sets, or a variable's reduced costs over its own sets |
+| `has_duals` | whether `dual` returns values: status `optimal`, and a solver that reports duals |
 
 `status` and `feasible` are readable whatever the solver reported.
 `objective` and `primal` raise `ValueError` where `feasible` is False. They
@@ -27,7 +28,8 @@ reports. An unbounded model has no optimal value, and `bound` and `gap` are
 `None` there.
 A solve stopped at a limit reports `feasible` True where the solver found a
 point, and those reads then return it. `dual` raises `ValueError` where
-`status` is not `optimal`. Read `status` first.
+`status` is not `optimal`, and for a model with integer columns. Read
+`status` first, or `has_duals` before `dual`.
 
 `primal` and `dual` raise `KeyError` for a name the model does not declare.
 `primal` takes a variable, and its message reports a constraint name as one

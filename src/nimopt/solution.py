@@ -150,6 +150,19 @@ class Solution:
             )
         return variable.domain().array(values.copy(), absence="unknown")
 
+    @property
+    def has_duals(self) -> bool:
+        """Return True where `dual` returns values for this solve.
+
+        Duals are defined at status `optimal`, for a solver that reports them.
+        A solver reports no duals for a model with integer columns.
+        """
+        return (
+            self.status == "optimal"
+            and self._row_dual is not None
+            and self._col_dual is not None
+        )
+
     def _require_dual(
         self,
     ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
