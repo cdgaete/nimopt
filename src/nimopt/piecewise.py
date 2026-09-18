@@ -282,19 +282,19 @@ class Piecewise:
 def _bounds_of(variable: Any, where: Any = None) -> tuple[float, float]:
     """Return the least lower bound and the greatest upper bound of `variable`.
 
-    A bound parameter over every dimension of `where` is read at the
-    coordinates of `where` only.
+    The bounds are read at the members of `variable`. With `where`, they are
+    read at its coordinates only.
     """
     found = []
-    for held, reduce in ((variable.lower, np.min), (variable.upper, np.max)):
-        if isinstance(held, Param):
-            array = held.materialise()
-            if where is not None and set(where.dims) <= set(held.dims):
-                array = array.restrict(where)
-            values = array.values()
-            found.append(float(reduce(values)) if values.size else 0.0)
-        else:
-            found.append(float(held))
+    for which, reduce in (("lower", np.min), ("upper", np.max)):
+        held = variable.bound_array(which)
+        if isinstance(held, float):
+            found.append(held)
+            continue
+        if where is not None:
+            held = held.restrict(where)
+        values = held.values()
+        found.append(float(reduce(values)) if values.size else 0.0)
     return found[0], found[1]
 
 

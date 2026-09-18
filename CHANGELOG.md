@@ -12,7 +12,17 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
 
+### Added
+
+- `Variable.bound_array(which)` returns the lower or the upper bound at each
+  member of the variable: a float, or an array over the variable's
+  dimensions. The column bounds and the checks of `Model.piecewise` read it.
+
 ### Fixed
+
+- `Model.piecewise` reads the bounds of an `active` variable at the members
+  of the variable. A bound parameter above 1 outside the variable's `subset=`
+  raises no `ValueError`.
 
 - `where=`, `over=` and `subset=` raise `ValueError` for a tuple that
   contains a lagged or a cyclic set, such as `(T - 1,)`, in

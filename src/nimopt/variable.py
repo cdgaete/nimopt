@@ -198,22 +198,23 @@ class Variable(Symbol):
         """
         _, start, _total = self._numbered
         at = slice(start, start + self.n_columns)
-        self._write_bound(lower[at], self.lower, "lower")
-        self._write_bound(upper[at], self.upper, "upper")
+        self._write_bound(lower[at], "lower")
+        self._write_bound(upper[at], "upper")
 
-    def _write_bound(
-        self, target: npt.NDArray[np.float64], bound: float | Param, which: str
-    ) -> None:
-        """Fill `target`, a view of one variable's columns, from `bound`.
+    def bound_array(self, which: str) -> float | SparseArray:
+        """Return the lower or the upper bound at each member of this variable.
 
-        A bound over fewer dimensions than the variable is replicated over
-        the extent of the rest. It is then transposed into the variable's own
-        dimension order and scattered. A variable over a subset restricts the
-        replicated array to its own members first.
+        `which` is "lower" or "upper". A number is returned as a float. A
+        Param is returned as an array over the variable's dimensions,
+        replicated over the dimensions it lacks and restricted to the
+        variable's members. Raises ValueError for a Param with no value or a
+        value that is not a number at a member.
         """
+        if which not in ("lower", "upper"):
+            raise ValueError(f"which is 'lower' or 'upper'; got {which!r}")
+        bound = self.lower if which == "lower" else self.upper
         if not isinstance(bound, Param):
-            target[:] = bound
-            return
+            return bound
         array = bound.materialise()
         missing = tuple(d for d in self.dims if d not in bound.dims)
         if missing:
@@ -224,13 +225,20 @@ class Variable(Symbol):
         covered = array.domain(self.dims)
         if covered.size != self.n_columns:
             self._reject_uncovered(covered, bound, which)
-        values = array.values()
-        unstated = np.flatnonzero(np.isnan(values))
+        unstated = np.flatnonzero(np.isnan(array.values()))
         if unstated.size:
             self._reject_not_a_number(covered, bound, which, int(unstated[0]))
+        return array
+
+    def _write_bound(self, target: npt.NDArray[np.float64], which: str) -> None:
+        """Fill `target`, a view of one variable's columns, from one bound."""
+        array = self.bound_array(which)
+        if not isinstance(array, SparseArray):
+            target[:] = array
+            return
         coord, start, _total = self._numbered
         at = coord.to_position(array.coordinates()) - start
-        target[at] = values
+        target[at] = array.values()
 
     def _reject_not_a_number(
         self, covered: Domain, bound: Param, which: str, at: int

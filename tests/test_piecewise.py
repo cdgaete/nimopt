@@ -1044,3 +1044,26 @@ def test_an_active_bound_above_one_inside_where_raises():
     )
     with pytest.raises(ValueError, match=re.escape(message)):
         modules_model([1.0, 2.0])
+
+
+def test_active_reads_its_bounds_at_its_own_members():
+    # u is declared at b only; the ceiling of 5 at a bounds no column
+    G = no.Set("G", np.array(["a", "b"]))
+    B = no.Set("B", np.array(["b0", "b1", "b2"]))
+    xp = table(G, B, [("b", "b0", 0), ("b", "b1", 10), ("b", "b2", 20)], "xp")
+    yp = table(G, B, [("b", "b0", 0), ("b", "b1", 10), ("b", "b2", 30)], "yp")
+    at_b = no.subset((G,), {"G": np.array(["b"])})
+    ceiling = no.Param.from_dense("ceiling", (G,), np.array([5.0, 1.0]))
+    m = no.Model("members")
+    p = m.var("p", (G,), subset=at_b)
+    y = m.var("y", (G,), subset=at_b)
+    u = m.var("u", (G,), subset=at_b, upper=ceiling, integer=True)
+    m.constraint("meet", no.Sum(G, p[G]) == 15.0)
+    m.piecewise(
+        "curve", p[G], xp[G, B], y[G], yp[G, B], ">=", "incremental", active=u[G]
+    )
+    m.set_objective(no.Sum(G, y[G]) + 2.0 * no.Sum(G, u[G]))
+    s = m.solve()
+    # b serves 15 at 10 + 5 * 2 = 20, and 2 for its status
+    assert s.status == "optimal"
+    assert s.objective == pytest.approx(22.0)
