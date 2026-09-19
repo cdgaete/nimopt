@@ -7,10 +7,18 @@ a new `Unreleased` above it. `tests/test_changelog.py` holds the latest
 released section to the version the package states, so a release without a
 section here, or a section without the version bump, fails the suite.
 
-The format is the one at <https://keepachangelog.com/en/1.1.0/>, and the
-versions follow <https://semver.org/spec/v2.0.0.html>.
+The format is the one at <https://keepachangelog.com/en/1.1.0/>.
+
+A version is `MAJOR.YYYYMMDD.PATCH`. `MAJOR` is 0 for a package that is not
+stable, and any release of it can contain a breaking change. `MAJOR` is 1 for
+the first stable release and increases with every breaking change. `YYYYMMDD`
+is the date of a release that adds features. `PATCH` counts the releases that
+only correct defects of that release, from 0. The releases up to 0.4.1 follow
+<https://semver.org/spec/v2.0.0.html>.
 
 ## Unreleased
+
+## 0.20260919.0 - 2026-09-19
 
 ### Changed
 
