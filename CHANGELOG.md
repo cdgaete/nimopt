@@ -52,9 +52,10 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Fixed
 
-- A single `Set` or `Alias` given to `Variable`, `Param`, `Param.from_dense`,
-  `Param.from_long`, `product`, `subset` or `subset_of` in place of a list of
-  sets raises `TypeError` with the owner and a hint.
+- A single `Set`, `Alias`, lagged set or cyclic set given to `Variable`,
+  `Param`, `Param.from_dense`, `Param.from_long`, `product`, `subset` or
+  `subset_of` in place of a list of sets raises `TypeError` with the owner,
+  the class of the object and a hint.
 - A bound message writes a timedelta member as a count and a unit, such as
   `'3 h'`, and `Diagnosis` writes a datetime coordinate as its ISO text. Every
   message and display writes a member in the form a model file reads.

@@ -453,12 +453,13 @@ def check_members(
 def as_sets(given: Any, owner: str) -> tuple[Any, ...]:
     """Return `given` as a tuple of sets.
 
-    Raises TypeError for a single Set or Alias in place of a list of sets.
+    Raises TypeError for a single Set, Alias, CyclicSet or LaggedSet in place
+    of a list of sets.
     """
-    if isinstance(given, (Set, Alias)):
+    if isinstance(given, SET_LIKE):
         raise TypeError(
-            f"{owner} is given a single Set; pass a list of sets, such as "
-            f"[{given.name}]"
+            f"{owner} is given a single {type(given).__name__}; pass a list of "
+            f"sets, such as [{given.name}]"
         )
     return tuple(given)
 

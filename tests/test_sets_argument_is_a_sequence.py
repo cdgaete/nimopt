@@ -8,6 +8,7 @@ from nimopt.param import Param
 from nimopt.variable import Variable
 
 G = no.Set("G", np.array(["a", "b"]))
+H = no.Alias("H", G)
 
 ENTRIES = (
     (
@@ -37,6 +38,18 @@ ENTRIES = (
     (
         "subset_of is given a single Set; pass a list of sets, such as [G]",
         lambda: no.subset_of(G, np.array([[0]])),
+    ),
+    (
+        "product is given a single Alias; pass a list of sets, such as [H]",
+        lambda: no.product(H),
+    ),
+    (
+        "product is given a single LaggedSet; pass a list of sets, such as [G]",
+        lambda: no.product(G - 1),
+    ),
+    (
+        "variable 'x' is given a single CyclicSet; pass a list of sets, such as [G]",
+        lambda: Variable("x", G.cyclic),
     ),
 )
 
