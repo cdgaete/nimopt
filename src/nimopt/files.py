@@ -12,7 +12,7 @@ from nimopt.definition import Definition
 from nimopt.model import Model
 from nimopt.names import check_addressable, check_one_kind
 from nimopt.param import Param
-from nimopt.sets import as_members, condition_name, member_text
+from nimopt.sets import as_members, member_text, named_condition
 from nimopt.syntax import read, render
 from nimopt.term import Relation
 
@@ -241,15 +241,10 @@ def written_version(version: Any) -> int:
 def _domain(held: Any, owner: str, slot: str) -> Any:
     if held is None:
         return None
-    name = condition_name(held, owner, slot)
+    name = named_condition(held, owner, slot)
     if isinstance(name, str):
         return name
-    if name is not None:
-        return list(name)
-    raise ValueError(
-        f"{owner} gives {slot} a domain with no name; declare its members as "
-        f"a parameter and refer to that parameter"
-    )
+    return list(name)
 
 
 def _bound(bound: Any, default: float) -> str | float | None:

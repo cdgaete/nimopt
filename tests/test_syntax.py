@@ -1,4 +1,5 @@
 import importlib
+import re
 
 import numpy as np
 import pytest
@@ -127,7 +128,11 @@ def test_a_sum_condition_spells_a_parameter_or_a_tuple_of_sets():
 def test_a_condition_with_no_name_is_refused():
     G, T, gen, *_ = fleet()
     arcs = subset((G, T), {"G": np.array(["base"]), "T": np.array(["t0"])})
-    with pytest.raises(ValueError, match="no name"):
+    message = (
+        "a sum gives where= a domain with no name; declare its members as a "
+        "parameter and refer to that parameter"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
         render(Sum(G, gen[G, T], where=arcs))
 
 

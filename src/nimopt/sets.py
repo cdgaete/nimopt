@@ -574,3 +574,17 @@ def condition_name(given: Any, owner: str, what: str) -> str | tuple[str, ...] |
     if isinstance(given, tuple):
         return tuple(s.name for s in given)
     return None
+
+
+def named_condition(given: Any, owner: str, what: str) -> str | tuple[str, ...]:
+    """Return the name of a condition: a parameter's name or a tuple of set names.
+
+    Raises ValueError for a domain with no name.
+    """
+    name = condition_name(given, owner, what)
+    if name is None:
+        raise ValueError(
+            f"{owner} gives {what} a domain with no name; declare its "
+            f"members as a parameter and refer to that parameter"
+        )
+    return name
