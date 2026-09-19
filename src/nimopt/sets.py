@@ -450,6 +450,19 @@ def check_members(
             ) from None
 
 
+def as_sets(given: Any, owner: str) -> tuple[Any, ...]:
+    """Return `given` as a tuple of sets.
+
+    Raises TypeError for a single Set or Alias in place of a list of sets.
+    """
+    if isinstance(given, (Set, Alias)):
+        raise TypeError(
+            f"{owner} is given a single Set; pass a list of sets, such as "
+            f"[{given.name}]"
+        )
+    return tuple(given)
+
+
 def reading(name: str, dims: Sequence[str]) -> str:
     """Return the text that reads a symbol named `name` over `dims`.
 
@@ -474,7 +487,7 @@ def subset(sets: Iterable[Any], columns: Mapping[str, npt.ArrayLike]) -> Domain:
     `columns` contains one label column per set, keyed by the set's name. The
     columns are read in step: the k-th entry of each identifies one member.
     """
-    dims, coords = _frame(tuple(sets))
+    dims, coords = _frame(as_sets(sets, "subset"))
     return Domain.from_labels(dims, coords, columns)
 
 
@@ -485,7 +498,7 @@ def product(sets: Iterable[Any]) -> Domain:
     constraint declares its rows with this instead of deriving them from its
     terms. Raises ValueError for two factors over one dimension.
     """
-    factors = tuple(sets)
+    factors = as_sets(sets, "product")
     if not any(isinstance(f, Domain) for f in factors):
         dims, coords = _frame(factors)
         return Domain.full(dims, coords)
@@ -501,7 +514,7 @@ def subset_of(sets: Iterable[Any], index: npt.ArrayLike) -> Domain:
     Each column of `index` identifies one member. A caller with positions
     passes them directly, with no labels to resolve.
     """
-    dims, coords = _frame(tuple(sets))
+    dims, coords = _frame(as_sets(sets, "subset_of"))
     return Domain.from_coordinates(dims, coords, index)
 
 

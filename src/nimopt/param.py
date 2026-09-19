@@ -7,7 +7,7 @@ import numpy as np
 import numpy.typing as npt
 from nimblend import Domain, SparseArray, from_long
 
-from nimopt.sets import as_members, coords_of
+from nimopt.sets import as_members, as_sets, coords_of
 from nimopt.symbol import Symbol
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ class Param(Symbol):
         self, name: str, sets: Iterable[Any], array: SparseArray | None = None
     ) -> None:
         self.name = str(name)
-        self.sets = tuple(sets)
+        self.sets = as_sets(sets, f"parameter {self.name!r}")
         self.array = None
         if array is not None:
             self._bind(array)
@@ -61,7 +61,7 @@ class Param(Symbol):
         row-major order, the order of the full product's members. Raises
         ValueError for any other shape.
         """
-        sets = tuple(sets)
+        sets = as_sets(sets, f"parameter {name!r}")
         values = np.array(values, dtype=np.float64)
         dims = tuple(s.name for s in sets)
         shape = tuple(len(s) for s in sets)
@@ -85,7 +85,7 @@ class Param(Symbol):
 
         Each label resolves through the coordinate its set already stores.
         """
-        sets = tuple(sets)
+        sets = as_sets(sets, f"parameter {name!r}")
         dims = tuple(s.name for s in sets)
         converted = dict(columns)
         for held in sets:

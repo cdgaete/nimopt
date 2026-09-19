@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 from nimopt.names import COLUMN
 from nimopt.param import Param
-from nimopt.sets import condition_dims, coords_of, label_text, rows_of
+from nimopt.sets import as_sets, condition_dims, coords_of, label_text, rows_of
 from nimopt.symbol import Symbol
 
 
@@ -37,7 +37,7 @@ class Variable(Symbol):
         integer: bool = False,
     ) -> None:
         self.name = str(name)
-        self.sets = tuple(sets)
+        self.sets = as_sets(sets, f"variable {self.name!r}")
         if subset is not None:
             condition_dims(subset, f"variable {self.name!r}", "subset=")
         self.subset = subset
