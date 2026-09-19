@@ -379,12 +379,11 @@ class Model:
             )
         raise KeyError(f"model {self.name!r} has no variable {name!r}; {valid}")
 
-    def _constraint(self, name: str, other: str | None = None) -> Constraint:
+    def _constraint(self, name: str) -> Constraint:
         """Return the named constraint.
 
         Raises KeyError for a name that is not a declared constraint. The
-        message lists the declared constraints. `other` is the action the
-        message gives where `name` is a variable.
+        message lists the declared constraints.
         """
         if name in self.constraints:
             return self.constraints[name]
@@ -394,9 +393,7 @@ class Model:
             else "declare a constraint first"
         )
         if name in self.variables:
-            raise KeyError(
-                f"{name!r} is a variable, not a constraint; {other or valid}"
-            )
+            raise KeyError(f"{name!r} is a variable, not a constraint; {valid}")
         raise KeyError(f"model {self.name!r} has no constraint {name!r}; {valid}")
 
     def row(self, name: str, **coords: Any) -> "Row":

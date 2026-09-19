@@ -2,15 +2,11 @@
 
 import copy
 from collections.abc import Iterable, Iterator, Mapping, MutableMapping
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 
 from nimopt.coefficient import Coefficient, Derived, DerivedRef
-
-if TYPE_CHECKING:
-    from nimopt.model import Model
-
 from nimopt.constraint import check_relation
 from nimopt.explanation import (
     ConstraintShape,
