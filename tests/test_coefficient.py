@@ -23,9 +23,9 @@ def test_a_coefficient_is_read_at_its_sets_as_a_parameter_is():
     G, T, price, eta = fleet()
     unit_cost = price[G, T] / eta[G, T]
     assert unit_cost[G, T].dims == ("G", "T")
-    with pytest.raises(ValueError, match=r"is over \('G', 'T'\)"):
+    with pytest.raises(ValueError, match=r"is declared over \('G', 'T'\)"):
         unit_cost[T, G]
-    with pytest.raises(ValueError, match=r"is over \('G', 'T'\)"):
+    with pytest.raises(ValueError, match=r"is declared over \('G', 'T'\)"):
         unit_cost[G]
 
 

@@ -113,20 +113,12 @@ class Param(Symbol):
         reference is not over that dimension. Raises ValueError for a lag and
         for a set list that differs from the declared dimensions.
         """
-        from nimopt.sets import check_members, reference
+        from nimopt.sets import read_at
         from nimopt.term import ParamRef
 
-        given, shifts, fixed = reference(sets, self.dims)
-        if shifts:
-            raise ValueError(
-                f"parameter {self.name!r} is read at a lag {sorted(shifts)}; "
-                f"write the lag at the variable's reference"
-            )
-        if given != self.dims:
-            raise ValueError(
-                f"parameter {self.name!r} is declared over {self.dims}; got {given}"
-            )
-        check_members(self.sets, fixed, f"parameter {self.name!r}")
+        _, fixed = read_at(
+            f"parameter {self.name!r}", self.dims, self.sets, sets, lags=False
+        )
         return ParamRef(self, fixed)
 
     def materialise(self) -> SparseArray:

@@ -19,6 +19,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 - The message for a `Sum(..., where=)` condition with no name matches the
   message `files.structure` raises for the same defect: it identifies the
   owner and the slot.
+- A coefficient read at dimensions other than its own raises `is declared
+  over`, the wording a parameter and a variable already raise.
 - `Constraint.write_into` takes the coordinate of every row of the model, and
   numbers the constraint's rows inside it from `row_start`. It calls the
   nimblend `group(coord=, start=)`: nimopt requires the nimblend release that

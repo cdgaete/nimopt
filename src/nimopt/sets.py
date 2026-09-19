@@ -588,3 +588,28 @@ def named_condition(given: Any, owner: str, what: str) -> str | tuple[str, ...]:
             f"members as a parameter and refer to that parameter"
         )
     return name
+
+
+def read_at(
+    owner: str,
+    dims: Sequence[str],
+    sets_declared: Iterable[Any],
+    given: Any,
+    lags: bool,
+) -> tuple[dict[str, tuple[int, str]], dict[str, Any]]:
+    """Return the shifts and the fixed members of a reference read at `given`.
+
+    Raises ValueError for a lag where `lags` is False, for a reference over
+    dimensions other than `dims`, and for a fixed member the set does not
+    contain.
+    """
+    resolved, shifts, fixed = reference(given, dims)
+    if shifts and not lags:
+        raise ValueError(
+            f"{owner} is read at a lag {sorted(shifts)}; write the lag at "
+            f"the variable's reference"
+        )
+    if resolved != dims:
+        raise ValueError(f"{owner} is declared over {dims}; got {resolved}")
+    check_members(sets_declared, fixed, owner)
+    return shifts, fixed

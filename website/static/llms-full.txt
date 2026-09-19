@@ -142,7 +142,7 @@ beside it.
 | `ValueError` | the upper bound 'cap' has no value at member ('b',) of variable 'x'; give the bound a value at every member of the variable | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
 | `ValueError` | variable 'x' is declared over ('G',) and is not over ['W']; its upper bound 'cap' is declared over ('W',) | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
 | `TypeError` | a coefficient is a parameter; build one with `Param.from_dense` or `Param.from_long` and read it at its sets. A product of two expressions is not linear. | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
-| `ValueError` | coefficient (fuel_price / efficiency) is over ('G', 'T'); got ('T', 'G') | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
+| `ValueError` | coefficient (fuel_price / efficiency) is declared over ('G', 'T'); got ('T', 'G') | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ZeroDivisionError` | divisor holed is zero at 1 coordinate(s), first at {'G': 'base', 'T': 1}; remove the zeros or divide by another parameter | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | frames ('G',) and ('T',) share no dimension; pass operands that share a dimension | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | constraint 'capacity' has free dimensions ('P',); its condition is over ('W',) | [/guides/conditions](/guides/conditions) |
@@ -1622,7 +1622,7 @@ supply[P='porto']  row 1
 A coordinate at which the constraint has no row raises `ValueError`; the
 message points to the function that reports why it is missing. `row` and
 `absent` raise `KeyError` for a name that is not a declared constraint, and
-the message lists the declared constraints. `row` raises `KeyError` for a
+the message lists the declared constraints. `row` raises `ValueError` for a
 label that is not a member of its dimension, and the message identifies the
 dimension.
 
@@ -5264,7 +5264,7 @@ eta = Param.from_dense("efficiency", (G, T), np.array([[0.5] * 3, [0.4] * 3]))
 Raises ValueError:
 
 ```text
-ValueError: coefficient (fuel_price / efficiency) is over ('G', 'T'); got ('T', 'G')
+ValueError: coefficient (fuel_price / efficiency) is declared over ('G', 'T'); got ('T', 'G')
 ```
 
 A bare parameter has no arithmetic: `price * 2.0` raises `TypeError`. Read

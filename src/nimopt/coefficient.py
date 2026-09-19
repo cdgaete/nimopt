@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 from nimblend import combined_dims
 
-from nimopt.sets import check_members, displayed, reference
+from nimopt.sets import displayed, read_at
 from nimopt.symbol import Symbol, read_bare
 
 NOT_A_COEFFICIENT = (
@@ -97,17 +97,9 @@ class Coefficient:
 
     def _read(self, sets: Any, holder: Any) -> dict[str, Any]:
         """Return the members `sets` fixes, checked against the dimensions."""
-        given, shifts, fixed = reference(sets, self.dims)
-        if shifts:
-            raise ValueError(
-                f"coefficient {self.name} is read at a lag {sorted(shifts)}; "
-                f"write the lag at the variable's reference"
-            )
-        if given != self.dims:
-            raise ValueError(
-                f"coefficient {self.name} is over {self.dims}; got {given}"
-            )
-        check_members(holder.sets, fixed, f"coefficient {self.name}")
+        _, fixed = read_at(
+            f"coefficient {self.name}", self.dims, holder.sets, sets, lags=False
+        )
         return fixed
 
     def _combine(self, other: Any, symbol: str, flip: bool = False) -> Any:

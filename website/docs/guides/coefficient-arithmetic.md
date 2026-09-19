@@ -70,7 +70,7 @@ eta = Param.from_dense("efficiency", (G, T), np.array([[0.5] * 3, [0.4] * 3]))
 <summary>Raises ValueError</summary>
 
 ```text
-ValueError: coefficient (fuel_price / efficiency) is over ('G', 'T'); got ('T', 'G')
+ValueError: coefficient (fuel_price / efficiency) is declared over ('G', 'T'); got ('T', 'G')
 ```
 
 </details>

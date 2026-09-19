@@ -162,15 +162,12 @@ class Variable(Symbol):
         recorded on the term. A label in place of a set fixes that dimension
         at one member, and that dimension is not in the frame.
         """
-        from nimopt.sets import check_members, reference
+        from nimopt.sets import read_at
         from nimopt.term import Expression, Term
 
-        given, shifts, fixed = reference(sets, self.dims)
-        if given != self.dims:
-            raise ValueError(
-                f"variable {self.name!r} is declared over {self.dims}; got {given}"
-            )
-        check_members(self.sets, fixed, f"variable {self.name!r}")
+        shifts, fixed = read_at(
+            f"variable {self.name!r}", self.dims, self.sets, sets, lags=True
+        )
         return Expression([Term(self, shifts=shifts, fixed=fixed)])
 
     kind = "variable"

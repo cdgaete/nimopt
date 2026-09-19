@@ -147,7 +147,7 @@ beside it.
 | `ValueError` | the upper bound 'cap' has no value at member ('b',) of variable 'x'; give the bound a value at every member of the variable | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
 | `ValueError` | variable 'x' is declared over ('G',) and is not over ['W']; its upper bound 'cap' is declared over ('W',) | [/guides/bounds-from-parameters](/guides/bounds-from-parameters) |
 | `TypeError` | a coefficient is a parameter; build one with `Param.from_dense` or `Param.from_long` and read it at its sets. A product of two expressions is not linear. | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
-| `ValueError` | coefficient (fuel_price / efficiency) is over ('G', 'T'); got ('T', 'G') | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
+| `ValueError` | coefficient (fuel_price / efficiency) is declared over ('G', 'T'); got ('T', 'G') | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ZeroDivisionError` | divisor holed is zero at 1 coordinate(s), first at {'G': 'base', 'T': 1}; remove the zeros or divide by another parameter | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | frames ('G',) and ('T',) share no dimension; pass operands that share a dimension | [/guides/coefficient-arithmetic](/guides/coefficient-arithmetic) |
 | `ValueError` | constraint 'capacity' has free dimensions ('P',); its condition is over ('W',) | [/guides/conditions](/guides/conditions) |
