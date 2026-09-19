@@ -9,10 +9,8 @@ The hourly profiles are the input of a time series store. Every computation
 nimopt performs on them is measured.
 """
 
-import time
-import tracemalloc
-
 import numpy as np
+from compare import assembly_metrics
 
 from nimopt.models import storage
 from nimopt.models.storage import CHARGE_EFFICIENCY, DISCHARGE_EFFICIENCY
@@ -75,34 +73,10 @@ def measure(n_generators, n_storage, n_hours, solve=False, seed=0):
     `solve` adds the status, the objective and the solve time.
     """
     availability, demand, price = profiles(n_generators, n_hours, seed)
-
-    tracemalloc.start()
-    started = time.perf_counter()
-    model = build(n_generators, n_storage, n_hours, availability, demand, price)
-    session = model.session()
-    assembled = session.assembled
-    elapsed = time.perf_counter() - started
-    _, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-
-    matrix = assembled.indices.nbytes + assembled.values.nbytes
-    got = {
-        "rows": assembled.n_rows,
-        "cols": assembled.n_cols,
-        "nnz": int(assembled.values.size),
-        "matrix_mb": matrix / 1e6,
-        "peak_mb": peak / 1e6,
-        "ratio": peak / matrix,
-        "build_ms": elapsed * 1e3,
-    }
-    if solve:
-        started = time.perf_counter()
-        solution = session.solve()
-        got["solve_ms"] = (time.perf_counter() - started) * 1e3
-        got["status"] = solution.status
-        got["objective"] = solution.objective
-    session.close()
-    return got
+    return assembly_metrics(
+        lambda: build(n_generators, n_storage, n_hours, availability, demand, price),
+        solve=solve,
+    )
 
 
 if __name__ == "__main__":

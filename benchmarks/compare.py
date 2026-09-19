@@ -46,6 +46,41 @@ class Case:
     read: Callable[[Any], dict]
 
 
+def assembly_metrics(build, solve=False):
+    """Return the peak bytes and the elapsed time of one build and assembly.
+
+    `build` takes no argument and returns a `Model` built from a corpus
+    `Definition`. `solve` adds the status, the objective and the solve time.
+    """
+    tracemalloc.start()
+    started = time.perf_counter()
+    model = build()
+    session = model.session()
+    assembled = session.assembled
+    elapsed = time.perf_counter() - started
+    _, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
+    matrix = assembled.indices.nbytes + assembled.values.nbytes
+    got = {
+        "rows": assembled.n_rows,
+        "cols": assembled.n_cols,
+        "nnz": int(assembled.values.size),
+        "matrix_mb": matrix / 1e6,
+        "peak_mb": peak / 1e6,
+        "ratio": peak / matrix,
+        "build_ms": elapsed * 1e3,
+    }
+    if solve:
+        started = time.perf_counter()
+        solution = session.solve()
+        got["solve_ms"] = (time.perf_counter() - started) * 1e3
+        got["status"] = solution.status
+        got["objective"] = solution.objective
+    session.close()
+    return got
+
+
 def _rss_mb():
     return int(_STATM.read_text().split()[1]) * _PAGE_BYTES / 1e6
 

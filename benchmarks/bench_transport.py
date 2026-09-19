@@ -8,10 +8,8 @@ The arc list and its labels are the input of a columnar store. Every
 computation nimopt performs on them is measured.
 """
 
-import time
-import tracemalloc
-
 import numpy as np
+from compare import assembly_metrics
 
 from nimopt.models import transport
 
@@ -74,34 +72,10 @@ def measure(n_plants, n_warehouses, arcs_per_plant, solve=False, seed=0):
     """
     arc_index = network(n_plants, n_warehouses, arcs_per_plant, seed)
     unit_cost = np.random.default_rng(seed + 1).uniform(1.0, 9.0, arc_index.shape[1])
-
-    tracemalloc.start()
-    started = time.perf_counter()
-    model = build(n_plants, n_warehouses, arcs_per_plant, arc_index, unit_cost)
-    session = model.session()
-    assembled = session.assembled
-    elapsed = time.perf_counter() - started
-    _, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-
-    matrix = assembled.indices.nbytes + assembled.values.nbytes
-    got = {
-        "rows": assembled.n_rows,
-        "cols": assembled.n_cols,
-        "nnz": int(assembled.values.size),
-        "matrix_mb": matrix / 1e6,
-        "peak_mb": peak / 1e6,
-        "ratio": peak / matrix,
-        "build_ms": elapsed * 1e3,
-    }
-    if solve:
-        started = time.perf_counter()
-        solution = session.solve()
-        got["solve_ms"] = (time.perf_counter() - started) * 1e3
-        got["status"] = solution.status
-        got["objective"] = solution.objective
-    session.close()
-    return got
+    return assembly_metrics(
+        lambda: build(n_plants, n_warehouses, arcs_per_plant, arc_index, unit_cost),
+        solve=solve,
+    )
 
 
 if __name__ == "__main__":
