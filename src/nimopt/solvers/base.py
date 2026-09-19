@@ -29,6 +29,7 @@ feature the adapter does not call is `absent`. Support has two values. No
 adapter reformulates a model.
 """
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any
 
@@ -174,6 +175,32 @@ def check_sense(sense: str) -> None:
     """Raise ValueError for a sense other than "min" and "max"."""
     if sense not in ("min", "max"):
         raise ValueError(f"sense is 'min' or 'max'; got {sense!r}")
+
+
+def check_reported(
+    reported: str,
+    failed: Collection[str],
+    accepted: Collection[str],
+    solver: str,
+    noun: str,
+    tail: str = "",
+) -> None:
+    """Raise RuntimeError for a solver's reported status the adapter cannot map.
+
+    Raises RuntimeError when `reported` is a member of `failed`. Raises
+    RuntimeError when `reported` is not a member of `accepted`. Returns None
+    otherwise.
+    """
+    if reported in failed:
+        raise RuntimeError(
+            f"{solver} stopped at {noun} {reported} without solving the "
+            f"model; check the model and the options{tail}"
+        )
+    if reported not in accepted:
+        raise RuntimeError(
+            f"{solver} reported the {noun} {reported!r}; this adapter maps "
+            f"no outcome to it, report it as a defect"
+        )
 
 
 def proved_bound(status: str, objective: float, reported: float | None) -> float | None:

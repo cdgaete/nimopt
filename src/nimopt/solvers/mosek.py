@@ -25,7 +25,13 @@ import numpy.typing as npt
 if TYPE_CHECKING:
     from nimopt.model import Assembled
 
-from nimopt.solvers.base import Capabilities, Result, check_sense, proved_bound
+from nimopt.solvers.base import (
+    Capabilities,
+    Result,
+    check_reported,
+    check_sense,
+    proved_bound,
+)
 from nimopt.solvers.options import translated
 
 BACKEND = "mosek"
@@ -232,16 +238,7 @@ def solve(
                 "integer columns; leave `method` at 'choose' for this model"
             ) from error
         raise
-    if reported in FAILED:
-        raise RuntimeError(
-            f"Mosek stopped at termination code {reported} without solving the "
-            f"model; check the model and the options"
-        )
-    if reported != "ok" and reported not in LIMITS:
-        raise RuntimeError(
-            f"Mosek reported the termination code {reported!r}; this adapter "
-            f"maps no outcome to it, report it as a defect"
-        )
+    check_reported(reported, FAILED, {"ok", *LIMITS}, "Mosek", "termination code")
     integer = bool(assembled.integrality.any())
     duals = None
     if CAPABILITIES.reports_duals(integer):

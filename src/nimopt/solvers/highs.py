@@ -17,7 +17,13 @@ import numpy.typing as npt
 if TYPE_CHECKING:
     from nimopt.model import Assembled
 
-from nimopt.solvers.base import Capabilities, Result, check_sense, proved_bound
+from nimopt.solvers.base import (
+    Capabilities,
+    Result,
+    check_reported,
+    check_sense,
+    proved_bound,
+)
 from nimopt.solvers.options import translated
 
 BACKEND = "highspy"
@@ -211,16 +217,9 @@ def solve(
         )
 
     reported = str(highs.getModelStatus()).split(".")[-1]
-    if reported in FAILED:
-        raise RuntimeError(
-            f"HiGHS stopped at model status {reported} without solving the "
-            f"model; check the model and the options.{threads}"
-        )
-    if reported not in OUTCOME:
-        raise RuntimeError(
-            f"HiGHS reported the model status {reported!r}; this adapter maps "
-            f"no outcome to it, report it as a defect"
-        )
+    check_reported(
+        reported, FAILED, OUTCOME, "HiGHS", "model status", tail=f".{threads}"
+    )
     solution = highs.getSolution()
     integer = bool(assembled.integrality.any())
     duals = None

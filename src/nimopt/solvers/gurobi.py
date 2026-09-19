@@ -24,7 +24,13 @@ if TYPE_CHECKING:
     from nimopt.model import Assembled
 
 from nimopt.row import senses
-from nimopt.solvers.base import Capabilities, Result, check_sense, proved_bound
+from nimopt.solvers.base import (
+    Capabilities,
+    Result,
+    check_reported,
+    check_sense,
+    proved_bound,
+)
 from nimopt.solvers.options import translated
 
 BACKEND = "gurobipy"
@@ -172,16 +178,7 @@ def solve(
     model.optimize()
 
     reported = _named(GRB.Status, model.Status)
-    if reported in FAILED:
-        raise RuntimeError(
-            f"Gurobi stopped at model status {reported} without solving the "
-            f"model; check the model and the options"
-        )
-    if reported not in OUTCOME:
-        raise RuntimeError(
-            f"Gurobi reported the model status {reported!r}; this adapter maps "
-            f"no outcome to it, report it as a defect"
-        )
+    check_reported(reported, FAILED, OUTCOME, "Gurobi", "model status")
     integer = bool(assembled.integrality.any())
     status = OUTCOME[reported]
     duals = None
