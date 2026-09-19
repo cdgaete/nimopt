@@ -103,6 +103,57 @@ def test_every_nimblend_import_names_a_public_name_on_the_top_level_module():
     assert offenders == [], offenders
 
 
+def nimblend_attribute_offenders(tree):
+    """Lines reading an attribute of a `nimblend` import alias, off `__all__`.
+
+    `import nimblend` binds the name `nimblend`, and `import nimblend as nb`
+    binds `nb`. An attribute of that name, such as `nb.sparse`, reads a
+    submodule off the module object; an outer attribute of the result, such
+    as `nb.sparse.SparseArray`, is not counted again. A dunder attribute
+    such as `nb.__file__` is a module attribute of every module, not a name
+    `nimblend.__all__` curates, and is not counted.
+    """
+    aliases = {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+        if alias.name == "nimblend"
+    }
+    return [
+        f"{node.lineno} .{node.attr}"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id in aliases
+        and node.attr not in nb.__all__
+        and not (node.attr.startswith("__") and node.attr.endswith("__"))
+    ]
+
+
+def test_every_nimblend_attribute_off_an_alias_names_a_public_name():
+    offenders = []
+    for name, tree in sources():
+        offenders.extend(
+            f"{name}:{where}" for where in nimblend_attribute_offenders(tree)
+        )
+    assert offenders == [], offenders
+
+
+def test_the_attribute_scan_flags_a_submodule_reached_through_an_alias():
+    flagged = nimblend_attribute_offenders(
+        ast.parse("import nimblend as nb\nx = nb.sparse.SparseArray\n")
+    )
+    assert flagged == ["2 .sparse"]
+
+
+def test_the_attribute_scan_accepts_a_public_name_off_the_alias():
+    accepted = nimblend_attribute_offenders(
+        ast.parse("import nimblend as nb\nnb.SparseArray\n")
+    )
+    assert accepted == []
+
+
 def internals_read(tree, names=BUFFERS):
     """Lines reading one of `names` off an object, however it is written.
 
@@ -167,6 +218,10 @@ PACKAGE_IMPORTS = {
 INDEX_CONSTRUCTORS = ("from_canonical", "is_canonical")
 
 
+# package_modules() covers src/nimopt alone, not tests/ or benchmarks/. A
+# benchmark builds a plain numpy array as a fixture before it is passed to
+# nimopt, and a test builds one to exercise a case the corpus does not; the
+# checks below would flag both as if nimopt had built them.
 def package_modules():
     """Every module nimopt ships, as a parsed tree beside its path."""
     root = Path(no.__file__).parent
