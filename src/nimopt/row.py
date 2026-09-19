@@ -167,10 +167,9 @@ def position_of(constraint: "Constraint", coords: Mapping[str, Any]) -> int:
     """Return the position of the named coordinate in a constraint's rows.
 
     Each label is converted to the dtype of its dimension's members and
-    resolves through that dimension's own coordinate. Raises KeyError for a
-    label that is not a member of its dimension. Raises ValueError for a
-    label that does not convert and for a coordinate the constraint has no
-    row at.
+    resolves through that dimension's own coordinate. Raises ValueError for a
+    label that is not a member of its dimension, for a label that does not
+    convert and for a coordinate the constraint has no row at.
     """
     rows = constraint.rows
     if tuple(coords) != rows.dims:
@@ -186,7 +185,7 @@ def position_of(constraint: "Constraint", coords: Mapping[str, Any]) -> int:
         try:
             at = rows.coords[d].to_position(np.asarray([label]))
         except KeyError:
-            raise KeyError(
+            raise ValueError(
                 f"member {shown(coords[d])} is not in dimension {d!r} of "
                 f"constraint {constraint.name!r}; pass a member of {d!r}"
             ) from None

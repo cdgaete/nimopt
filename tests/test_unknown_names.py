@@ -141,7 +141,8 @@ def test_a_variable_with_no_columns_declared_after_the_solve_raises():
 
 def test_a_row_at_a_label_outside_its_set_identifies_the_set():
     m, P, x = transport_like()
-    with raises(
+    message = (
         "member 'zz' is not in dimension 'P' of constraint 'cap'; pass a member of 'P'"
-    ):
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
         m.row("cap", P="zz")

@@ -14,6 +14,8 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Changed
 
+- `Model.row` raises `ValueError`, not `KeyError`, for a coordinate label
+  that is not a member of the constraint's dimension.
 - `Constraint.write_into` takes the coordinate of every row of the model, and
   numbers the constraint's rows inside it from `row_start`. It calls the
   nimblend `group(coord=, start=)`: nimopt requires the nimblend release that
