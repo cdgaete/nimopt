@@ -22,6 +22,7 @@ import numpy as np
 import numpy.typing as npt
 
 from nimopt import Definition, Sum
+from nimopt.models._arithmetic import scenarios
 
 FLEET = (
     ("base", 120.0, 40.0, 20.0, 400.0),
@@ -61,24 +62,6 @@ def definition() -> Definition:
     return d
 
 
-def _scenarios(
-    scale: int,
-) -> tuple[list[str], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    """Return the scenario names, their level and their probability.
-
-    Each of `SCENARIO` splits into `scale` draws spread by `SPREAD` about its
-    level, each with an equal share of its probability. The probabilities sum
-    to one at every scale.
-    """
-    names, level, weight = [], [], []
-    for name, centre, share in SCENARIO:
-        for k in range(scale):
-            names.append(f"{name}{k}")
-            level.append(centre * (1.0 + SPREAD * (k - (scale - 1) / 2)))
-            weight.append(share / scale)
-    return names, np.array(level), np.array(weight)
-
-
 def data(scale: int = 1) -> dict[str, Any]:
     """Return inputs for `3 * scale` scenarios over the scaled hours.
 
@@ -89,7 +72,7 @@ def data(scale: int = 1) -> dict[str, Any]:
     fleet totals 260.0 against a coldest third hour of 268.75, and that hour
     sheds whatever is committed.
     """
-    names, level, weight = _scenarios(scale)
+    names, level, weight = scenarios(SCENARIO, SPREAD, scale)
     return {
         "S": np.array(names),
         "G": np.array([name for name, _, _, _, _ in FLEET]),

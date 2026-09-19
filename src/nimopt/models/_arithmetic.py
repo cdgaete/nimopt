@@ -1,7 +1,27 @@
 """The arithmetic a model's reference is computed with, independent of nimopt."""
 
+from collections.abc import Sequence
+
 import numpy as np
 import numpy.typing as npt
+
+
+def scenarios(
+    scenario: Sequence[tuple[str, float, float]], spread: float, scale: int
+) -> tuple[list[str], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    """Return the names, the levels and the probabilities of a scenario table.
+
+    Each entry of `scenario` is a name, a center and a probability. It splits
+    into `scale` draws spread by `spread` about its center, each with an equal
+    share of its probability. The probabilities sum to one at every scale.
+    """
+    names, level, weight = [], [], []
+    for name, center, share in scenario:
+        for k in range(scale):
+            names.append(f"{name}{k}")
+            level.append(center * (1.0 + spread * (k - (scale - 1) / 2)))
+            weight.append(share / scale)
+    return names, np.array(level), np.array(weight)
 
 
 def merit_order(
