@@ -311,15 +311,14 @@ def _bounds_of(variable: Any, where: Any = None) -> tuple[float, float]:
     read at its coordinates only.
     """
     found = []
-    for which, reduce in (("lower", np.min), ("upper", np.max)):
+    for which, op in (("lower", "min"), ("upper", "max")):
         held = variable.bound_array(which)
         if isinstance(held, float):
             found.append(held)
             continue
         if where is not None:
             held = held.restrict(where)
-        values = held.values()
-        found.append(float(reduce(values)) if values.size else 0.0)
+        found.append(getattr(held, op)() if held.nnz else 0.0)
     return found[0], found[1]
 
 
