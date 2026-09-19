@@ -18,12 +18,13 @@ from nimopt.explanation import (
     set_shape,
     variable_shape,
 )
-from nimopt.model import Model, check_sense, objective_expression
+from nimopt.model import Model, objective_expression
 from nimopt.names import check_addressable, check_one_kind
 from nimopt.param import Param
 from nimopt.piecewise import Piecewise, check_not_generated, taken
 from nimopt.progress import reporter
 from nimopt.sets import Alias, Set, check_members, condition_dims
+from nimopt.solvers.base import check_sense
 from nimopt.syntax import render
 from nimopt.term import ParamRef
 from nimopt.variable import Variable

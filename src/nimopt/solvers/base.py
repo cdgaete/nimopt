@@ -170,6 +170,12 @@ class Capabilities:
         return not (integer and self.rejects("integrality", "duals"))
 
 
+def check_sense(sense: str) -> None:
+    """Raise ValueError for a sense other than "min" and "max"."""
+    if sense not in ("min", "max"):
+        raise ValueError(f"sense is 'min' or 'max'; got {sense!r}")
+
+
 def proved_bound(status: str, objective: float, reported: float | None) -> float | None:
     """Return the bound a solver proved on the optimal objective, or None.
 

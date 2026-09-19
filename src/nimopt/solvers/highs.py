@@ -17,7 +17,7 @@ import numpy.typing as npt
 if TYPE_CHECKING:
     from nimopt.model import Assembled
 
-from nimopt.solvers.base import Capabilities, Result, proved_bound
+from nimopt.solvers.base import Capabilities, Result, check_sense, proved_bound
 from nimopt.solvers.options import translated
 
 BACKEND = "highspy"
@@ -148,8 +148,7 @@ def solve(
     """
     import highspy
 
-    if sense not in SENSES:
-        raise ValueError(f"sense is 'min' or 'max'; got {sense!r}")
+    check_sense(sense)
     settings = translated(options, OPTION_NAMES, OPTION_VALUES, solver="highs")
     if settings.get("solver") == "hipo" and not hipo_available():
         raise RuntimeError(

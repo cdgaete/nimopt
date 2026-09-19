@@ -25,7 +25,7 @@ import numpy.typing as npt
 if TYPE_CHECKING:
     from nimopt.model import Assembled
 
-from nimopt.solvers.base import Capabilities, Result, proved_bound
+from nimopt.solvers.base import Capabilities, Result, check_sense, proved_bound
 from nimopt.solvers.options import translated
 
 BACKEND = "mosek"
@@ -220,8 +220,7 @@ def solve(
     """
     import mosek
 
-    if sense not in SENSES:
-        raise ValueError(f"sense is 'min' or 'max'; got {sense!r}")
+    check_sense(sense)
     settings = translated(options, OPTION_NAMES, OPTION_VALUES, solver="mosek")
     task = _loaded(mosek, _configured(mosek, settings), assembled, sense)
     try:

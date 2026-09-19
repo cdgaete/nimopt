@@ -24,6 +24,7 @@ from nimopt.param import Param
 from nimopt.piecewise import Piecewise, check_not_generated, generate
 from nimopt.progress import reporter
 from nimopt.sets import Alias
+from nimopt.solvers.base import check_sense
 from nimopt.symbol import read_at_its_sets
 from nimopt.syntax import render
 from nimopt.term import Expression
@@ -68,12 +69,6 @@ class _Written:
         """Report that the pass is finished."""
         if self.held is not None:
             self.held.done()
-
-
-def check_sense(sense: str) -> None:
-    """Raise ValueError for a sense other than "min" and "max"."""
-    if sense not in ("min", "max"):
-        raise ValueError(f"sense is 'min' or 'max'; got {sense!r}")
 
 
 def objective_expression(expression: Any) -> Expression:

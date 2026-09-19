@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from nimopt.model import Assembled
 
 from nimopt.row import senses
-from nimopt.solvers.base import Capabilities, Result, proved_bound
+from nimopt.solvers.base import Capabilities, Result, check_sense, proved_bound
 from nimopt.solvers.options import translated
 
 BACKEND = "gurobipy"
@@ -148,8 +148,7 @@ def solve(
     import gurobipy as gp
     from gurobipy import GRB
 
-    if sense not in SENSES:
-        raise ValueError(f"sense is 'min' or 'max'; got {sense!r}")
+    check_sense(sense)
     env = gp.Env(
         params={
             "OutputFlag": 0,
