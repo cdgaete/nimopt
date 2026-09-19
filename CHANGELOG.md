@@ -14,13 +14,13 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 ### Changed
 
-- `Model.row` raises `ValueError`, not `KeyError`, for a coordinate label
-  that is not a member of the constraint's dimension.
+- `Model.row` raises `ValueError` for a coordinate label that is not a member
+  of the constraint's dimension.
 - The message for a `Sum(..., where=)` condition with no name matches the
   message `files.structure` raises for the same defect: it identifies the
   owner and the slot.
-- A coefficient read at dimensions other than its own raises `is declared
-  over`, the wording a parameter and a variable already raise.
+- A coefficient, a parameter and a variable read at dimensions other than
+  their own raise one wording, `is declared over`.
 - `Constraint.write_into` takes the coordinate of every row of the model, and
   numbers the constraint's rows inside it from `row_start`. It calls the
   nimblend `group(coord=, start=)`: nimopt requires the nimblend release that
@@ -54,8 +54,7 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
 
 - A single `Set` or `Alias` given to `Variable`, `Param`, `Param.from_dense`,
   `Param.from_long`, `product`, `subset` or `subset_of` in place of a list of
-  sets raises `TypeError` with the owner and a hint, not `'Set' object is
-  not iterable`.
+  sets raises `TypeError` with the owner and a hint.
 - A bound message writes a timedelta member as a count and a unit, such as
   `'3 h'`, and `Diagnosis` writes a datetime coordinate as its ISO text. Every
   message and display writes a member in the form a model file reads.
@@ -67,7 +66,7 @@ versions follow <https://semver.org/spec/v2.0.0.html>.
   `Model.constraint`, `Model.var`, `Sum` and the `Definition` methods. A
   `Definition` raises when the declaration is made.
 - A condition that is not a parameter, a tuple of sets or a domain, such as a
-  list or a string, raises `ValueError`, not `AttributeError`.
+  list or a string, raises `ValueError`.
 - A set, an alias, a parameter, a variable or a piecewise declaration named by
   a Python keyword, such as `lambda`, raises `ValueError`. A `Definition`
   raises when the declaration is made, and a `Model` when it is written.
