@@ -3160,7 +3160,7 @@ coordinates are present, and it records no numbering origin.
 | `positions_of(array)` | each entry of `array` as its position here, `-1` where absent |
 | `positions_of_coordinates(index)` | each column of an index matrix as its position here, `-1` where absent |
 | `expand(dims, coords)` | every member crossed with the full extent of the named dimensions |
-| `transpose(*dims)` | the same members, over the dimensions in the order given |
+| `transpose(*dims)` | the same members, over the dimensions in the order given, or reversed when none are given |
 | `as_coord(start=0)` | the domain read as a coordinate, its members numbered from `start` |
 | `array(values, absence="empty")` | the members with one value each, as a `SparseArray` |
 | `identity(into, coord, start=0)` | each member paired with its own position along `into`, valued 1.0 |
