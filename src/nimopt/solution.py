@@ -10,7 +10,8 @@ from nimblend import DenseArray, Domain, SparseArray
 from nimopt.names import ROW
 
 if TYPE_CHECKING:
-    from nimopt.model import Assembled, Model
+    from nimopt.assembly import Assembled
+    from nimopt.model import Model
 
 NO_FINITE_OPTIMUM = ("unbounded", "unbounded_or_infeasible")
 

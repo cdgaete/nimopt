@@ -1,12 +1,13 @@
 """An LP/MILP builder whose constraint blocks are labeled sparse arrays."""
 
 from nimopt.absence import Absence
+from nimopt.assembly import Assembled
 from nimopt.coefficient import Coefficient
 from nimopt.constraint import Constraint
 from nimopt.definition import Definition
 from nimopt.explanation import Explanation
 from nimopt.files import dumps, load, loads, save
-from nimopt.model import Assembled, Model
+from nimopt.model import Model
 from nimopt.names import COLUMN, ROW
 from nimopt.param import Param
 from nimopt.piecewise import Piecewise

@@ -1,5 +1,9 @@
+import ast
+from pathlib import Path
+
 import numpy as np
 
+import nimopt as no
 from nimopt.model import Model
 from nimopt.param import Param
 from nimopt.sets import Set
@@ -146,3 +150,32 @@ def test_assembly_does_not_hold_a_block_per_constraint():
     # and does not grow with the number of constraints
     assert nine["matrix_mb"] > three["matrix_mb"] * 2.5, (three, nine)
     assert nine["excess_mb"] < three["excess_mb"] * 1.5, (three, nine)
+
+
+def model_module():
+    return ast.parse(Path(no.__file__).with_name("model.py").read_text())
+
+
+def test_assembled_is_defined_in_the_assembly_module():
+    assert no.Assembled.__module__ == "nimopt.assembly"
+
+
+def test_the_model_module_imports_no_nimblend_name():
+    # model.py declares; assembly.py builds the matrix
+    imported = [
+        node.lineno
+        for node in ast.walk(model_module())
+        if isinstance(node, ast.ImportFrom) and node.module == "nimblend"
+    ]
+    assert imported == []
+
+
+def test_the_model_module_imports_at_module_level_alone():
+    nested = [
+        node.lineno
+        for function in ast.walk(model_module())
+        if isinstance(function, ast.FunctionDef)
+        for node in ast.walk(function)
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+    ]
+    assert nested == []

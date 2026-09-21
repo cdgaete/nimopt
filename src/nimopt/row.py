@@ -9,7 +9,8 @@ import numpy.typing as npt
 from nimopt.sets import as_label, label_text, shown
 
 if TYPE_CHECKING:
-    from nimopt.model import Assembled, Model
+    from nimopt.assembly import Assembled
+    from nimopt.model import Model
 
 
 @dataclass(frozen=True)

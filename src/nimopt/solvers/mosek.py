@@ -23,7 +23,7 @@ import numpy as np
 import numpy.typing as npt
 
 if TYPE_CHECKING:
-    from nimopt.model import Assembled
+    from nimopt.assembly import Assembled
 
 from nimopt.solvers.base import (
     Capabilities,
