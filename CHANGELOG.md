@@ -38,6 +38,9 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
   `tests/test_pypsa_fidelity.py`.
 - The `nimblend` domains page documents `as_coord()` and the coordinates
   without a `start`.
+- `benchmarks/pypsa_findings.md` reports the European network built by PyPSA
+  on its nimopt and its linopy backend: solved at 24 snapshots, and built over
+  the 2920 snapshots of the year.
 
 ### Removed
 
