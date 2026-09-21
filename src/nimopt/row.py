@@ -1,4 +1,4 @@
-"""One row of a built model, read back from the matrix it was assembled into."""
+"""One row of a built model: its terms, its sense and its bounds."""
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -27,8 +27,7 @@ class RowTerm:
 class Row:
     """A row as the matrix stores it: its terms, its sense and its bounds.
 
-    The row is read from a matrix the assembly pass writes, not from a second
-    walk of the expression.
+    The row contains the entries the assembly pass writes for it.
     """
 
     constraint: str

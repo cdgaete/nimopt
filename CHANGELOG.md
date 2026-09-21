@@ -40,8 +40,8 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 - `Session.solve` and `Session.diagnose` raise `ValueError` where the model
   sets its objective after the session opened.
-- `Model.row` writes the named constraint alone. It assembles no other
-  constraint and no objective.
+- `Model.row` computes the entries of the named row alone. It builds no
+  matrix and no other row.
 
 ## 0.20260919.0 - 2026-09-19
 

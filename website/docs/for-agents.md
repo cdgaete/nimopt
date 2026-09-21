@@ -30,10 +30,9 @@ vocabulary a model is written in, `set`, `param`, `var`, `constraint` and
 a `Model`. One definition builds a model for each dataset it is given.
 
 **A built model is inspected through three methods.** `explain()` reports
-what it built, and `row(name, **coords)` reads one row out of the assembled
-matrix. `absent(name)` reports which coordinates were dropped from a
-constraint and by which rule. All three read the assembled model, and none
-walks the expression a second time.
+what it built. `row(name, **coords)` computes one row: the entries `assemble`
+writes for it, and no other row. `absent(name)` reports which coordinates
+were dropped from a constraint and by which rule.
 
 **A session keeps the solver open.** `model.session()` assembles once and
 keeps the solver's model. `diagnose()` queries the solved instance for the

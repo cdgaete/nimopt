@@ -116,7 +116,7 @@ transport  min  not built
 </details>
 <!-- /output -->
 
-A definition is copied before it is bound. One definition builds a model for each dataset it is given, and no build changes the definition. The built model is inspected the same way. `row()` reads one row out of the assembled matrix in the form passed to the solver.
+A definition is copied before it is bound. One definition builds a model for each dataset it is given, and no build changes the definition. The built model is inspected the same way. `row()` computes one row of the assembled matrix in the form passed to the solver.
 
 ```python
 import numpy as np

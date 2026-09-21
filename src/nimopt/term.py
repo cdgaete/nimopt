@@ -172,7 +172,11 @@ class Term:
         )
 
     def materialise(
-        self, frame: Sequence[str], coords: Mapping[str, Any], record: Any = None
+        self,
+        frame: Sequence[str],
+        coords: Mapping[str, Any],
+        record: Any = None,
+        at: Mapping[str, Any] | None = None,
     ) -> SparseArray:
         """Return the term's coefficients over `(*frame, COLUMN)`.
 
@@ -182,13 +186,18 @@ class Term:
         multiplies. Each summed dimension is reduced last. A frame wider than
         the term's own dimensions is filled by replication. A coefficient over
         dimensions the variable has none of is replicated over the variable's
-        own dimensions first.
+        own dimensions first. `at` maps each dimension of the frame to one
+        label, and the array is then over `(COLUMN,)` at that coordinate.
         """
         array = self.variable.terms()
         for dim, (amount, mode) in self.shifts.items():
             array = array.shift({dim: amount}, mode=mode)
         if self.fixed:
             array = array.sel(self.fixed)
+        if at is not None and self.where is None:
+            early = {d: at[d] for d in array.dims if d in at and d not in self.summed}
+            if early:
+                array = array.sel(early)
         if self.coefficient is not None:
             values = self.coefficient.materialise()
             apart = tuple(d for d in values.dims if d not in array.dims)
@@ -206,7 +215,12 @@ class Term:
             array = array * self.scale
         for dim in self.summed:
             array = array.sum(dim)
-        return array.broadcast((*frame, COLUMN), coords)
+        if at is None:
+            return array.broadcast((*frame, COLUMN), coords)
+        late = {d: at[d] for d in array.dims if d in at}
+        if late:
+            array = array.sel(late)
+        return array.broadcast((COLUMN,), coords)
 
 
 class ParamRef(Reference):
@@ -452,6 +466,25 @@ class Expression:
             rows = rows.intersect(spanned)
             total = total + block
         return total, rows
+
+    def materialise_at(self, at: Mapping[str, Any]) -> SparseArray:
+        """Return the coefficients at one coordinate of the frame, over `(COLUMN,)`.
+
+        `at` maps each dimension of the frame to one label. The entries are
+        the entries of `materialise` at that coordinate. Raises ValueError for
+        an `at` over other dimensions than the frame.
+        """
+        if set(at) != set(self.frame):
+            raise ValueError(
+                f"expression is free over {self.frame} and at is over "
+                f"{tuple(at)}; pass one label per dimension of the frame"
+            )
+        coords = self.coords
+        blocks = [term.materialise(self.frame, coords, at=at) for term in self.terms]
+        total = blocks[0]
+        for block in blocks[1:]:
+            total = total + block
+        return total
 
 
 def Sum(*args: Any, where: Any = None) -> "Expression":

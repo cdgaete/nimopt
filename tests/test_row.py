@@ -1,8 +1,11 @@
+import importlib
+
 import nimblend as nb
 import numpy as np
 import pytest
 
-from nimopt import Expression, Model, Param, Row, Set
+from nimopt import Expression, Model, Param, Row, Set, Sum
+from nimopt.models import MODELS
 from nimopt.row import read, resolve
 from test_definition import data, dispatch, nodal, nodal_data
 
@@ -144,24 +147,9 @@ def test_every_row_equals_the_row_of_the_assembled_matrix():
         assert m.row(expected.constraint, **expected.coordinate) == expected
 
 
-def test_a_row_materialises_its_own_constraint_and_no_other(monkeypatch):
-    # an assembly for one row materialises every constraint and the objective
-    m = nodal().build(nodal_data())
-    calls = []
-    materialise = Expression.materialise
-
-    def counted(self, *args, **kwargs):
-        calls.append(self)
-        return materialise(self, *args, **kwargs)
-
-    monkeypatch.setattr(Expression, "materialise", counted)
-    m.row("live", B="b0", T=0)
-    assert len(calls) == 1
-    assert calls[0] is m.constraints["live"].expression
-
-
 def test_a_row_decodes_the_labels_of_that_row_alone(monkeypatch):
-    # the constraint has 6 rows; decoding every row reads all 6
+    # the constraint has 6 rows; decoding every row reads all 6, and each
+    # decode here reads the one row
     m = nodal().build(nodal_data())
     rows = m.constraints["balance"].rows
     decoded = []
@@ -174,4 +162,70 @@ def test_a_row_decodes_the_labels_of_that_row_alone(monkeypatch):
 
     monkeypatch.setattr(nb.Domain, "labels", counted)
     m.row("balance", B="b1", T=2)
-    assert decoded == [1]
+    assert decoded
+    assert set(decoded) == {1}
+
+
+def rows_equal_their_assembled_rows(m):
+    # a dozen rows of each constraint, spread over its range
+    a = m.assemble()
+    for name in m.constraints:
+        at = a.row_of(name)
+        if at.stop == at.start:
+            continue
+        for index in np.unique(np.linspace(at.start, at.stop - 1, 12).astype(int)):
+            expected = read(m, a, int(index))
+            assert m.row(name, **expected.coordinate) == expected
+
+
+@pytest.mark.parametrize("name", MODELS)
+def test_a_row_of_every_corpus_constraint_equals_its_assembled_row(name):
+    held = importlib.import_module(f"nimopt.models.{name}")
+    rows_equal_their_assembled_rows(held.definition().build(held.data()))
+
+
+def test_a_row_of_every_piecewise_constraint_equals_its_assembled_row():
+    # the generated rows read the segment after the current one
+    from test_piecewise import cost_model
+
+    rows_equal_their_assembled_rows(cost_model())
+
+
+def test_a_row_of_a_sum_over_a_free_dimension_sums_every_member():
+    # the second term sums G, over which the first term is free
+    G = Set("G", np.array(["a", "b", "c"]))
+    T = Set("T", np.array([0, 1]))
+    m = Model("m")
+    p = m.var("p", (G, T))
+    m.constraint("share", p[G, T] - 0.5 * Sum(G, p[G, T]) <= 0.0)
+    row = m.row("share", G="b", T=1)
+    assert [t.coefficient for t in row.terms] == [-0.5, 0.5, -0.5]
+    rows_equal_their_assembled_rows(m)
+
+
+def test_a_row_materialises_no_whole_expression(monkeypatch):
+    # the row is computed at its coordinate
+    m = nodal().build(nodal_data())
+
+    def whole(self, *args, **kwargs):
+        raise AssertionError("Model.row materialized a whole expression")
+
+    monkeypatch.setattr(Expression, "materialise", whole)
+    assert m.row("balance", B="b1", T=2).constraint == "balance"
+
+
+def test_row_at_returns_the_columns_coefficients_and_bounds_of_a_row():
+    m = nodal().build(nodal_data())
+    a = m.assemble()
+    index = a.row_of("live").start + 1
+    columns, values, lower, upper = m.constraints["live"].row_at(1)
+    span = slice(a.indptr[index], a.indptr[index + 1])
+    assert columns.tolist() == a.indices[span].tolist()
+    assert values.tolist() == a.values[span].tolist()
+    assert (lower, upper) == (a.row_lower[index], a.row_upper[index])
+
+
+def test_materialise_at_other_dimensions_than_the_frame_raises():
+    m = nodal().build(nodal_data())
+    with pytest.raises(ValueError, match="expression is free over"):
+        m.constraints["balance"].expression.materialise_at({"B": "b0"})

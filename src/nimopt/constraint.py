@@ -134,6 +134,24 @@ class Constraint:
             )
         return at
 
+    def row_at(
+        self, position: int
+    ) -> tuple[npt.NDArray[np.int32], npt.NDArray[np.float64], float, float]:
+        """Return the columns, coefficients and bounds of the row at `position`.
+
+        The columns ascend. The coefficients are the entries `write_into`
+        writes for that row. Raises ValueError for a position outside the
+        rows.
+        """
+        labels = self.labels_at([position])
+        block = self.expression.materialise_at(
+            {d: held[0] for d, held in labels.items()}
+        )
+        value = float(self._rhs_values[position])
+        lower = value if self.sense in (">=", "==") else -np.inf
+        upper = value if self.sense in ("<=", "==") else np.inf
+        return block.coordinates()[0], block.values(), lower, upper
+
     def write_bounds(
         self, lower: npt.NDArray[np.float64], upper: npt.NDArray[np.float64]
     ) -> None:

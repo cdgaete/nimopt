@@ -7,7 +7,7 @@ import numpy as np
 import numpy.typing as npt
 
 from nimopt.absence import Absence, Recorder
-from nimopt.assembly import Assembled, Written, assemble_model, matrix_of
+from nimopt.assembly import Assembled, assemble_model
 from nimopt.coefficient import Coefficient
 from nimopt.constraint import Constraint, narrow
 from nimopt.explanation import (
@@ -355,34 +355,23 @@ class Model:
             raise KeyError(f"{name!r} is a variable, not a constraint; {valid}")
         raise KeyError(f"model {self.name!r} has no constraint {name!r}; {valid}")
 
-    def row(self, name: str, **coords: Any) -> "Row":
+    def row(self, name: str, **coords: Any) -> Row:
         """Return one row of this model's matrix, at the coordinate given.
 
-        The row is written by the pass `assemble` runs, for the named
-        constraint alone, and is the row the solver is given. Its index is its
-        position in the assembled matrix. Raises KeyError for a name that is
-        not a declared constraint. Raises ValueError for a label that is not a
-        member of its dimension. Raises ValueError for a coordinate the
-        constraint has no row at; the message refers to `absent`.
+        The row contains the entries `assemble` writes for it, and is the row
+        the solver is given. Its index is its position in the assembled
+        matrix. Raises KeyError for a name that is not a declared constraint.
+        Raises ValueError for a label that is not a member of its dimension.
+        Raises ValueError for a coordinate the constraint has no row at; the
+        message refers to `absent`.
         """
         constraint = self._constraint(name)
         position = constraint.position_of(coords)
-        matrix, _, lower, upper = matrix_of(
-            {name: constraint}, self._n_columns, Written(None, 0, "")
-        )
-        indices, values, indptr = matrix.to_csr()
+        columns, values, lower, upper = constraint.row_at(position)
         names = tuple(self.constraints)
         start = sum(self.constraints[n].n_rows for n in names[: names.index(name)])
-        span = slice(indptr[position], indptr[position + 1])
         return written(
-            self,
-            name,
-            start + position,
-            position,
-            indices[span],
-            values[span],
-            float(lower[position]),
-            float(upper[position]),
+            self, name, start + position, position, columns, values, lower, upper
         )
 
     def absent(self, name: str) -> "Absence":
