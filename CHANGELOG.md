@@ -18,6 +18,11 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+### Fixed
+
+- `Session.solve` and `Session.diagnose` raise `ValueError` where the model
+  sets its objective after the session opened.
+
 ## 0.20260919.0 - 2026-09-19
 
 ### Changed

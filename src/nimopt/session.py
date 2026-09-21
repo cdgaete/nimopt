@@ -104,6 +104,7 @@ class Session:
         self.solver = solver
         self.assembled = model.assemble(progress=progress)
         self._declared = self._declarations()
+        self._objective = model.objective
         self.options = options
         self._adapter = adapter(solver)
         self._backend = None
@@ -149,18 +150,26 @@ class Session:
         return tuple(self.model.variables), tuple(self.model.constraints)
 
     def _require_current(self) -> None:
-        """Raise ValueError where the model declares names after the session opened."""
+        """Raise ValueError where the model changed after the session opened.
+
+        A change is a declared variable or constraint, or a set objective.
+        """
         if self._declarations() != self._declared:
             raise ValueError(
                 f"model {self.model.name!r} declares variables or constraints "
                 f"that are not in the assembled matrix; open a new Session"
             )
+        if self.model.objective is not self._objective:
+            raise ValueError(
+                f"model {self.model.name!r} sets its objective after the "
+                f"session opened; open a new Session"
+            )
 
     def solve(self) -> Solution:
         """Solve this session's matrix and read the values back onto its sets.
 
-        Raises ValueError where the model declares a variable or a constraint
-        after the session opened.
+        Raises ValueError where the model declares a variable or a constraint,
+        or sets its objective, after the session opened.
         """
         self._require_current()
         result = self._adapter.solve(self.assembled, self.model.sense, self.options)
@@ -191,7 +200,8 @@ class Session:
         model is solved a second time.
 
         Raises ValueError before the first solve, and where the model declares
-        a variable or a constraint after the session opened.
+        a variable or a constraint, or sets its objective, after the session
+        opened.
         """
         self._require_current()
         if self._status is None:

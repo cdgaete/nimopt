@@ -239,3 +239,24 @@ def test_a_diagnosis_reads_as_the_rows_that_conflict():
         rendered = repr(session.diagnose())
     assert rendered.startswith("infeasible  highs  conflict native")
     assert "balance[snapshot=1]" in rendered
+
+
+def test_an_objective_set_after_the_session_opened_raises():
+    # the session's matrix contains the costs of the earlier objective; a
+    # solve reported those costs with the constant of the later objective
+    T = Set("T", np.arange(3))
+    m = Model("m")
+    x = m.var("x", (T,), upper=10.0)
+    m.constraint("floor", x[T] >= 2.0)
+    m.set_objective(Sum(T, x[T]) + 100.0)
+    message = re.escape(
+        "model 'm' sets its objective after the session opened; open a new Session"
+    )
+    with m.session() as session:
+        assert session.solve().objective == pytest.approx(106.0)
+        m.set_objective(5.0 * Sum(T, x[T]) + 1.0)
+        with pytest.raises(ValueError, match=message):
+            session.solve()
+        with pytest.raises(ValueError, match=message):
+            session.diagnose()
+    assert m.solve().objective == pytest.approx(31.0)
