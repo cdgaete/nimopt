@@ -26,6 +26,9 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
   coordinate.
 - `dumps(what, inline=False, instructions=False, version=4)` returns the text
   of a definition's file or a model's file. `loads` reads it.
+- `Constraint.row_at(position)` returns the columns, the coefficients and the
+  bounds of one row. `Expression.materialise_at(at)` returns the coefficients
+  at one coordinate of the frame.
 
 ### Changed
 

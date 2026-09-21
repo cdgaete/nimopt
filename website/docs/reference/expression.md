@@ -38,6 +38,7 @@ materialised.
 | `frame` | the dimensions it is indexed over |
 | `coords` | the coordinates of that frame |
 | `materialise()` | its coefficients as a `nimblend` array |
+| `materialise_at(at)` | its coefficients at one coordinate of the frame, as a `nimblend` array over the column dimension |
 
 ```python
 import numpy as np
