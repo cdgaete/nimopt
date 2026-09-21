@@ -18,6 +18,8 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+## 0.20260921.0 - 2026-09-21
+
 ### Added
 
 - `Constraint.labels_at(positions)` and `Variable.labels_at(positions)`
