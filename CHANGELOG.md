@@ -18,6 +18,33 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+### Added
+
+- `tests/test_pdlp.py` solves with `options={"method": "pdlp"}` and checks
+  the optimum, the row duals against simplex and the PDLP line of the HiGHS
+  log. It is skipped unless `NIMOPT_TEST_PDLP=1`. PDLP on a GPU requires an
+  NVIDIA driver and a HiGHS built from source with CUDA.
+
+### Changed
+
+- A `Variable` numbers its own coordinate from 0 and passes no `start` to a
+  `nimblend` coordinate.
+- The `pypsa` rung of `benchmarks/bench_vs_linopy.py` builds the European
+  network through the nimopt and the linopy backend of PyPSA.
+  `benchmarks/bench_pypsa_backend.py` reports the linopy column count without
+  the objective constant column.
+- `pypsa_network.py`, `pypsa_fidelity.py` and `pypsa_reference.py` are in
+  `tests/`. `pypsa_network.py` is the PyPSA-free fixture of
+  `tests/test_pypsa_fidelity.py`.
+- The `nimblend` domains page documents `as_coord()` and the coordinates
+  without a `start`.
+
+### Removed
+
+- `benchmarks/pdlp_gpu.py`, which passed the matrix to highspy outside
+  `Session`, and `benchmarks/bench_pypsa.py`, which built a second
+  formulation of the PyPSA model.
+
 ## 0.20260921.0 - 2026-09-21
 
 ### Added
