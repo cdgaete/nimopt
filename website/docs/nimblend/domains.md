@@ -33,7 +33,7 @@ coordinates are present, and it records no numbering origin.
 | `positions_of_coordinates(index)` | each column of an index matrix as its position here, `-1` where absent |
 | `expand(dims, coords)` | every member crossed with the full extent of the named dimensions |
 | `transpose(*dims)` | the same members, over the dimensions in the order given, or reversed when none are given |
-| `as_coord(start=0)` | the domain read as a coordinate, its members numbered from `start` |
+| `as_coord()` | the domain as a coordinate, each member at its rank |
 | `array(values, absence="empty")` | the members with one value each, as a `SparseArray` |
 | `identity(into, coord, start=0)` | each member paired with its own position along `into`, valued 1.0 |
 
@@ -100,9 +100,9 @@ matrix behind one, and a caller with positions queries without building an
 array. A member the domain does not have returns `-1`, and a membership test
 is `>= 0`.
 
-`as_coord` reads the domain as a coordinate: a member's position is its
-rank among the members present, numbered from `start`. This is how a
-dimension spanning a subset of a product is numbered.
+`as_coord` returns the domain as a coordinate: a member's position is its
+rank among the members present. This is how a dimension over a subset of a
+product is numbered.
 
 ```python
 import numpy as np
@@ -122,7 +122,7 @@ asked = np.array([[0, 1, 1], [0, 1, 2]], dtype=np.int32)
 print(pairs.positions_of_coordinates(asked))
 print(pairs.positions_of_coordinates(asked) >= 0)
 
-numbered = pairs.as_coord(100)
+numbered = pairs.as_coord()
 print(numbered.to_position(asked[:, :2]))
 ```
 
@@ -133,15 +133,15 @@ print(numbered.to_position(asked[:, :2]))
 ```text
 [ 0  1 -1]
 [ True  True False]
-[100 101]
+[0 1]
 ```
 
 </details>
 <!-- /output -->
 
 `("porto", "rome")` is not a member, and the query returns `-1`. The other
-two are the first and second members of the domain, and `as_coord(100)`
-numbers them from 100.
+two are the first and second members of the domain, and `as_coord()`
+numbers them 0 and 1.
 
 ## Crossing a domain with further dimensions
 
@@ -273,8 +273,7 @@ ValueError: a domain of 3 member(s) requires values of shape (3,); got shape (2,
 
 `identity(into, coord, start)` pairs each member with its own position along
 a new dimension, valued 1.0. The position of a member is its rank plus
-`start`, the numbering `as_coord(start)` uses. An array built one way and a
-coordinate built the other place a member at the same position. `coord` is
+`start`, and the rank is its position under `as_coord()`. `coord` is
 the coordinate of the new dimension. It spans the whole extent the positions
 are numbered into. That extent is wider than these members where several
 domains share one numbering.
@@ -334,8 +333,8 @@ dimension determines which of the three is used.
 | Coordinate | Is | Used for |
 | --- | --- | --- |
 | `StoredCoord(labels)` | labels stored as an array | a dimension whose members have labels |
-| `ProductCoord(sizes, start=0)` | positions of a full product, numbered from `start` | a dimension whose positions are computed, such as a variable's columns |
-| `SubsetCoord(codes, sizes, start=0)` | positions of a subset of a product, numbered from `start` in code order | a variable over a subset, where a position is a rank among the codes |
+| `ProductCoord(sizes)` | positions of a full product | a dimension whose positions are computed, such as a variable's columns |
+| `SubsetCoord(codes, sizes)` | positions of a subset of a product, in code order | a variable over a subset, where a position is a rank among the codes |
 
 `SubsetCoord` gives the position of an entry as its rank among the codes. A
 block already in canonical order needs no lookup.
@@ -374,7 +373,9 @@ stores the codes `0` and `4`, the same two members, and returns their
 ranks.
 
 `to_position` takes an index matrix of one row per dimension, and each
-column is one entry.
+column is one entry. Every coordinate numbers its positions from 0 to its
+extent less one. `ProductCoord` and `SubsetCoord` raise `KeyError` for a cell
+outside their sizes.
 
 ## `EntryBuffer`
 

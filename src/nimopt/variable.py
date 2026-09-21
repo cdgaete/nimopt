@@ -66,7 +66,7 @@ class Variable(Symbol):
         self.total_columns = int(total_columns)
         sizes = tuple(len(s) for s in self.sets)
         if self.subset is None:
-            self.coord = ProductCoord(sizes, self.start)
+            self.coord = ProductCoord(sizes)
             return
         members = rows_of(self.subset, None, f"variable {self.name!r}", "subset=")
         if members.dims != self.dims or members.shape != sizes:
@@ -76,7 +76,7 @@ class Variable(Symbol):
                 f"{members.shape}; give members over {self.dims}"
             )
         self._domain = members
-        self.coord = members.as_coord(self.start)
+        self.coord = members.as_coord()
 
     def _bound(self, bound: float | Param, which: str) -> float | Param:
         """Return the bound as given, as a float or a Param.
@@ -148,7 +148,7 @@ class Variable(Symbol):
         are not a one-dimensional integer array and for a position outside
         the columns.
         """
-        coord, start, _ = self._numbered
+        coord = self._numbered[0]
         at = np.asarray(positions)
         if at.ndim != 1:
             raise ValueError(
@@ -164,7 +164,7 @@ class Variable(Symbol):
                 f"position {int(at[outside][0])} is outside the {n} columns of "
                 f"variable {self.name!r}; pass positions of 0 or more and below {n}"
             )
-        index = coord.to_index(at + start)
+        index = coord.to_index(at)
         coords = self.coords
         return {d: coords[d].to_index(index[j]) for j, d in enumerate(self.dims)}
 
@@ -258,9 +258,8 @@ class Variable(Symbol):
         if not isinstance(array, SparseArray):
             target[:] = array
             return
-        coord, start, _total = self._numbered
-        at = coord.to_position(array.coordinates()) - start
-        target[at] = array.values()
+        coord = self._numbered[0]
+        target[coord.to_position(array.coordinates())] = array.values()
 
     def _reject_not_a_number(
         self, covered: Domain, bound: Param, which: str, at: int
