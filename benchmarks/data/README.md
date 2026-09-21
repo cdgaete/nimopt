@@ -17,7 +17,7 @@ constraint families, and solves to 2,662,944,681.859 beside a constant of
 Regenerate both with the network path:
 
 ```bash
-python benchmarks/pypsa_reference.py <path to elec_s_10_ec_lcopt_Co2L-4H.nc>
+python tests/pypsa_reference.py <path to elec_s_10_ec_lcopt_Co2L-4H.nc>
 ```
 
 A regenerated reference with different numbers is a different model, and every

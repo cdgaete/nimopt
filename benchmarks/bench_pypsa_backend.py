@@ -1,8 +1,7 @@
 """The European network through PyPSA itself, on either optimization backend.
 
-`bench_pypsa` compares the nimopt model of the network with the PyPSA linopy
-model. This module compares the two paths a PyPSA user runs: the same network,
-the same `n.optimize` accessor, and the backend switched between `nimopt` and
+This module compares the two paths a PyPSA user runs: the same network, the
+same `n.optimize` accessor, and the backend switched between `nimopt` and
 `linopy`. The phases are the phases PyPSA runs: building the model, passing it
 to the solver, and assigning the solution and the duals back onto the network.
 `compare.measure` samples resident size through each phase and writes the
@@ -42,6 +41,11 @@ METHODS = ("choose", "simplex", "barrier")
 CROSSOVER = ("choose", "off", "on")
 SOLVERS = ("highs", "gurobi", "mosek")
 LINOPY_METHOD = {"choose": "choose", "simplex": "simplex", "barrier": "ipm"}
+
+# linopy adds the objective constant as a column fixed to its value, with no
+# matrix entry; the nimopt backend reports the constant as a number. The
+# column is excluded, and both backends report the same column count.
+CONSTANT_COLUMNS = 1
 
 
 def load(backend, snapshots, network=NETWORK):
@@ -139,7 +143,7 @@ def case(
             matrix = model.matrices.A
             shape = {
                 "rows": int(matrix.shape[0]),
-                "cols": int(matrix.shape[1]),
+                "cols": int(matrix.shape[1]) - CONSTANT_COLUMNS,
                 "nnz": int(matrix.nnz),
                 "matrix_mb": (
                     matrix.indices.nbytes + matrix.nnz * matrix.dtype.itemsize

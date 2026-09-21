@@ -111,21 +111,6 @@ def test_agreement_refuses_a_shape_mismatch_whether_or_not_it_solved():
     assert agree({"nimopt": stated, "linopy": dict(stated)}, {"snapshots": 1}) == stated
 
 
-def test_the_european_case_reports_the_sparsity_it_measured():
-    from bench_pypsa import ARRAYS, nimopt
-
-    if not ARRAYS.exists():
-        pytest.skip(f"generate {ARRAYS} with benchmarks/pypsa_reference.py")
-    case = nimopt(24)
-    got = case.describe(case.build())
-    assert (got["rows"], got["cols"], got["nnz"]) == (162582, 79457, 382520)
-    assert abs(got["nnz"] / got["cols"] - 4.81) < 0.01
-    # the 2,537 nominal columns less those whose capacity term drops at every
-    # hour the component is unavailable, which is the rule that leaves the
-    # extendable generator's upper rows short of two nonzeros a row
-    assert got["dense_cols"] == 2314
-
-
 def test_the_process_peak_is_not_below_a_phase_it_contains():
     pytest.importorskip(
         "linopy", reason="the comparison benchmarks need the bench extra"

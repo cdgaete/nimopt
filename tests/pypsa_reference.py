@@ -271,8 +271,8 @@ def extract(
 if __name__ == "__main__":
     import sys
 
-    here = Path(__file__).resolve().parent
-    got = extract(sys.argv[1], here / "data")
+    data = Path(__file__).resolve().parent.parent / "benchmarks" / "data"
+    got = extract(sys.argv[1], data)
     print(
         f"{got['rows']} rows, {got['cols']} cols, {got['nnz']} nonzeros "
         f"across {len(got['families'])} families"

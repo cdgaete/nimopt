@@ -1,10 +1,9 @@
 import json
-import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "benchmarks"))
 DATA = Path(__file__).parent.parent / "benchmarks" / "data"
 NETWORK = DATA / "elec_s_10.npz"
 
@@ -187,7 +186,7 @@ def test_the_model_solves_to_what_pypsa_solves_to(reference):
 LARGE = DATA / "large" / "eu_24.npz"
 LARGE_REFERENCE = DATA / "large" / "eu_24_reference.json"
 needs_large = pytest.mark.skipif(
-    not LARGE.exists(), reason=f"generate {LARGE} with benchmarks/pypsa_reference.py"
+    not LARGE.exists(), reason=f"generate {LARGE} with tests/pypsa_reference.py"
 )
 
 BALANCE_BLOCKS = (
@@ -320,3 +319,23 @@ def test_the_small_network_still_agrees_family_by_family():
         if sides["rows"][0] != sides["rows"][1] or sides["nnz"][0] != sides["nnz"][1]
     }
     assert not wrong, wrong
+
+
+EU = DATA / "large" / "eu.npz"
+
+
+@pytest.mark.skipif(
+    not EU.exists(), reason=f"generate {EU} with tests/pypsa_reference.py"
+)
+def test_the_european_network_at_24_snapshots_has_the_measured_sparsity():
+    from pypsa_network import Data, model_from
+
+    assembled = model_from(Data(EU, 24)).assemble()
+    nnz = int(assembled.values.size)
+    assert (assembled.n_rows, assembled.n_cols, nnz) == (162582, 79457, 382520)
+    assert abs(nnz / assembled.n_cols - 4.81) < 0.01
+    # the 2,537 nominal columns less those whose capacity term drops at every
+    # hour the component is unavailable, which is the rule that leaves the
+    # extendable generator's upper rows short of two nonzeros a row
+    per_column = np.bincount(assembled.indices, minlength=assembled.n_cols)
+    assert int((per_column >= 24).sum()) == 2314

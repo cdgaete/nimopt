@@ -1,11 +1,12 @@
 """nimopt against linopy: the cost of building the same model in each.
 
-Three models over four axes. Transport puts a variable on a sparse arc
+Four models over four axes. Transport puts a variable on a sparse arc
 network: a subset of the product in nimopt, a masked full product in linopy.
 Storage couples adjacent hours through a ramp limit and a cyclic
 `state_of_charge` row. The integer transport model declares the same network
-as a MILP. Every case also reads its primals and duals back onto their labels,
-and that is the fourth axis.
+as a MILP. The European network is built by PyPSA on its nimopt and its
+linopy backend. Every case also reads its primals and duals back onto their
+labels, and that is the fourth axis.
 
 Each side runs in a process of its own. A row is printed only when the two
 sides agree on rows, columns, nonzeros and the solved objective.
@@ -13,7 +14,7 @@ sides agree on rows, columns, nonzeros and the solved objective.
 
 from pathlib import Path
 
-import bench_pypsa
+import bench_pypsa_backend
 import linopy_models
 import numpy as np
 from bench_storage import build as storage_build
@@ -100,8 +101,18 @@ def transport_milp(n_plants, n_warehouses, arcs_per_plant, seed=0):
     return transport(n_plants, n_warehouses, arcs_per_plant, seed, integer=True)
 
 
+def pypsa(backend):
+    """Return the European network case on one PyPSA optimization backend."""
+
+    def case(snapshots):
+        network = bench_pypsa_backend.load(backend, snapshots)
+        return bench_pypsa_backend.case(network, backend)
+
+    return case
+
+
 CASES = {
-    "pypsa": {"nimopt": bench_pypsa.nimopt, "linopy": bench_pypsa.linopy},
+    "pypsa": {"nimopt": pypsa("nimopt"), "linopy": pypsa("linopy")},
     "transport": {"nimopt": transport, "linopy": linopy_models.transport},
     "storage": {"nimopt": storage, "linopy": linopy_models.storage},
     "transport_milp": {

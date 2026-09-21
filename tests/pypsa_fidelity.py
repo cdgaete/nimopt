@@ -13,8 +13,7 @@ from pathlib import Path
 
 from pypsa_network import build, constant
 
-HERE = Path(__file__).resolve().parent
-DATA = HERE / "data"
+DATA = Path(__file__).resolve().parent.parent / "benchmarks" / "data"
 
 
 def group_of(name):

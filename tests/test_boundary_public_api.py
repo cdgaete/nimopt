@@ -9,7 +9,7 @@ import nimopt as no
 # these adapters read another library's own `index` or `data` -- a scipy
 # matrix's and a pandas frame's. Neither library is the package this boundary
 # is about, and neither module imports nimblend, so neither can bypass it.
-FOREIGN_BUFFERS = ("linopy_models.py", "pypsa_reference.py", "bench_pypsa.py")
+FOREIGN_BUFFERS = ("linopy_models.py", "pypsa_reference.py")
 
 # a `Row` has the solver's own row number as `index`, a nimopt field and not
 # an array's buffer. The scan reads names, not types, and the modules that
