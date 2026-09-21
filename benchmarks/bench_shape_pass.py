@@ -38,6 +38,7 @@ INDEX_AND_VALUE = frozenset(
         "select_axis",
         "shift_axis",
         "canonicalize",
+        "merge_sum",
         "regroup",
     )
 )

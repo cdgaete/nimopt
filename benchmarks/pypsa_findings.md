@@ -12,9 +12,11 @@ the same objective.
 ## Setup
 
 An AMD Ryzen 7 5800X with 8 cores, 16 threads and 62 GB of memory. highspy
-1.15.1, PyPSA 1.3.0, linopy 0.9.1 and numpy 2.5.2. nimopt at `5f3d358` and
-nimblend at `733ed1c`. The one-minute load average read 1.1 before the first
-rung and 4.2 after each rung.
+1.15.1, PyPSA 1.3.0, linopy 0.9.1 and numpy 2.5.2. nimopt and nimblend at the
+commit of this file. The one-minute load average read between 1.1 and 1.8 at
+the start and the end of each rung. Each number is one run. The linopy build
+of the whole year took between 10.1 s and 18.1 s in the runs made for this
+file.
 
 Each phase contains the following work:
 
@@ -37,13 +39,13 @@ columns. Both objectives are 232,416,019,336.75.
 
 | | nimopt | linopy |
 | --- | --- | --- |
-| build | 1,138.6 ms | 2,159.2 ms |
+| build | 897.7 ms | 2,050.3 ms |
 | matrix | 4.6 MB | 6.1 MB |
-| solve | 285.4 s | 210.7 s |
-| read | 4.6 s | 5.2 s |
-| resident added by the solve | 368.0 MB | 484.3 MB |
-| peak resident of the solve | 829.2 MB | 947.2 MB |
-| peak resident of the process | 1,065.8 MB | 1,065.9 MB |
+| solve | 289.8 s | 200.4 s |
+| read | 4.7 s | 4.9 s |
+| resident added by the solve | 286.1 MB | 489.9 MB |
+| peak resident of the solve | 832.7 MB | 949.3 MB |
+| peak resident of the process | 1,065.4 MB | 1,063.2 MB |
 
 The generator dispatch sums to 118,174,790.05 on both backends. The nodal
 prices sum to 10,632,436.32 on the nimopt backend and to 10,636,519.87 on the
@@ -56,43 +58,47 @@ linopy backend. The two solves return different dual points.
 
 | | nimopt | linopy |
 | --- | --- | --- |
-| build | 69.5 s | 18.1 s |
+| build | 22.8 s | 10.1 s |
 | matrix | 557 MB | 742 MB |
-| resident added by the build | 4,321 MB | 4,769 MB |
-| peak resident of the process | 5,035 MB | 5,513 MB |
+| resident added by the build | 3,434 MB | 4,768 MB |
+| peak resident of the process | 4,148 MB | 5,511 MB |
 
 A separate nimopt run times the two parts of the build: `create_model` takes
-37.5 s and `assemble` takes 35.3 s.
+12.0 s and `assemble` takes 10.4 s.
 
 ## What the numbers show
 
 **The nimopt build is faster at twenty-four snapshots and slower over the
-year.** It takes 1.14 s against 2.16 s at twenty-four snapshots, and 69.5 s
-against 18.1 s over the year. For a horizon 122 times longer, the nimopt build
-time grows 61 times and the linopy build time grows 8.4 times.
+year.** It takes 0.90 s against 2.05 s at twenty-four snapshots, and 22.8 s
+against 10.1 s over the year. For a horizon 122 times longer, the nimopt build
+time grows 25 times and the linopy build time grows 4.9 times.
 
-**Over the year the nimopt build has two parts of equal size.**
-`create_model` translates the network and declares the nimopt model in 37.5 s.
-`assemble` writes the matrix in 35.3 s. linopy builds its model and its matrix
-in 18.1 s.
+**Over the year the nimopt build materialises every expression twice.**
+`create_model` declares the constraints, and the shape pass of the
+declaration materialises each expression to find its rows and count its
+coefficients. `assemble` materialises each expression again to write it. A
+constraint with `over=` or `where=` materialises its expression within its
+rows. The backend declares the nodal balance once per connectivity group, and
+each group materialises its own rows. The backend passes the position of each
+entry in each set, and nimopt resolves no label of an entry.
 
 **The matrix is smaller by a quarter, at every size.** 557 MB against 742 MB
 for the same 46.4 million nonzeros. nimopt stores a column index in four bytes
 and linopy in eight. The difference is structural and does not depend on the
 machine.
 
-**The nimopt solve takes 35% longer.** 285.4 s against 210.7 s, for matrices
+**The nimopt solve takes 45% longer.** 289.8 s against 200.4 s, for matrices
 of the same shape passed to the same HiGHS with its default method. The second
-assembly in the nimopt solve takes less than the 1.14 s of the whole nimopt
+assembly in the nimopt solve takes less than the 0.90 s of the whole nimopt
 build. One run per side does not identify the cause of the difference. The
-solve is about 250 times the nimopt build and about 98 times the linopy build,
+solve is about 320 times the nimopt build and about 98 times the linopy build,
 and it determines the elapsed time of a run.
 
 **The nimopt backend adds less resident memory in the solve and in the build
-of the whole year.** The solve adds 368 MB against 484 MB, and its peak is
-118 MB lower. Over the year the build adds 4.3 GB against 4.8 GB. At
-twenty-four snapshots the build adds 16.1 MB against 13.6 MB, and the two
-processes peak at the same 1,066 MB.
+of the whole year.** The solve adds 286 MB against 490 MB, and its peak is
+117 MB lower. Over the year the build adds 3.4 GB against 4.8 GB, and the
+process peaks 1.4 GB lower. At twenty-four snapshots the build adds 14.1 MB
+against 13.6 MB, and the two processes peak at 1,065 MB and 1,063 MB.
 
 ## What was not measured
 
