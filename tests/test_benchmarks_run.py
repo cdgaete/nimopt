@@ -141,3 +141,15 @@ def test_the_process_peak_is_not_below_a_phase_it_contains():
     # getrusage counts kibibytes; a process peak below a phase it contains is
     # the unit and not the memory
     assert got["process_rss_mb"] >= max(reached)
+
+
+def test_the_shape_pass_benchmark_bounds_the_value_time():
+    from bench_shape_pass import measure
+
+    got = measure(n_generators=10, n_storage=2, n_hours=168)
+    assert got["rows"] > 0
+    assert got["declare_s"] > 0
+    assert got["assemble_s"] > 0
+    # the value-only time is part of the profiled build
+    assert 0.0 <= got["value_low_s"] <= got["value_high_s"] <= got["profiled_s"]
+    assert 0.0 <= got["saving_low"] <= got["saving_high"] < 1.0
