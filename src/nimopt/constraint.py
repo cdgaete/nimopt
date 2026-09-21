@@ -1,5 +1,6 @@
 """A constraint: an expression, a sense and a right-hand side."""
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -8,7 +9,15 @@ from nimblend import Domain, EntryBuffer, SparseArray
 
 from nimopt.coefficient import Coefficient
 from nimopt.names import ROW
-from nimopt.sets import condition_dims, condition_name, displayed, rows_of
+from nimopt.sets import (
+    as_member,
+    condition_dims,
+    condition_name,
+    coord_dtype,
+    displayed,
+    rows_of,
+    shown,
+)
 from nimopt.term import Relation
 
 SENSES = ("<=", ">=", "==")
@@ -79,6 +88,51 @@ class Constraint:
     def relation(self) -> Relation:
         """Return the comparison this constraint was declared from."""
         return Relation(self.expression, self.sense, self.rhs)
+
+    def labels_at(self, positions: npt.ArrayLike) -> dict[str, npt.NDArray[Any]]:
+        """Return the labels of the rows at `positions`, per free dimension.
+
+        A position is the index of a row among this constraint's rows, from 0.
+        The labels are in the order of `positions`. Raises ValueError for a
+        position that is not an integer or is outside the rows.
+        """
+        return self.rows.labels(positions)
+
+    def position_of(self, coords: Mapping[str, Any]) -> int:
+        """Return the position of the row at a coordinate.
+
+        `coords` maps each free dimension to one label. Each label is converted
+        to the dtype of its dimension's members. Raises ValueError for other
+        dimensions, for a label that is not a member of its dimension, for a
+        label that does not convert and for a coordinate with no row.
+        """
+        rows = self.rows
+        if tuple(coords) != rows.dims:
+            raise ValueError(
+                f"constraint {self.name!r} is free over {rows.dims}; got "
+                f"{tuple(coords)}"
+            )
+        positions = []
+        for d in rows.dims:
+            dtype = coord_dtype(rows.coords[d])
+            where = f"dimension {d!r} of constraint {self.name!r}"
+            label = coords[d] if dtype is None else as_member(coords[d], dtype, where)
+            try:
+                at = rows.coords[d].to_position(np.asarray([label]))
+            except KeyError:
+                raise ValueError(
+                    f"member {shown(coords[d])} is not in dimension {d!r} of "
+                    f"constraint {self.name!r}; pass a member of {d!r}"
+                ) from None
+            positions.append(at.astype(np.int32))
+        index = np.stack(positions)
+        at = int(rows.positions_of_coordinates(index)[0])
+        if at < 0:
+            raise ValueError(
+                f"constraint {self.name!r} has no row at {dict(coords)}; "
+                f"read `absent({self.name!r})` for the rule that dropped it"
+            )
+        return at
 
     def write_bounds(
         self, lower: npt.NDArray[np.float64], upper: npt.NDArray[np.float64]

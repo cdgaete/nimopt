@@ -158,3 +158,53 @@ def test_a_variable_with_no_numbering_has_no_column_slice():
 def test_a_numbered_variable_returns_its_column_slice():
     v = Variable("x", (Set("T", np.array(["a", "b"])),), start=3, total_columns=9)
     assert v._columns() == slice(3, 5)
+
+
+def test_labels_at_positions_are_the_labels_of_those_columns_of_a_product():
+    # the first variable occupies columns 0 to 5; positions count from `start`
+    from nimopt.model import Model
+
+    P, W = sets_2x3()
+    m = Model("m")
+    m.var("first", (P, W))
+    x = m.var("x", (P, W))
+    got = x.labels_at([5, 0])
+    assert list(got["P"]) == ["p2", "p1"]
+    assert list(got["W"]) == ["w3", "w1"]
+
+
+def test_labels_at_positions_are_the_labels_of_those_members_of_a_subset():
+    from nimopt.model import Model
+
+    P, W = sets_2x3()
+    members = subset((P, W), {"P": ["p1", "p2"], "W": ["w2", "w3"]})
+    x = Model("m").var("x", (P, W), subset=members)
+    got = x.labels_at([1, 0])
+    assert list(got["P"]) == ["p2", "p1"]
+    assert list(got["W"]) == ["w3", "w2"]
+
+
+@pytest.mark.parametrize("positions", [[6], [-1]])
+def test_a_position_outside_the_columns_of_a_variable_raises(positions):
+    from nimopt.model import Model
+
+    x = Model("m").var("x", sets_2x3())
+    with pytest.raises(ValueError, match="is outside the 6 columns of variable 'x'"):
+        x.labels_at(positions)
+
+
+def test_labels_at_reads_each_sets_labels_once(monkeypatch):
+    # one lookup per set for any number of positions
+    from nimopt.model import Model
+
+    x = Model("m").var("x", sets_2x3())
+    looked_up = []
+    to_index = nb.StoredCoord.to_index
+
+    def counted(self, positions):
+        looked_up.append(len(positions))
+        return to_index(self, positions)
+
+    monkeypatch.setattr(nb.StoredCoord, "to_index", counted)
+    x.labels_at([0, 1, 2, 3, 4, 5])
+    assert looked_up == [6, 6]

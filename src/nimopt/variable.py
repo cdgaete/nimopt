@@ -139,6 +139,35 @@ class Variable(Symbol):
     def __len__(self) -> int:
         return self.n_columns
 
+    def labels_at(self, positions: npt.ArrayLike) -> dict[str, npt.NDArray[Any]]:
+        """Return the labels of the columns at `positions`, per set.
+
+        A position is a column of this variable less its `start`. The labels
+        are in the order of `positions`. Each set's labels are read once.
+        Raises ValueError for a variable with no columns, for positions that
+        are not a one-dimensional integer array and for a position outside
+        the columns.
+        """
+        coord, start, _ = self._numbered
+        at = np.asarray(positions)
+        if at.ndim != 1:
+            raise ValueError(
+                f"positions have shape {at.shape}; pass a one-dimensional array"
+            )
+        if at.size and not np.issubdtype(at.dtype, np.integer):
+            raise ValueError(f"positions have dtype {at.dtype}; pass integer positions")
+        at = at.astype(np.int64)
+        n = len(coord)
+        outside = (at < 0) | (at >= n)
+        if outside.any():
+            raise ValueError(
+                f"position {int(at[outside][0])} is outside the {n} columns of "
+                f"variable {self.name!r}; pass positions of 0 or more and below {n}"
+            )
+        index = coord.to_index(at + start)
+        coords = self.coords
+        return {d: coords[d].to_index(index[j]) for j, d in enumerate(self.dims)}
+
     def _columns(self) -> slice:
         """Return the slice of the column indices of this variable.
 

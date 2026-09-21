@@ -18,6 +18,18 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+### Added
+
+- `Constraint.labels_at(positions)` and `Variable.labels_at(positions)`
+  return the labels of the rows or the columns at those positions.
+- `Constraint.position_of(coords)` returns the position of the row at a
+  coordinate.
+
+### Changed
+
+- `Model.row` and `Session.diagnose` read the labels of the rows and the
+  columns they report alone. They decode no other row of the constraint.
+
 ### Fixed
 
 - `Session.solve` and `Session.diagnose` raise `ValueError` where the model

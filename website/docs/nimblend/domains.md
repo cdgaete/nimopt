@@ -24,8 +24,8 @@ coordinates are present, and it records no numbering origin.
 | --- | --- |
 | `size`, `dims`, `shape`, `coords` | the number of members, the dimensions, their extents and their coordinates |
 | `is_full` | whether every coordinate of the product is present |
-| `coordinates()` | the multi-index of each member, as an int32 index matrix |
-| `labels()` | each member's label, per dimension |
+| `coordinates(positions=None)` | the multi-index of each member, or of the members at `positions`, as an int32 index matrix |
+| `labels(positions=None)` | each member's label, or the labels of the members at `positions`, per dimension |
 | `intersect(other)` | the members both have |
 | `union(other)` | the members either has |
 | `difference(other)` | the members this one has and `other` does not |
@@ -41,7 +41,7 @@ That table is the whole surface. **A domain's `codes` are the raw ravelled
 members of the layer below it. An array's `.index` and `.data` are its raw
 buffers. Never read them.** `coordinates()` and `labels()` report which
 members are present, and `positions_of_coordinates` reports the position of
-one. `as_coord` numbers them, and `array` and `identity` return an array over
+one. With `positions`, `coordinates` and `labels` decode those members alone. `as_coord` numbers them, and `array` and `identity` return an array over
 them. No layer above builds an index matrix. A test in this repository fails
 on a read of any of the three.
 

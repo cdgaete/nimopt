@@ -31,6 +31,7 @@ variable over millions of columns therefore costs only its members.
 | --- | --- |
 | `dims` | the names of the sets it is over |
 | `n_columns` | the number of columns it occupies |
+| `labels_at(positions)` | the labels of the columns at those positions, per set; a position is a column less `start` |
 | `domain()` | the members it has |
 | `terms()` | its coefficients over `(*dims, COLUMN)` |
 | `variable[sets]` | a one-term expression referencing it |

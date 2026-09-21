@@ -434,10 +434,10 @@ class Model:
         member of its dimension. Raises ValueError for a coordinate the
         constraint has no row at; the message refers to `absent`.
         """
-        from nimopt.row import position_of, written
+        from nimopt.row import written
 
         constraint = self._constraint(name)
-        position = position_of(constraint, coords)
+        position = constraint.position_of(coords)
         matrix, _, lower, upper = _matrix(
             {name: constraint}, self._n_columns, _Written(None, 0, "")
         )

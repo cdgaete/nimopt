@@ -1,3 +1,4 @@
+import nimblend as nb
 import numpy as np
 import pytest
 
@@ -157,3 +158,20 @@ def test_a_row_materialises_its_own_constraint_and_no_other(monkeypatch):
     m.row("live", B="b0", T=0)
     assert len(calls) == 1
     assert calls[0] is m.constraints["live"].expression
+
+
+def test_a_row_decodes_the_labels_of_that_row_alone(monkeypatch):
+    # the constraint has 6 rows; decoding every row reads all 6
+    m = nodal().build(nodal_data())
+    rows = m.constraints["balance"].rows
+    decoded = []
+    labels = nb.Domain.labels
+
+    def counted(self, positions=None):
+        if self is rows:
+            decoded.append(None if positions is None else len(positions))
+        return labels(self, positions)
+
+    monkeypatch.setattr(nb.Domain, "labels", counted)
+    m.row("balance", B="b1", T=2)
+    assert decoded == [1]

@@ -287,6 +287,33 @@ def test_a_row_reaches_no_array_at_all():
     assert imported == set(), imported
 
 
+# the attributes that return or call a nimblend domain or coordinate: a
+# constraint's `rows`, a variable's `coord` and `domain()`, and their lookups
+NIMBLEND_LOOKUPS = {
+    "rows",
+    "coord",
+    "coords",
+    "domain",
+    "labels",
+    "coordinates",
+    "to_index",
+    "to_position",
+    "positions_of",
+    "positions_of_coordinates",
+}
+
+
+def test_a_row_calls_no_nimblend_method():
+    # row.py reads labels through Constraint and Variable methods
+    source = next(t for p, t in modules() if p.name == "row.py")
+    reads = [
+        f"{node.lineno} .{node.attr}"
+        for node in ast.walk(source)
+        if isinstance(node, ast.Attribute) and node.attr in NIMBLEND_LOOKUPS
+    ]
+    assert reads == [], reads
+
+
 def test_the_rule_catches_a_read_that_is_not_a_subscript():
     # the forms a narrower rule misses: an argument, and a plain assignment
     caught = internals_read(ast.parse("f(arr.index)\nx = arr.data\ny = arr.index[0]\n"))

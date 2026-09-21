@@ -217,3 +217,30 @@ def test_a_constraint_narrows_to_the_same_shape_when_it_is_re_run():
     assert rows.size == c.n_rows
     assert nnz == c.nnz
     assert list(values) == [1.0, 1.0]
+
+
+def nodal_model():
+    from test_definition import nodal, nodal_data
+
+    return nodal().build(nodal_data())
+
+
+def test_labels_at_positions_are_the_labels_of_those_rows_in_that_order():
+    # the rows of `live` are the bus-hours (b0, 0) and (b1, 0)
+    got = nodal_model().constraints["live"].labels_at([1, 0])
+    assert list(got["B"]) == ["b1", "b0"]
+    assert list(got["T"]) == [0, 0]
+
+
+def test_position_of_a_rows_labels_is_that_rows_position():
+    constraint = nodal_model().constraints["balance"]
+    for position in range(constraint.n_rows):
+        labels = constraint.labels_at([position])
+        coords = {d: labels[d][0] for d in labels}
+        assert constraint.position_of(coords) == position
+
+
+def test_a_position_outside_the_rows_of_a_constraint_raises():
+    constraint = nodal_model().constraints["live"]
+    with pytest.raises(ValueError, match="position 2 is outside a domain of 2"):
+        constraint.labels_at([2])

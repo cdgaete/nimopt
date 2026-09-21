@@ -1,16 +1,14 @@
 """One row of a built model, read back from the matrix it was assembled into."""
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import numpy.typing as npt
 
-from nimopt.sets import as_label, as_member, coord_dtype, label_text, shown
+from nimopt.sets import as_label, label_text, shown
 
 if TYPE_CHECKING:
-    from nimopt.constraint import Constraint
     from nimopt.model import Assembled, Model
 
 
@@ -84,16 +82,6 @@ def _sense_of(lower: float, upper: float) -> str:
     return str(senses(lower, upper)[0])
 
 
-def _coordinate(domain: Any, position: int) -> dict[str, Any]:
-    """Return the label of each dimension at one member of a domain.
-
-    Each label is the Python value. A datetime64 or a timedelta64 label is
-    the numpy scalar.
-    """
-    labels = domain.labels()
-    return {d: as_label(labels[d][position]) for d in domain.dims}
-
-
 def resolve(
     model: "Model", columns: npt.ArrayLike
 ) -> tuple[tuple[int, int, str, dict[str, Any]], ...]:
@@ -102,7 +90,8 @@ def resolve(
     Each entry also contains the position the column occupied in `columns`.
     A variable owns a contiguous range of the column space from its `start`.
     A column resolves to its variable by that range, and to a coordinate
-    through the variable's own numbering rule. Raises ValueError for a column
+    through `Variable.labels_at`. Each label is the Python value. A datetime64
+    or a timedelta64 label is the numpy scalar. Raises ValueError for a column
     no variable owns.
     """
     columns = np.asarray(columns, dtype=np.int64)
@@ -112,12 +101,9 @@ def resolve(
         at = np.nonzero((columns >= span.start) & (columns < span.stop))[0]
         if not at.size:
             continue
-        index = variable.coord.to_index(columns[at])
+        labels = variable.labels_at(columns[at] - span.start)
         for k, position in enumerate(at):
-            coordinate = {
-                d: as_label(s.coord.to_index(np.asarray([index[j][k]]))[0])
-                for j, (d, s) in enumerate(zip(variable.dims, variable.sets))
-            }
+            coordinate = {d: as_label(held[k]) for d, held in labels.items()}
             found.append(
                 (int(position), int(columns[position]), variable.name, coordinate)
             )
@@ -169,11 +155,14 @@ def written(
     """Return row `index` of the matrix, the row at `position` of a constraint.
 
     `name` identifies the constraint. `columns` and `values` are the row's
-    column indices and coefficients. `lower` and `upper` are its bounds.
+    column indices and coefficients. `lower` and `upper` are its bounds. Each
+    label of the coordinate is the Python value. A datetime64 or a
+    timedelta64 label is the numpy scalar.
     """
+    labels = model.constraints[name].labels_at([position])
     return Row(
         constraint=name,
-        coordinate=_coordinate(model.constraints[name].rows, position),
+        coordinate={d: as_label(held[0]) for d, held in labels.items()},
         index=int(index),
         terms=tuple(
             RowTerm(column, variable, coordinate, float(values[at]))
@@ -183,40 +172,3 @@ def written(
         lower=lower,
         upper=upper,
     )
-
-
-def position_of(constraint: "Constraint", coords: Mapping[str, Any]) -> int:
-    """Return the position of the named coordinate in a constraint's rows.
-
-    Each label is converted to the dtype of its dimension's members and
-    resolves through that dimension's own coordinate. Raises ValueError for a
-    label that is not a member of its dimension, for a label that does not
-    convert and for a coordinate the constraint has no row at.
-    """
-    rows = constraint.rows
-    if tuple(coords) != rows.dims:
-        raise ValueError(
-            f"constraint {constraint.name!r} is free over {rows.dims}; got "
-            f"{tuple(coords)}"
-        )
-    positions = []
-    for d in rows.dims:
-        dtype = coord_dtype(rows.coords[d])
-        where = f"dimension {d!r} of constraint {constraint.name!r}"
-        label = coords[d] if dtype is None else as_member(coords[d], dtype, where)
-        try:
-            at = rows.coords[d].to_position(np.asarray([label]))
-        except KeyError:
-            raise ValueError(
-                f"member {shown(coords[d])} is not in dimension {d!r} of "
-                f"constraint {constraint.name!r}; pass a member of {d!r}"
-            ) from None
-        positions.append(at.astype(np.int32))
-    index = np.stack(positions)
-    at = int(rows.positions_of_coordinates(index)[0])
-    if at < 0:
-        raise ValueError(
-            f"constraint {constraint.name!r} has no row at {dict(coords)}; "
-            f"read `absent({constraint.name!r})` for the rule that dropped it"
-        )
-    return at

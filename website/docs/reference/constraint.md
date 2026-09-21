@@ -25,6 +25,8 @@ Model.constraint(name, relation, where=None, over=None)
 | --- | --- |
 | `n_rows` | the number of rows it produces |
 | `nnz` | the number of coefficients they contain |
+| `labels_at(positions)` | the labels of the rows at those positions, per free dimension |
+| `position_of(coords)` | the position of the row at a coordinate, one label per free dimension |
 | `row_of(name)` on the `Assembled` | the position of those rows in the matrix |
 
 A row derived from the terms exists where every term has a value and the
