@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from nimopt import Model, Param, Row, Set
-from nimopt.row import resolve
+from nimopt import Expression, Model, Param, Row, Set
+from nimopt.row import read, resolve
 from test_definition import data, dispatch, nodal, nodal_data
 
 
@@ -131,3 +131,29 @@ def test_a_column_outside_every_variable_is_refused():
     m = dispatch().build(data())
     with pytest.raises(ValueError, match="belongs to no variable"):
         resolve(m, np.array([m.n_columns]))
+
+
+def test_every_row_equals_the_row_of_the_assembled_matrix():
+    # the second constraint's rows are numbered after the first constraint's
+    m = nodal().build(nodal_data())
+    a = m.assemble()
+    assert list(m.constraints) == ["balance", "live"]
+    for index in range(a.n_rows):
+        expected = read(m, a, index)
+        assert m.row(expected.constraint, **expected.coordinate) == expected
+
+
+def test_a_row_materialises_its_own_constraint_and_no_other(monkeypatch):
+    # an assembly for one row materialises every constraint and the objective
+    m = nodal().build(nodal_data())
+    calls = []
+    materialise = Expression.materialise
+
+    def counted(self, *args, **kwargs):
+        calls.append(self)
+        return materialise(self, *args, **kwargs)
+
+    monkeypatch.setattr(Expression, "materialise", counted)
+    m.row("live", B="b0", T=0)
+    assert len(calls) == 1
+    assert calls[0] is m.constraints["live"].expression

@@ -9,7 +9,9 @@ description: What one row of a built model contains, and which coordinates were 
 
 Returned by `Model.row(name, **coords)`. One row as the assembled matrix
 stores it. The row is read from the matrix, not from a second walk of the
-expression, and it shows what is passed to the solver.
+expression, and it shows what is passed to the solver. `Model.row` writes the
+named constraint alone, with the pass `assemble` runs, and assembles no other
+constraint.
 
 | Field | Contains |
 | --- | --- |

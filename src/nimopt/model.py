@@ -71,6 +71,39 @@ class _Written:
             self.held.done()
 
 
+def _matrix(
+    constraints: Mapping[str, Constraint], n_columns: int, report: _Written
+) -> tuple[
+    SparseArray, dict[str, slice], npt.NDArray[np.float64], npt.NDArray[np.float64]
+]:
+    """Return the matrix of `constraints`, their row ranges and their row bounds.
+
+    Rows are numbered from zero in the order of `constraints`. Each constraint
+    writes its block into one buffer. The row bounds are written after the
+    matrix is built.
+    """
+    n_rows = sum(c.n_rows for c in constraints.values())
+    buffer = EntryBuffer(2, sum(c.nnz for c in constraints.values()))
+    rows = ProductCoord((n_rows,))
+    rows_of = {}
+    row_start = 0
+    for name, constraint in constraints.items():
+        constraint.write_into(buffer, rows, row_start, report)
+        report.constraint(name, constraint.nnz)
+        rows_of[name] = slice(row_start, row_start + constraint.n_rows)
+        row_start += constraint.n_rows
+    report.close()
+    matrix = buffer.array(
+        {ROW: rows, COLUMN: ProductCoord((n_columns,))},
+        (ROW, COLUMN),
+    )
+    row_lower = np.empty(n_rows, dtype=np.float64)
+    row_upper = np.empty(n_rows, dtype=np.float64)
+    for name, constraint in constraints.items():
+        constraint.write_bounds(row_lower[rows_of[name]], row_upper[rows_of[name]])
+    return matrix, rows_of, row_lower, row_upper
+
+
 def objective_expression(expression: Any) -> Expression:
     """Return `expression` as an objective, read at its sets.
 
@@ -394,18 +427,34 @@ class Model:
     def row(self, name: str, **coords: Any) -> "Row":
         """Return one row of this model's matrix, at the coordinate given.
 
-        The row is read from the assembled matrix, and is the row the solver
-        is given. Raises KeyError for a name that is not a declared
-        constraint. Raises ValueError for a label that is not a member of
-        its dimension. Raises ValueError for a coordinate the constraint has
-        no row at; the message refers to `absent`.
+        The row is written by the pass `assemble` runs, for the named
+        constraint alone, and is the row the solver is given. Its index is its
+        position in the assembled matrix. Raises KeyError for a name that is
+        not a declared constraint. Raises ValueError for a label that is not a
+        member of its dimension. Raises ValueError for a coordinate the
+        constraint has no row at; the message refers to `absent`.
         """
-        from nimopt.row import position_of, read
+        from nimopt.row import position_of, written
 
         constraint = self._constraint(name)
-        assembled = self.assemble()
-        at = assembled.row_of(name).start + position_of(constraint, coords)
-        return read(self, assembled, at)
+        position = position_of(constraint, coords)
+        matrix, _, lower, upper = _matrix(
+            {name: constraint}, self._n_columns, _Written(None, 0, "")
+        )
+        indices, values, indptr = matrix.to_csr()
+        names = tuple(self.constraints)
+        start = sum(self.constraints[n].n_rows for n in names[: names.index(name)])
+        span = slice(indptr[position], indptr[position + 1])
+        return written(
+            self,
+            name,
+            start + position,
+            position,
+            indices[span],
+            values[span],
+            float(lower[position]),
+            float(upper[position]),
+        )
 
     def absent(self, name: str) -> "Absence":
         """Return which coordinates fell out of the named constraint, and why.
@@ -522,26 +571,10 @@ class Model:
         built, and no row is copied twice.
         """
         report = _Written(reporter(progress), self.nnz, f"assembling {self.name}")
-        buffer = EntryBuffer(2, self.nnz)
-        rows = ProductCoord((self._n_rows,))
-        rows_of = {}
-        row_start = 0
-        for name, constraint in self.constraints.items():
-            constraint.write_into(buffer, rows, row_start, report)
-            report.constraint(name, constraint.nnz)
-            rows_of[name] = slice(row_start, row_start + constraint.n_rows)
-            row_start += constraint.n_rows
-        report.close()
-
-        matrix = buffer.array(
-            {ROW: rows, COLUMN: ProductCoord((self._n_columns,))},
-            (ROW, COLUMN),
+        matrix, rows_of, row_lower, row_upper = _matrix(
+            self.constraints, self._n_columns, report
         )
         indices, values, indptr = matrix.to_csr()
-        row_lower = np.empty(row_start, dtype=np.float64)
-        row_upper = np.empty(row_start, dtype=np.float64)
-        for name, constraint in self.constraints.items():
-            constraint.write_bounds(row_lower[rows_of[name]], row_upper[rows_of[name]])
         col_lower, col_upper = self.column_bounds()
         return Assembled(
             matrix,

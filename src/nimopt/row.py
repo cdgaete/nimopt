@@ -28,8 +28,8 @@ class RowTerm:
 class Row:
     """A row as the matrix stores it: its terms, its sense and its bounds.
 
-    The row is read from the assembled matrix, not from a second walk of the
-    expression.
+    The row is read from a matrix the assembly pass writes, not from a second
+    walk of the expression.
     """
 
     constraint: str
@@ -137,29 +137,51 @@ def read(model: "Model", assembled: "Assembled", index: int) -> Row:
     `index` is the solver's own row number, the number a solver reports for a
     conflict. Raises ValueError for an index outside the assembled rows.
     """
-    for name, constraint in model.constraints.items():
+    for name in model.constraints:
         at = assembled.row_of(name)
         if at.start <= index < at.stop:
             span = slice(assembled.indptr[index], assembled.indptr[index + 1])
-            lower = float(assembled.row_lower[index])
-            upper = float(assembled.row_upper[index])
-            values = assembled.values[span]
-            return Row(
-                constraint=name,
-                coordinate=_coordinate(constraint.rows, index - at.start),
-                index=int(index),
-                terms=tuple(
-                    RowTerm(column, variable, coordinate, float(values[position]))
-                    for position, column, variable, coordinate in resolve(
-                        model, assembled.indices[span]
-                    )
-                ),
-                sense=_sense_of(lower, upper),
-                lower=lower,
-                upper=upper,
+            return written(
+                model,
+                name,
+                index,
+                index - at.start,
+                assembled.indices[span],
+                assembled.values[span],
+                float(assembled.row_lower[index]),
+                float(assembled.row_upper[index]),
             )
     raise ValueError(
         f"row {index} is outside the {assembled.n_rows} rows this model assembles"
+    )
+
+
+def written(
+    model: "Model",
+    name: str,
+    index: int,
+    position: int,
+    columns: npt.NDArray[np.int32],
+    values: npt.NDArray[np.float64],
+    lower: float,
+    upper: float,
+) -> Row:
+    """Return row `index` of the matrix, the row at `position` of a constraint.
+
+    `name` identifies the constraint. `columns` and `values` are the row's
+    column indices and coefficients. `lower` and `upper` are its bounds.
+    """
+    return Row(
+        constraint=name,
+        coordinate=_coordinate(model.constraints[name].rows, position),
+        index=int(index),
+        terms=tuple(
+            RowTerm(column, variable, coordinate, float(values[at]))
+            for at, column, variable, coordinate in resolve(model, columns)
+        ),
+        sense=_sense_of(lower, upper),
+        lower=lower,
+        upper=upper,
     )
 
 
