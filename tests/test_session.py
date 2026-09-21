@@ -1,8 +1,11 @@
+import ast
 import re
+from pathlib import Path
 
 import numpy as np
 import pytest
 
+import nimopt.session
 from nimopt import Model, Param, Session, Set, Sum
 
 
@@ -260,3 +263,15 @@ def test_an_objective_set_after_the_session_opened_raises():
         with pytest.raises(ValueError, match=message):
             session.diagnose()
     assert m.solve().objective == pytest.approx(31.0)
+
+
+def test_a_session_reads_no_labeled_array_of_the_assembled_model():
+    # Assembled.matrix is the one nimblend array an Assembled contains; the
+    # reduced costs are computed from it in solution.py
+    tree = ast.parse(Path(nimopt.session.__file__).read_text())
+    reads = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and node.attr == "matrix"
+    ]
+    assert reads == []

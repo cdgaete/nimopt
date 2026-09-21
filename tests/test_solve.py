@@ -4,6 +4,7 @@ import pytest
 from nimopt.model import Model
 from nimopt.param import Param
 from nimopt.sets import Set
+from nimopt.solution import Solution
 from nimopt.term import Sum
 
 highspy = pytest.importorskip("highspy")
@@ -274,6 +275,27 @@ def test_a_shared_name_reads_its_constraint_duals_by_kind():
 def test_a_shared_name_reads_its_reduced_costs_by_kind():
     solved = shared_name_model().solve()
     got = solved.dual("supply", kind="variable").to_dense()
+    assert got == pytest.approx([-2.0, 0.0])
+
+
+def test_a_solution_computes_reduced_costs_from_the_assembled_model():
+    # the row dual is 5 and the costs are 3 and 5
+    m = shared_name_model()
+    assembled = m.assemble()
+    rows_of = {name: assembled.row_of(name) for name in m.constraints}
+    solution = Solution(
+        m,
+        "optimal",
+        True,
+        42.0,
+        42.0,
+        np.array([4.0, 6.0]),
+        np.array([5.0]),
+        assembled,
+        rows_of,
+        "highs",
+    )
+    got = solution.dual("supply", kind="variable").to_dense()
     assert got == pytest.approx([-2.0, 0.0])
 
 

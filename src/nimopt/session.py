@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
-from nimopt.names import ROW
 from nimopt.row import Row, read, resolve
 from nimopt.sets import shown
 
@@ -16,16 +15,6 @@ if TYPE_CHECKING:
     from nimopt.solvers.base import Capabilities
 from nimopt.solution import Solution
 from nimopt.solvers import adapter
-
-
-def reduced_costs(assembled: Any, row_dual: Any) -> Any:
-    """Return each column's cost less the duals of the rows it appears in.
-
-    The matrix is summed over its rows, weighted by `row_dual`, with no
-    temporary of the size of the matrix.
-    """
-    weighted = assembled.matrix.weighted_sum(ROW, row_dual)
-    return assembled.col_cost - weighted.to_dense()
 
 
 @dataclass(frozen=True)
@@ -177,9 +166,6 @@ class Session:
         self._status = result.status
         rows_of = {name: self.assembled.row_of(name) for name in self.model.constraints}
         constant = self.model.objective_constant
-        col_dual = None
-        if result.row_dual is not None:
-            col_dual = reduced_costs(self.assembled, result.row_dual)
         return Solution(
             self.model,
             result.status,
@@ -188,7 +174,7 @@ class Session:
             None if result.bound is None else result.bound + constant,
             result.col_value,
             result.row_dual,
-            col_dual,
+            self.assembled,
             rows_of,
             self.solver,
         )
