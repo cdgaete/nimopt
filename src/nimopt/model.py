@@ -220,6 +220,7 @@ class Model:
             raise ValueError(
                 f"variable {variable.name!r} is already declared; declare another name"
             )
+        check_not_generated(variable.name, "variable", self.piecewise_declarations)
         variable._bind(self._n_columns, self._n_columns)
         self.variables[variable.name] = variable
         self._n_columns += variable.n_columns
@@ -284,7 +285,13 @@ class Model:
         declaration = Piecewise(
             name, x, x_points, y, y_points, sign, method, active, relaxed, where
         )
-        generate(self, declaration)
+        generated = generate(
+            declaration, self._declared_names(), f"model {self.name!r}"
+        )
+        for variable in generated.variables:
+            self._adopt(variable)
+        for constraint_name, relation in generated.constraints:
+            self.constraint(constraint_name, relation)
         self.piecewise_declarations[name] = declaration
         return declaration
 
@@ -294,6 +301,17 @@ class Model:
         for declaration in self.piecewise_declarations.values():
             names |= declaration.generated_names()
         return frozenset(names)
+
+    def _declared_names(self) -> set[str]:
+        """Return every set, parameter, variable and constraint name of this model."""
+        parameters = self._parameters()
+        sets, aliases = self._dimensions(parameters)
+        return {
+            *self.variables,
+            *self.constraints,
+            *(p.name for p in parameters),
+            *(s.name for s in (*sets, *aliases)),
+        }
 
     def set_objective(self, expression: Any) -> None:
         """Set the objective the model's sense optimizes.

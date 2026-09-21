@@ -1,6 +1,7 @@
 """A piecewise-linear relation between two expressions, as generated declarations."""
 
 from collections.abc import Container, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -11,7 +12,8 @@ from nimopt.names import check_addressable
 from nimopt.param import Param
 from nimopt.sets import Set, condition_dims, coords_of, displayed, rows_of, subset
 from nimopt.symbol import read_at_its_sets
-from nimopt.term import Expression, Sum
+from nimopt.term import Expression, Relation, Sum
+from nimopt.variable import Variable
 
 METHODS = ("incremental", "tangent", "auto")
 SIGNS = ("==", "<=", ">=")
@@ -572,22 +574,22 @@ def check_not_generated(
             )
 
 
-def _declared(model: Any) -> set[str]:
-    """Return the names of the sets, parameters, variables and constraints."""
-    parameters = model._parameters()
-    sets, aliases = model._dimensions(parameters)
-    return {
-        *model.variables,
-        *model.constraints,
-        *(p.name for p in parameters),
-        *(s.name for s in (*sets, *aliases)),
-    }
+@dataclass(frozen=True)
+class Generated:
+    """The variables and the constraints a piecewise declaration generates.
+
+    The variables have no columns. `constraints` contains one `(name,
+    relation)` pair per constraint, in declaration order.
+    """
+
+    variables: tuple[Variable, ...]
+    constraints: tuple[tuple[str, Relation], ...]
 
 
 def _tangent(
-    model: Any, declaration: Piecewise, grid: _Grid, names: Mapping[str, Any]
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Declare one row per segment and the two rows that bound `x`."""
+    declaration: Piecewise, grid: _Grid, names: Mapping[str, Any]
+) -> Generated:
+    """Return one relation per segment and the two relations that bound `x`."""
     d = declaration
     slope_name, intercept_name, low_name, high_name = names["parameters"]
     tangent_name, min_name, max_name = names["constraints"]
@@ -600,21 +602,20 @@ def _tangent(
     low, high = grid.bounds()
     x_low = grid.per_entity(low_name, d.x.frame, low)
     x_high = grid.per_entity(high_name, d.x.frame, high)
-    rows = (
-        model.constraint(
-            tangent_name,
-            _relation(body, d.sign, grid.at(intercept, body.frame)),
+    return Generated(
+        (),
+        (
+            (tangent_name, _relation(body, d.sign, grid.at(intercept, body.frame))),
+            (min_name, d.x >= grid.at(x_low, d.x.frame)),
+            (max_name, d.x <= grid.at(x_high, d.x.frame)),
         ),
-        model.constraint(min_name, d.x >= grid.at(x_low, d.x.frame)),
-        model.constraint(max_name, d.x <= grid.at(x_high, d.x.frame)),
     )
-    return (), tuple(row.name for row in rows)
 
 
 def _incremental(
-    model: Any, declaration: Piecewise, grid: _Grid, names: Mapping[str, Any]
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Declare one fill and one order column per segment, and their rows."""
+    declaration: Piecewise, grid: _Grid, names: Mapping[str, Any]
+) -> Generated:
+    """Return one fill and one order variable per segment, and their relations."""
     d = declaration
     members_name, x_step_name, y_step_name, x_first_name, y_first_name = names[
         "parameters"
@@ -627,8 +628,8 @@ def _incremental(
     columns = tuple(grid.sets[k] for k in dims)
     after = (*columns[:-1], grid.segment + 1)
     members = grid.per_segment(members_name, dims, np.ones(grid.segments.size))
-    fill = model.var(fill_name, columns, subset=members, upper=1.0)
-    order = model.var(order_name, columns, subset=members, upper=1.0, integer=True)
+    fill = Variable(fill_name, columns, subset=members, upper=1.0)
+    order = Variable(order_name, columns, subset=members, upper=1.0, integer=True)
     x_step = grid.per_segment(x_step_name, grid.points, grid.x_step)
     y_step = grid.per_segment(y_step_name, grid.points, grid.y_step)
     x_body = d.x - Sum(grid.segment, grid.at(x_step, grid.points) * fill[columns])
@@ -646,15 +647,15 @@ def _incremental(
         y_body = y_body - grid.at(y_first, grid.entity) * d.active
         x_rhs = y_rhs = 0.0
     rows = [
-        model.constraint(x_name, x_body == x_rhs),
-        model.constraint(y_name, _relation(y_body, d.sign, y_rhs)),
-        model.constraint(bound_name, fill[columns] - order[columns] <= 0.0),
-        model.constraint(fill_order_name, fill[after] - fill[columns] <= 0.0),
-        model.constraint(link_name, order[after] - fill[columns] <= 0.0),
+        (x_name, x_body == x_rhs),
+        (y_name, _relation(y_body, d.sign, y_rhs)),
+        (bound_name, fill[columns] - order[columns] <= 0.0),
+        (fill_order_name, fill[after] - fill[columns] <= 0.0),
+        (link_name, order[after] - fill[columns] <= 0.0),
     ]
     if d.active is not None:
-        rows.append(model.constraint(active_name[0], fill[columns] - d.active <= 0.0))
-    return (fill.name, order.name), tuple(row.name for row in rows)
+        rows.append((active_name[0], fill[columns] - d.active <= 0.0))
+    return Generated((fill, order), tuple(rows))
 
 
 def _resolved(declaration: Piecewise, grid: _Grid) -> str:
@@ -669,14 +670,15 @@ def _resolved(declaration: Piecewise, grid: _Grid) -> str:
     return "incremental"
 
 
-def generate(model: Any, declaration: Piecewise) -> None:
-    """Declare the sets, parameters, variables and constraints of `declaration`.
+def generate(declaration: Piecewise, declared: Container[str], owner: str) -> Generated:
+    """Return the variables and the constraints `declaration` generates.
 
-    The coordinate check, the breakpoint checks and the name checks run
-    before any declaration. Raises ValueError for a `y` or an `active` over
+    `declared` contains the names the model declares. `owner` identifies the
+    model in a message. The coordinate check, the breakpoint checks and the
+    name checks run first. Raises ValueError for a `y` or an `active` over
     other coordinates than `x`, for a breakpoint check that fails and for a
-    generated name the model declares. Sets `declaration.formulation` for
-    method "auto", and `declaration.generated`.
+    generated name in `declared`. Sets `declaration.formulation` for method
+    "auto", and `declaration.generated`.
     """
     declaration.check_domain()
     where = declaration.where_domain()
@@ -692,20 +694,21 @@ def generate(model: Any, declaration: Piecewise) -> None:
     if declaration.formulation is None:
         declaration.formulation = _resolved(declaration, grid)
     names = declaration.names()
-    held = taken(names, _declared(model))
+    held = taken(names, declared)
     if held:
         raise ValueError(
             f"piecewise {declaration.name!r} generates {held}, already "
-            f"declared in model {model.name!r}; rename the piecewise declaration"
+            f"declared in {owner}; rename the piecewise declaration"
         )
     if declaration.formulation == "tangent":
         grid.check_curvature(declaration.sign)
-        variables, constraints = _tangent(model, declaration, grid, names)
+        generated = _tangent(declaration, grid, names)
     else:
-        variables, constraints = _incremental(model, declaration, grid, names)
+        generated = _incremental(declaration, grid, names)
     declaration.generated = {
         "sets": names["sets"],
         "parameters": names["parameters"],
-        "variables": variables,
-        "constraints": constraints,
+        "variables": tuple(v.name for v in generated.variables),
+        "constraints": tuple(name for name, _ in generated.constraints),
     }
+    return generated

@@ -1,9 +1,12 @@
+import ast
 import re
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 import nimopt as no
+from nimopt.piecewise import Piecewise, generate
 
 
 def table(G, B, rows, name):
@@ -1183,3 +1186,73 @@ def test_a_file_writes_auto_and_loads_it():
     assert held.method == "auto"
     assert held.formulation == "tangent"
     assert loaded.solve().objective == pytest.approx(17.5)
+
+
+def test_generate_returns_the_declarations_and_declares_nothing():
+    # the model keeps its two variables; the generated variables have no columns
+    G = no.Set("G", np.array(["a", "b"]))
+    B = no.Set("B", np.array(["b0", "b1", "b2"]))
+    xp = table(
+        G,
+        B,
+        [
+            ("a", "b0", 0),
+            ("a", "b1", 10),
+            ("a", "b2", 20),
+            ("b", "b0", 0),
+            ("b", "b1", 5),
+            ("b", "b2", 10),
+        ],
+        "xp",
+    )
+    yp = table(
+        G,
+        B,
+        [
+            ("a", "b0", 0),
+            ("a", "b1", 5),
+            ("a", "b2", 30),
+            ("b", "b0", 0),
+            ("b", "b1", 5),
+            ("b", "b2", 20),
+        ],
+        "yp",
+    )
+    m = no.Model("m")
+    p = m.var("p", (G,))
+    c = m.var("c", (G,))
+    declaration = Piecewise(
+        "curve", p[G], xp[G, B], c[G], yp[G, B], ">=", "incremental"
+    )
+    generated = generate(declaration, {"p", "c"}, "model 'm'")
+    assert [v.name for v in generated.variables] == ["curve_fill", "curve_order"]
+    assert all(v.declared for v in generated.variables)
+    assert [name for name, _ in generated.constraints] == [
+        "curve_x",
+        "curve_y",
+        "curve_order_bound",
+        "curve_fill_order",
+        "curve_order_link",
+    ]
+    assert list(m.variables) == ["p", "c"]
+    assert list(m.constraints) == []
+    assert declaration.generated["variables"] == ("curve_fill", "curve_order")
+
+
+def test_the_piecewise_module_reads_no_model():
+    # a declaration returns what it generates; the model registers it
+    tree = ast.parse(Path(no.__file__).with_name("piecewise.py").read_text())
+    parameters = {
+        arg.arg
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+        for arg in node.args.args
+    }
+    reads = {
+        node.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and node.attr in ("_parameters", "_dimensions")
+    }
+    assert "model" not in parameters
+    assert reads == set()
