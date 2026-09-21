@@ -56,7 +56,7 @@ members through `array(values)` and `identity(into, coord, start)`.
 | From | Names |
 | --- | --- |
 | `nimopt` | `COLUMN`, `ROW`, `Absence`, `Alias`, `Assembled`, `Coefficient`, `Constraint`, `Definition`, `Diagnosis`, `Explanation`, `Expression`, `Model`, `Option`, `Param`, `Piecewise`, `Relation`, `Row`, `Session`, `Set`, `Solution`, `Sum`, `Term`, `Variable`, `available`, `capabilities`, `dumps`, `load`, `loads`, `options`, `product`, `save`, `subset`, `subset_of` |
-| `nimblend` | `Array`, `DenseArray`, `Domain`, `EntryBuffer`, `SparseArray`, `combined_dims`, `from_long`, `from_dense`, `is_canonical`, `StoredCoord`, `ProductCoord`, `SubsetCoord` |
+| `nimblend` | `Array`, `DenseArray`, `Domain`, `EntryBuffer`, `SparseArray`, `combined_dims`, `from_long`, `from_dense`, `is_canonical`, `sum_arrays`, `StoredCoord`, `ProductCoord`, `SubsetCoord` |
 <!-- /surface -->
 
 **A coefficient composes.** A coefficient is a parameter read at its sets

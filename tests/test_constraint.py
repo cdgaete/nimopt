@@ -1,3 +1,4 @@
+import nimblend as nb
 import numpy as np
 import pytest
 from nimblend import EntryBuffer, ProductCoord
@@ -244,3 +245,83 @@ def test_a_position_outside_the_rows_of_a_constraint_raises():
     constraint = nodal_model().constraints["live"]
     with pytest.raises(ValueError, match="position 2 is outside a domain of 2"):
         constraint.labels_at([2])
+
+
+def operand_sizes(monkeypatch):
+    """Record the entry counts of both operands of every array product."""
+    sizes = []
+    product_of = nb.SparseArray.__mul__
+
+    def recorded(self, other):
+        if isinstance(other, nb.SparseArray):
+            sizes.append((self.nnz, other.nnz))
+        return product_of(self, other)
+
+    monkeypatch.setattr(nb.SparseArray, "__mul__", recorded)
+    return sizes
+
+
+@pytest.mark.parametrize("keyword", ["over", "where"])
+def test_a_constraint_on_some_rows_multiplies_only_their_coefficients(
+    monkeypatch, keyword
+):
+    m, P, W, x, d, cap = model()
+    sizes = operand_sizes(monkeypatch)
+    rows = {keyword: subset((P,), {"P": ["p2"]})}
+    c = m.constraint("supply", Sum(W, d[P, W] * x[P, W]) <= cap[P], **rows)
+    # d and x have 3 entries at p2 and 6 over both plants
+    assert sizes and max(max(pair) for pair in sizes) == 3
+    assert (c.n_rows, c.nnz) == (1, 3)
+    sizes.clear()
+    m.assemble()
+    assert sizes and max(max(pair) for pair in sizes) == 3
+
+
+def test_the_assembly_looks_up_the_rows_of_each_constraint_once(monkeypatch):
+    m, P, W, x, d, cap = model()
+    c = m.constraint("supply", Sum(W, d[P, W] * x[P, W]) <= cap[P])
+    looked_up = []
+    positions_of = nb.Domain.positions_of
+
+    def recorded(self, array):
+        looked_up.append(self is c.rows)
+        return positions_of(self, array)
+
+    monkeypatch.setattr(nb.Domain, "positions_of", recorded)
+    m.assemble()
+    assert looked_up.count(True) == 1
+
+
+def test_a_coefficient_removed_after_declaration_raises_at_assembly():
+    m, P, W, x, d, cap = model()
+    m.constraint("supply", Sum(W, d[P, W] * x[P, W]) <= cap[P])
+    d.array = Param.from_long(
+        "d",
+        (P, W),
+        {"P": ["p1"] * 3 + ["p2"] * 2, "W": ["w1", "w2", "w3", "w1", "w2"]},
+        [1.0, 2.0, 3.0, 4.0, 5.0],
+    ).array
+    with pytest.raises(ValueError, match="measured 6 coefficients and built 5"):
+        m.assemble()
+
+
+def test_a_coefficient_added_after_declaration_raises_at_assembly():
+    m, P, W, x, _, cap = model()
+    d = Param.from_long(
+        "d",
+        (P, W),
+        {"P": ["p1"] * 3 + ["p2"] * 2, "W": ["w1", "w2", "w3", "w1", "w2"]},
+        [1.0, 2.0, 3.0, 4.0, 5.0],
+    )
+    m.constraint("supply", Sum(W, d[P, W] * x[P, W]) <= cap[P])
+    d.array = Param.from_dense("d", (P, W), np.ones((2, 3))).array
+    with pytest.raises(ValueError, match="measured 5 coefficients and built 6"):
+        m.assemble()
+
+
+def test_a_value_changed_after_declaration_is_written_at_assembly():
+    # the assembly materialises the expression again and reads the data then
+    m, P, W, x, d, cap = model()
+    m.constraint("supply", Sum(W, d[P, W] * x[P, W]) <= cap[P])
+    d.array = Param.from_dense("d", (P, W), 10.0 * np.ones((2, 3))).array
+    assert m.assemble().to_dense()[0, :3].tolist() == [10.0, 10.0, 10.0]

@@ -53,7 +53,7 @@ members through `array(values)` and `identity(into, coord, start)`.
 | From | Names |
 | --- | --- |
 | `nimopt` | `COLUMN`, `ROW`, `Absence`, `Alias`, `Assembled`, `Coefficient`, `Constraint`, `Definition`, `Diagnosis`, `Explanation`, `Expression`, `Model`, `Option`, `Param`, `Piecewise`, `Relation`, `Row`, `Session`, `Set`, `Solution`, `Sum`, `Term`, `Variable`, `available`, `capabilities`, `dumps`, `load`, `loads`, `options`, `product`, `save`, `subset`, `subset_of` |
-| `nimblend` | `Array`, `DenseArray`, `Domain`, `EntryBuffer`, `SparseArray`, `combined_dims`, `from_long`, `from_dense`, `is_canonical`, `StoredCoord`, `ProductCoord`, `SubsetCoord` |
+| `nimblend` | `Array`, `DenseArray`, `Domain`, `EntryBuffer`, `SparseArray`, `combined_dims`, `from_long`, `from_dense`, `is_canonical`, `sum_arrays`, `StoredCoord`, `ProductCoord`, `SubsetCoord` |
 
 **A coefficient composes.** A coefficient is a parameter read at its sets
 or an arithmetic combination of such readings: `price[G, T] / eta[G, T]` is
@@ -2024,6 +2024,33 @@ Raises ValueError:
 ValueError: parameter 'cost': label columns have lengths {'P': 1, 'W': 2} and the value column has length 2; pass columns of equal length
 ```
 
+### `Param.from_positions(name, sets, index, values)`
+
+Coefficients from an index matrix and one value column. `index` has one row
+per set, and each column identifies one member by its position in each set.
+A caller that already has positions resolves no labels. The columns are in
+any order, and each member appears once.
+
+```python
+import numpy as np
+from nimopt import Param, Set
+
+P = Set("P", np.array(["lisbon", "porto"]))
+W = Set("W", np.array(["berlin", "paris", "rome"]))
+
+cost = Param.from_positions("cost", (P, W), [[1, 0], [1, 0]], [1.0, 2.0])
+print(cost.array.to_dense())
+```
+
+Output:
+
+```text
+[[2. 0. 0.]
+ [0. 1. 0.]]
+```
+
+A position outside its set raises `ValueError`, as does a member given twice.
+
 ### Members
 
 | Member | Returns |
@@ -3072,6 +3099,33 @@ Raises ValueError:
 ValueError: frames ('P',) and ('Q',) share no dimension; pass operands that share a dimension
 ```
 
+## Adding several arrays
+
+`sum_arrays(arrays)` adds several arrays over one frame in one merge. The
+result equals adding them in order with `+`. A chain of `+` merges the running
+sum once per operand, and `sum_arrays` sorts the entries of all operands once.
+Under `"empty"` the result has every coordinate of any operand. Under
+`"unknown"` it has only the coordinates of every operand. The operands have
+the same dimensions, labels and absence.
+
+```python
+import numpy as np
+import nimblend as nb
+
+labels = {"A": np.array(["a0", "a1"]), "B": np.array(["b0", "b1"])}
+first = nb.SparseArray.from_dense(np.array([[1.0, 0.0], [0.0, 2.0]]), labels)
+second = nb.SparseArray.from_dense(np.array([[10.0, 20.0], [30.0, 40.0]]), labels)
+
+print(nb.sum_arrays([first, second, first]).to_dense())
+```
+
+Output:
+
+```text
+[[12. 20.]
+ [30. 44.]]
+```
+
 ## Densifying an unknown array
 
 An array declaring `"unknown"` that does not have every coordinate of its
@@ -3165,6 +3219,7 @@ coordinates are present, and it records no numbering origin.
 | `positions_of_coordinates(index)` | each column of an index matrix as its position here, `-1` where absent |
 | `expand(dims, coords)` | every member crossed with the full extent of the named dimensions |
 | `transpose(*dims)` | the same members, over the dimensions in the order given, or reversed when none are given |
+| `project(dims)` | the distinct coordinates of the members over `dims`, in the order given |
 | `as_coord()` | the domain as a coordinate, each member at its rank |
 | `array(values, absence="empty")` | the members with one value each, as a `SparseArray` |
 | `identity(into, coord, start=0)` | each member paired with its own position along `into`, valued 1.0 |

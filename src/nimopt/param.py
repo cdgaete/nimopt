@@ -7,7 +7,7 @@ import numpy as np
 import numpy.typing as npt
 from nimblend import Domain, SparseArray, from_long
 
-from nimopt.sets import as_members, as_sets, coords_of
+from nimopt.sets import as_members, as_sets, coords_of, subset_of
 from nimopt.symbol import Symbol
 
 if TYPE_CHECKING:
@@ -100,6 +100,37 @@ class Param(Symbol):
         except ValueError as error:
             raise ValueError(f"parameter {name!r}: {error}") from None
         return cls(name, sets, array)
+
+    @classmethod
+    def from_positions(
+        cls,
+        name: str,
+        sets: Iterable[Any],
+        index: npt.ArrayLike,
+        values: npt.ArrayLike,
+    ) -> "Param":
+        """Return a parameter from an index matrix and one value column.
+
+        `index` has one row per set, and each column identifies one member by
+        its position in each set. A caller with positions resolves no labels.
+        Raises ValueError for a position outside its set, a member given
+        twice, and a value count that differs from the column count.
+        """
+        sets = as_sets(sets, f"parameter {name!r}")
+        index = np.asarray(index)
+        values = np.asarray(values, dtype=np.float64)
+        try:
+            members = subset_of(sets, index)
+        except ValueError as error:
+            raise ValueError(f"parameter {name!r}: {error}") from None
+        if values.shape != (index.shape[1],):
+            raise ValueError(
+                f"parameter {name!r} has {index.shape[1]} index columns and "
+                f"{values.size} values; pass one value per column"
+            )
+        ordered = np.empty(members.size, dtype=np.float64)
+        ordered[members.positions_of_coordinates(index)] = values
+        return cls(name, sets, members.array(ordered))
 
     @property
     def dims(self) -> tuple[str, ...]:

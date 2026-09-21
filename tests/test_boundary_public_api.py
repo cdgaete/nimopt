@@ -210,6 +210,7 @@ PACKAGE_IMPORTS = {
     "StoredCoord",
     "combined_dims",
     "from_long",
+    "sum_arrays",
 }
 
 # the constructors that take an index matrix and the predicate that checks

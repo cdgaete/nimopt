@@ -20,6 +20,9 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ### Added
 
+- `Param.from_positions(name, sets, index, values)` returns a parameter from
+  an index matrix with one row per set and one value column. It resolves no
+  labels.
 - `tests/test_pdlp.py` solves with `options={"method": "pdlp"}` and checks
   the optimum, the row duals against simplex and the PDLP line of the HiGHS
   log. It is skipped unless `NIMOPT_TEST_PDLP=1`. PDLP on a GPU requires an
@@ -27,6 +30,16 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ### Changed
 
+- A constraint with `over=` or `where=` materialises its expression within
+  those rows. Each term restricts its variable's columns and its coefficient
+  to the rows before the product. `Model.absent` materialises the whole
+  expression and reports every narrowing.
+- The assembly looks up the rows of each constraint once. The number of
+  coefficients is checked against the number measured at declaration before
+  any entry is written.
+- `Expression.materialise` and `Expression.materialise_at` add the term
+  blocks with `nimblend.sum_arrays`, in one merge. The values are added in
+  the order of the terms, and the block is equal to the sum computed with `+`.
 - A `Variable` numbers its own coordinate from 0 and passes no `start` to a
   `nimblend` coordinate.
 - The `pypsa` rung of `benchmarks/bench_vs_linopy.py` builds the European

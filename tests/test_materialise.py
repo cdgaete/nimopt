@@ -1,8 +1,10 @@
+import nimblend as nb
 import numpy as np
+import pytest
 
 from nimopt.model import Model
 from nimopt.param import Param
-from nimopt.sets import Set
+from nimopt.sets import Set, subset
 from nimopt.term import Sum
 
 
@@ -106,3 +108,95 @@ def test_materialising_twice_answers_the_same_block():
     first, _ = e.materialise()
     second, _ = e.materialise()
     assert first.to_dense().tolist() == second.to_dense().tolist()
+
+
+def test_the_terms_are_added_in_one_merge(monkeypatch):
+    # a pairwise fold merges the running total once per term
+    _, P, W, x, y, d, a = model()
+    e = Sum(W, d[P, W] * x[P, W]) + a[P] * y[P] + 3.0 * y[P]
+    expected = e.materialise()[0].to_dense().tolist()
+
+    def pairwise(self, other):
+        raise AssertionError("the term blocks are added pairwise")
+
+    monkeypatch.setattr(nb.SparseArray, "__add__", pairwise)
+    assert e.materialise()[0].to_dense().tolist() == expected
+
+
+def test_the_terms_at_one_coordinate_are_added_in_one_merge(monkeypatch):
+    _, P, W, x, y, d, a = model()
+    e = Sum(W, d[P, W] * x[P, W]) + a[P] * y[P]
+    expected = e.materialise_at({"P": "p2"}).to_dense().tolist()
+
+    def pairwise(self, other):
+        raise AssertionError("the term blocks are added pairwise")
+
+    monkeypatch.setattr(nb.SparseArray, "__add__", pairwise)
+    assert e.materialise_at({"P": "p2"}).to_dense().tolist() == expected
+
+
+def lagged():
+    m = Model()
+    P = Set("P", np.array(["p1", "p2"]))
+    T = Set("T", np.array([2030, 2031, 2032, 2033]))
+    return P, T, m.var("x", (P, T))
+
+
+def summed_terms():
+    _, P, W, x, y, d, a = model()
+    return Sum(W, d[P, W] * x[P, W]) + a[P] * y[P], subset((P,), {"P": ["p2"]})
+
+
+def replicated_term():
+    _, P, W, x, y, _, _ = model()
+    within = subset((P, W), {"P": ["p1", "p2"], "W": ["w1", "w3"]})
+    return x[P, W] + y[P], within
+
+
+def widening_coefficient():
+    _, P, W, _, y, d, _ = model()
+    within = subset((P, W), {"P": ["p1", "p2"], "W": ["w2", "w1"]})
+    return d[P, W] * y[P], within
+
+
+def lag():
+    P, T, x = lagged()
+    within = subset((P, T), {"P": ["p1", "p2"], "T": [2031, 2033]})
+    return x[P, T] - x[P, T - 1], within
+
+
+def fixed_member():
+    _, P, _, x, y, _, _ = model()
+    return x[P, "w2"] + y[P], subset((P,), {"P": ["p1"]})
+
+
+def kept(block, within):
+    inside = block.restrict(within)
+    return inside.coordinates().tolist(), inside.values().tolist()
+
+
+@pytest.mark.parametrize(
+    "case",
+    [summed_terms, replicated_term, widening_coefficient, lag, fixed_member],
+)
+def test_a_block_within_rows_has_the_entries_of_the_full_block_there(case):
+    expression, within = case()
+    full, full_rows = expression.materialise()
+    part, part_rows = expression.materialise(within=within)
+    assert kept(part, within) == kept(full, within)
+    assert (
+        part_rows.intersect(within).coordinates().tolist()
+        == full_rows.intersect(within).coordinates().tolist()
+    )
+
+
+def test_a_block_within_a_product_of_members_has_no_entry_outside_it():
+    expression, within = summed_terms()
+    part, _ = expression.materialise(within=within)
+    assert part.nnz == expression.materialise()[0].restrict(within).nnz == 4
+
+
+def test_rows_over_other_dimensions_than_the_frame_raise():
+    _, P, W, x, _, d, _ = model()
+    with pytest.raises(ValueError, match="pass a domain over the frame"):
+        Sum(W, d[P, W] * x[P, W]).materialise(within=subset((W,), {"W": ["w1"]}))

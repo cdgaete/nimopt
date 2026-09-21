@@ -323,6 +323,38 @@ ValueError: frames ('P',) and ('Q',) share no dimension; pass operands that shar
 </details>
 <!-- /output -->
 
+## Adding several arrays
+
+`sum_arrays(arrays)` adds several arrays over one frame in one merge. The
+result equals adding them in order with `+`. A chain of `+` merges the running
+sum once per operand, and `sum_arrays` sorts the entries of all operands once.
+Under `"empty"` the result has every coordinate of any operand. Under
+`"unknown"` it has only the coordinates of every operand. The operands have
+the same dimensions, labels and absence.
+
+```python
+import numpy as np
+import nimblend as nb
+
+labels = {"A": np.array(["a0", "a1"]), "B": np.array(["b0", "b1"])}
+first = nb.SparseArray.from_dense(np.array([[1.0, 0.0], [0.0, 2.0]]), labels)
+second = nb.SparseArray.from_dense(np.array([[10.0, 20.0], [30.0, 40.0]]), labels)
+
+print(nb.sum_arrays([first, second, first]).to_dense())
+```
+
+<!-- output -->
+<details open>
+<summary>Output</summary>
+
+```text
+[[12. 20.]
+ [30. 44.]]
+```
+
+</details>
+<!-- /output -->
+
 ## Densifying an unknown array
 
 An array declaring `"unknown"` that does not have every coordinate of its

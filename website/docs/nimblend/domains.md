@@ -33,6 +33,7 @@ coordinates are present, and it records no numbering origin.
 | `positions_of_coordinates(index)` | each column of an index matrix as its position here, `-1` where absent |
 | `expand(dims, coords)` | every member crossed with the full extent of the named dimensions |
 | `transpose(*dims)` | the same members, over the dimensions in the order given, or reversed when none are given |
+| `project(dims)` | the distinct coordinates of the members over `dims`, in the order given |
 | `as_coord()` | the domain as a coordinate, each member at its rank |
 | `array(values, absence="empty")` | the members with one value each, as a `SparseArray` |
 | `identity(into, coord, start=0)` | each member paired with its own position along `into`, valued 1.0 |

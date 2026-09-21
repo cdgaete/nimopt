@@ -140,3 +140,42 @@ def test_a_declared_parameter_refuses_wherever_its_values_are_read():
     p = Param("cost", (G,))
     with pytest.raises(ValueError, match="has no values"):
         p[G].materialise()
+
+
+def test_from_positions_equals_from_long_at_the_same_members():
+    P, W = sets_2x3()
+    # columns in no particular order: (p2, w3), (p1, w1), (p2, w1)
+    by_position = Param.from_positions(
+        "c", (P, W), [[1, 0, 1], [2, 0, 0]], [3.0, 1.0, 2.0]
+    )
+    by_label = Param.from_long(
+        "c",
+        (P, W),
+        {"P": ["p2", "p1", "p2"], "W": ["w3", "w1", "w1"]},
+        [3.0, 1.0, 2.0],
+    )
+    assert (
+        by_position.array.coordinates().tolist()
+        == by_label.array.coordinates().tolist()
+    )
+    assert by_position.array.values().tolist() == by_label.array.values().tolist()
+
+
+def test_from_positions_raises_for_a_position_outside_a_set():
+    P, W = sets_2x3()
+    with pytest.raises(
+        ValueError, match="parameter 'c': row 1 of the index has positions"
+    ):
+        Param.from_positions("c", (P, W), [[0], [3]], [1.0])
+
+
+def test_from_positions_raises_for_a_member_given_twice():
+    P, W = sets_2x3()
+    with pytest.raises(ValueError, match="appears twice"):
+        Param.from_positions("c", (P, W), [[0, 0], [1, 1]], [1.0, 2.0])
+
+
+def test_from_positions_raises_for_one_value_per_column_missing():
+    P, W = sets_2x3()
+    with pytest.raises(ValueError, match="has 2 index columns and 3 values"):
+        Param.from_positions("c", (P, W), [[0, 1], [1, 2]], [1.0, 2.0, 3.0])

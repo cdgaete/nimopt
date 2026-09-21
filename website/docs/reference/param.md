@@ -104,6 +104,38 @@ ValueError: parameter 'cost': label columns have lengths {'P': 1, 'W': 2} and th
 </details>
 <!-- /output -->
 
+### `Param.from_positions(name, sets, index, values)`
+
+Coefficients from an index matrix and one value column. `index` has one row
+per set, and each column identifies one member by its position in each set.
+A caller that already has positions resolves no labels. The columns are in
+any order, and each member appears once.
+
+```python
+import numpy as np
+from nimopt import Param, Set
+
+P = Set("P", np.array(["lisbon", "porto"]))
+W = Set("W", np.array(["berlin", "paris", "rome"]))
+
+cost = Param.from_positions("cost", (P, W), [[1, 0], [1, 0]], [1.0, 2.0])
+print(cost.array.to_dense())
+```
+
+<!-- output -->
+<details open>
+<summary>Output</summary>
+
+```text
+[[2. 0. 0.]
+ [0. 1. 0.]]
+```
+
+</details>
+<!-- /output -->
+
+A position outside its set raises `ValueError`, as does a member given twice.
+
 ### Members
 
 | Member | Returns |

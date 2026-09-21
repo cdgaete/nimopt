@@ -4,7 +4,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 import numpy as np
-from nimblend import Domain, SparseArray
+from nimblend import Domain, SparseArray, sum_arrays
 
 from nimopt.coefficient import NOT_A_COEFFICIENT, Coefficient, Derived, Reference
 from nimopt.names import COLUMN
@@ -24,6 +24,30 @@ def _names(sets: Any) -> tuple[str, ...]:
 
 
 _EACH_BOUND = "write each bound in its own constraint"
+
+
+class Within:
+    """A row domain over a frame, projected onto the dimensions of each operand."""
+
+    def __init__(self, domain: Domain) -> None:
+        self.domain = domain
+        self._projected: dict[tuple[str, ...], Domain | None] = {}
+
+    def restrict(self, array: Any) -> Any:
+        """Return the entries of `array` whose coordinates are in a projection.
+
+        The projection is the row domain over the dimensions `array` shares
+        with it. An array that shares no dimension, or a projection with every
+        cell of its shape, returns `array` unchanged.
+        """
+        dims = tuple(d for d in self.domain.dims if d in array.dims)
+        if dims not in self._projected:
+            projected = self.domain.project(dims) if dims else None
+            if projected is not None and projected.is_full:
+                projected = None
+            self._projected[dims] = projected
+        projected = self._projected[dims]
+        return array if projected is None else array.restrict(projected)
 
 
 class Term:
@@ -177,6 +201,7 @@ class Term:
         coords: Mapping[str, Any],
         record: Any = None,
         at: Mapping[str, Any] | None = None,
+        within: Within | None = None,
     ) -> SparseArray:
         """Return the term's coefficients over `(*frame, COLUMN)`.
 
@@ -188,18 +213,25 @@ class Term:
         dimensions the variable has none of is replicated over the variable's
         own dimensions first. `at` maps each dimension of the frame to one
         label, and the array is then over `(COLUMN,)` at that coordinate.
+        `within` restricts the columns and the coefficient before the product.
+        The block then contains every entry inside the row domain, and entries
+        outside it where the domain is not the product of its projections.
         """
         array = self.variable.terms()
         for dim, (amount, mode) in self.shifts.items():
             array = array.shift({dim: amount}, mode=mode)
         if self.fixed:
             array = array.sel(self.fixed)
+        if within is not None:
+            array = within.restrict(array)
         if at is not None and self.where is None:
             early = {d: at[d] for d in array.dims if d in at and d not in self.summed}
             if early:
                 array = array.sel(early)
         if self.coefficient is not None:
             values = self.coefficient.materialise()
+            if within is not None:
+                values = within.restrict(values)
             apart = tuple(d for d in values.dims if d not in array.dims)
             if len(apart) == len(values.dims):
                 array = array.expand(apart, {d: coords[d] for d in apart})
@@ -439,24 +471,33 @@ class Expression:
         return {name: s.coord for name, s in self.sets_by_name().items()}
 
     def materialise(
-        self, record: Any = None, progress: Any = None
+        self, record: Any = None, progress: Any = None, within: Domain | None = None
     ) -> tuple[SparseArray, Domain]:
         """Return the block over `(*frame, COLUMN)` and the rows it spans.
 
         Every entry is produced by a `nimblend` operation. The row domain is
         the intersection of the terms' domains over the frame. A row absent
-        from one term is absent from the expression. `progress` is called
-        once per term, the finest division of the work available.
+        from one term is absent from the expression. The term blocks are
+        added in one merge. `progress` is called once per term, the finest
+        division of the work available. `within` is a domain over the frame.
+        The block then has the entries of the full block inside `within`, and
+        can have entries outside it. Raises ValueError for a `within` over
+        other dimensions than the frame.
         """
         frame = self.frame
+        if within is not None and within.dims != frame:
+            raise ValueError(
+                f"expression is free over {frame} and within is over "
+                f"{within.dims}; pass a domain over the frame"
+            )
         coords = self.coords
+        rows_of_terms = None if within is None else Within(within)
         blocks = []
         for term in self.terms:
-            blocks.append(term.materialise(frame, coords, record))
+            blocks.append(term.materialise(frame, coords, record, within=rows_of_terms))
             if progress is not None:
                 progress.term(term)
         rows = blocks[0].domain(frame)
-        total = blocks[0]
         if record is not None:
             record.term_rows(self.terms[0], rows)
         for term, block in zip(self.terms[1:], blocks[1:]):
@@ -464,8 +505,7 @@ class Expression:
             if record is not None:
                 record.term_rows(term, spanned)
             rows = rows.intersect(spanned)
-            total = total + block
-        return total, rows
+        return sum_arrays(blocks), rows
 
     def materialise_at(self, at: Mapping[str, Any]) -> SparseArray:
         """Return the coefficients at one coordinate of the frame, over `(COLUMN,)`.
@@ -481,10 +521,7 @@ class Expression:
             )
         coords = self.coords
         blocks = [term.materialise(self.frame, coords, at=at) for term in self.terms]
-        total = blocks[0]
-        for block in blocks[1:]:
-            total = total + block
-        return total
+        return sum_arrays(blocks)
 
 
 def Sum(*args: Any, where: Any = None) -> "Expression":

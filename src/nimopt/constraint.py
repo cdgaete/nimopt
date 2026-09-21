@@ -181,23 +181,29 @@ class Constraint:
         is grouped into the slice the buffer reserves, and exists as no second
         object. The frame precedes the column dimension in canonical order.
         The grouping reads a leading prefix, and the result is canonical as
-        written.
+        written. Raises ValueError where the coefficients differ in number
+        from those measured at declaration, and writes nothing then.
         """
-        block, _ = self.expression.materialise(progress=progress)
-        n = int((self.rows.positions_of(block) >= 0).sum())
-        if n != self._nnz:
-            raise ValueError(
-                f"constraint {self.name!r} measured {self._nnz} coefficients "
-                f"and built {n}; keep the parameter data unchanged between "
-                f"measuring and writing"
-            )
+        narrowed = self.over is not None or self.where is not None
+        within = self.rows if narrowed else None
+        block, _ = self.expression.materialise(progress=progress, within=within)
+
+        def reserve(n: int) -> Any:
+            if n != self._nnz:
+                raise ValueError(
+                    f"constraint {self.name!r} measured {self._nnz} coefficients "
+                    f"and built {n}; keep the parameter data unchanged between "
+                    f"measuring and writing"
+                )
+            return buffer.reserve(n)
+
         return block.group(
             self.frame,
             into=ROW,
             domain=self.rows,
             coord=rows,
             start=row_start,
-            out=buffer.reserve(n),
+            reserve=reserve,
         )
 
 
@@ -208,23 +214,28 @@ def narrow(
 
     The rows are the coordinates at which every term is present, narrowed by
     the condition and by the coverage of the right-hand side. `over=` declares
-    the rows instead. A recorder passed here records what each narrowing
-    dropped.
+    the rows instead. Without a recorder, the expression is materialised
+    within the declared rows or the condition. A recorder passed here records
+    what each narrowing dropped, over the whole expression.
     """
     frame = constraint.frame
-    block, rows = constraint.expression.materialise(record)
+    owner = f"constraint {constraint.name!r}"
+    declared = condition = None
+    if constraint.over is not None:
+        declared = rows_of(constraint.over, frame, owner, "over=")
+    elif constraint.where is not None:
+        condition = rows_of(constraint.where, frame, owner, "condition")
+    within = declared if declared is not None else condition
+    if record is not None:
+        within = None
+    block, rows = constraint.expression.materialise(record, within=within)
     if record is not None:
         record.reached(frame, rows)
-    if constraint.over is not None:
-        rows = rows_of(
-            constraint.over, frame, f"constraint {constraint.name!r}", "over="
-        )
+    if declared is not None:
+        rows = declared
         if record is not None:
             record.stated(rows)
-    elif constraint.where is not None:
-        condition = rows_of(
-            constraint.where, frame, f"constraint {constraint.name!r}", "condition"
-        )
+    elif condition is not None:
         narrowed = rows.intersect(condition)
         if record is not None:
             record.dropped(
