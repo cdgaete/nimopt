@@ -10,7 +10,9 @@ description: What one row of a built model contains, and which coordinates were 
 Returned by `Model.row(name, **coords)`. One row as the assembled matrix
 stores it: the columns, the coefficients and the bounds that are passed to
 the solver. `Model.row` computes the entries of that row alone. It builds no
-matrix and no other row.
+matrix and no other row. `coords` gives one label per free dimension. A
+constraint with no free dimension has one row, and `Model.row(name)` returns
+it.
 
 | Field | Contains |
 | --- | --- |

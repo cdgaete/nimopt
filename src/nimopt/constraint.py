@@ -102,9 +102,10 @@ class Constraint:
         """Return the position of the row at a coordinate.
 
         `coords` maps each free dimension to one label. Each label is converted
-        to the dtype of its dimension's members. Raises ValueError for other
-        dimensions, for a label that is not a member of its dimension, for a
-        label that does not convert and for a coordinate with no row.
+        to the dtype of its dimension's members. A constraint with no free
+        dimension has its one row at an empty `coords`. Raises ValueError for
+        other dimensions, for a label that is not a member of its dimension,
+        for a label that does not convert and for a coordinate with no row.
         """
         rows = self.rows
         if tuple(coords) != rows.dims:
@@ -125,7 +126,7 @@ class Constraint:
                     f"constraint {self.name!r}; pass a member of {d!r}"
                 ) from None
             positions.append(at.astype(np.int32))
-        index = np.stack(positions)
+        index = np.asarray(positions, dtype=np.int32).reshape(len(rows.dims), 1)
         at = int(rows.positions_of_coordinates(index)[0])
         if at < 0:
             raise ValueError(

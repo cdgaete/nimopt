@@ -45,6 +45,8 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
   sets its objective after the session opened.
 - `Model.row` computes the entries of the named row alone. It builds no
   matrix and no other row.
+- `Model.row(name)` returns the one row of a constraint with no free
+  dimension.
 
 ## 0.20260919.0 - 2026-09-19
 

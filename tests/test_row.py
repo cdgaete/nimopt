@@ -229,3 +229,29 @@ def test_materialise_at_other_dimensions_than_the_frame_raises():
     m = nodal().build(nodal_data())
     with pytest.raises(ValueError, match="expression is free over"):
         m.constraints["balance"].expression.materialise_at({"B": "b0"})
+
+
+def test_a_row_of_a_constraint_with_no_free_dimension_equals_its_assembled_row():
+    # one row, read with no coordinate
+    T = Set("T", np.array([0, 1]))
+    m = Model("m")
+    x = m.var("x", (T,))
+    m.constraint("total", Sum(T, 2.0 * x[T]) <= 5.0)
+    row = m.row("total")
+    assert row.coordinate == {}
+    assert [t.coefficient for t in row.terms] == [2.0, 2.0]
+    assert (row.sense, row.upper) == ("<=", 5.0)
+    rows_equal_their_assembled_rows(m)
+
+
+def test_a_constraint_with_no_free_dimension_and_no_row_raises():
+    # the variable has no column, and the sum has no term
+    T = Set("T", np.array([0, 1]))
+    none = Param.from_long(
+        "none", (T,), {"T": np.array([], dtype=np.int64)}, np.array([], float)
+    )
+    m = Model("m")
+    x = m.var("x", (T,), subset=none)
+    m.constraint("total", Sum(T, x[T]) <= 5.0)
+    with pytest.raises(ValueError, match=r"has no row at \{\}; read `absent"):
+        m.row("total")
