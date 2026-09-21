@@ -30,7 +30,6 @@ beside it. `sense` is `"min"` or `"max"`, set once here.
 | `piecewise(name, x, x_points, y, y_points, sign, method, active=None, relaxed=False, where=None)` | a `Piecewise`; `build` generates its declarations and checks its breakpoints |
 | `build(data)` | a `Model` over the declarations, bound to `data` |
 | `explain()` | an `Explanation` of what is declared |
-| `to_yaml(instructions=False, version=4)` | the text of this definition's file, structure and no data; `instructions=True` adds the comment block that describes the format; `version=3` raises `ValueError` for a definition with a piecewise declaration |
 | `set_objective(expression)` | nothing; sets the objective |
 | `sense` | `"min"` or `"max"`, as declared |
 | `sets`, `aliases`, `parameters`, `variables`, `constraints`, `piecewise_declarations` | the registries, keyed by name |

@@ -1181,7 +1181,7 @@ def test_a_definition_reserves_the_names_of_both_methods_for_auto():
 
 def test_a_file_writes_auto_and_loads_it():
     m = auto_model([0.0, 10.0, 30.0])
-    loaded = no.loads(m.to_yaml(inline=True))
+    loaded = no.loads(no.dumps(m, inline=True))
     held = loaded.piecewise_declarations["curve"]
     assert held.method == "auto"
     assert held.formulation == "tangent"

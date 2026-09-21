@@ -11,7 +11,7 @@ coefficient written out, every term with its own sum and sign, and the
 constant last.
 
 ```python
-from nimopt import Definition, Sum
+from nimopt import Definition, Sum, dumps
 
 d = Definition("dispatch", sense="min")
 G, T = d.set("G"), d.set("T")
@@ -21,7 +21,7 @@ gen = d.var("gen", (G, T), upper=cap)
 d.constraint("balance", Sum(G, gen[G, T]) == load[T])
 d.set_objective(Sum(G, T, 2 * (price[G, T] / eta[G, T]) * gen[G, T]))
 
-print(d.to_yaml())
+print(dumps(d))
 ```
 
 <!-- output -->
@@ -113,7 +113,7 @@ Adding a scalar, reordering terms and reversing a comparison all parse. The
 file written back is the canonical form.
 
 ```python
-from nimopt import loads
+from nimopt import dumps, loads
 
 edited = """
 version: 3
@@ -131,7 +131,7 @@ constraints:
     relation: load[T] == Sum(G, gen[G, T]) * 2 + 1 - 1
 objective: Sum(G, T, cost[G] * gen[G, T])
 """
-print(loads(edited).to_yaml().splitlines()[-2])
+print(dumps(loads(edited)).splitlines()[-2])
 ```
 
 <!-- output -->
@@ -186,11 +186,11 @@ coordinates of its product is a table of the dimensions then `value`. A file
 containing data loads to a built `Model`.
 
 ```python
-from nimopt import loads
+from nimopt import dumps, loads
 from nimopt.models import transport
 
 m = transport.definition().build(transport.data())
-text = m.to_yaml(inline=True)
+text = dumps(m, inline=True)
 print(text[text.index("data:") :])
 print(loads(text).solve().objective)
 ```
@@ -237,7 +237,7 @@ fixed in a relation is written as quoted text.
 
 ```python
 import numpy as np
-from nimopt import Model, Param, Set, Sum, loads
+from nimopt import Model, Param, Set, Sum, dumps, loads
 
 T = Set("T", np.array(["2030-01-01T00", "2030-01-01T01"], dtype="datetime64[h]"))
 cost = Param.from_dense("cost", (T,), np.array([2.0, 5.0]))
@@ -246,7 +246,7 @@ gen = m.var("gen", (T,), upper=10.0)
 m.constraint("start", gen["2030-01-01T00"] == 4.0)
 m.constraint("total", Sum(T, gen[T]) >= 6.0)
 m.set_objective(Sum(T, cost[T] * gen[T]))
-text = m.to_yaml(inline=True)
+text = dumps(m, inline=True)
 print(text[text.index("constraints:") :])
 print(loads(text).solve().objective)
 ```
@@ -345,8 +345,8 @@ source.
 
 ## A file that describes its own format
 
-`instructions=True` on `save`, `Definition.to_yaml` and `Model.to_yaml` writes
-a comment block at the top of the file. The block is the same in every file.
+`instructions=True` on `save` and `dumps` writes a comment block at the top of
+the file. The block is the same in every file.
 It describes the format, not the model: the keys and their order, the
 defaults, the rules that determine which rows a constraint has, and the
 expression syntax. A reader with one file interprets it without this package.
@@ -355,16 +355,16 @@ The block is a YAML comment. A file with it loads to the same model as one
 without it, and writing the loaded model with the flag gives the same text.
 
 ```python
-from nimopt import Definition, loads
+from nimopt import Definition, dumps, loads
 
 d = Definition("dispatch", sense="min")
 T = d.set("T")
 load, gen = d.param("load", (T,)), d.var("gen", (T,))
 d.constraint("balance", gen[T] == load[T])
-text = d.to_yaml(instructions=True)
+text = dumps(d, instructions=True)
 print("\n".join(text.splitlines()[:5]))
-print(loads(text).to_yaml() == d.to_yaml())
-print(loads(text).to_yaml(instructions=True) == text)
+print(dumps(loads(text)) == dumps(d))
+print(dumps(loads(text), instructions=True) == text)
 ```
 
 <!-- output -->

@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 import pytest
 
-from nimopt import Definition, Model, Param, Set, Sum, load, loads, save
+from nimopt import Definition, Model, Param, Set, Sum, dumps, load, loads, save
 
 UNITS = ("ns", "us", "s", "D")
 DELTAS = ("h", "ns")
@@ -89,29 +89,29 @@ def test_a_timedelta_set_round_trips_through_both_formats(
     ],
 )
 def test_a_fixed_datetime_member_is_written_as_a_quoted_iso_string(unit, written):
-    text = model(stamps(unit), True).to_yaml()
+    text = dumps(model(stamps(unit), True))
     assert f"x['{written}'] == 1" in text
 
 
 def test_a_fixed_timedelta_member_is_written_as_a_count_and_a_unit():
-    text = model(spans("h"), True).to_yaml()
+    text = dumps(model(spans("h"), True))
     assert "x['1 h'] == 1" in text
 
 
 def test_an_inline_datetime_set_is_written_as_its_dtype_and_its_members():
-    block = model(stamps("s"), False).to_yaml(inline=True)
+    block = dumps(model(stamps("s"), False), inline=True)
     assert "dtype: datetime64[s]" in block
     assert "members: ['2030-01-01T00:00:00', '2030-01-02T00:00:00'" in block
 
 
 def test_an_inline_timedelta_set_is_written_as_its_dtype_and_its_counts():
-    block = model(spans("h"), False).to_yaml(inline=True)
+    block = dumps(model(spans("h"), False), inline=True)
     assert "dtype: timedelta64[h]" in block
     assert "members: [1, 2, 3]" in block
 
 
 def test_a_saved_file_declares_version_four():
-    assert "version: 4\n" in model(stamps("ns"), False).to_yaml()
+    assert "version: 4\n" in dumps(model(stamps("ns"), False))
 
 
 VERSION_TWO = textwrap.dedent(
@@ -252,7 +252,7 @@ def test_a_naive_datetime_object_is_a_member():
     T = Set("T", stamps("ns"))
     x = m.var("x", (T,))
     m.constraint("start", x[datetime.datetime(2030, 1, 1)] == 1.0)
-    assert "x['2030-01-01T00:00:00.000000000'] == 1" in m.to_yaml()
+    assert "x['2030-01-01T00:00:00.000000000'] == 1" in dumps(m)
 
 
 def test_a_member_outside_the_range_of_its_dtype_raises():
@@ -311,7 +311,7 @@ def test_an_integer_against_a_timedelta_set_counts_its_own_unit():
     T = Set("T", spans("h"))
     x = m.var("x", (T,))
     m.constraint("start", x[2] == 1.0)
-    assert "x['2 h'] == 1" in m.to_yaml()
+    assert "x['2 h'] == 1" in dumps(m)
 
 
 def test_a_timedelta_text_takes_a_unit_with_a_multiplier():

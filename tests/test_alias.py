@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nimopt import Alias, Definition, Model, Param, Set, Sum
+from nimopt import Alias, Definition, Model, Param, Set, Sum, dumps
 
 
 def test_an_alias_shares_the_sets_labels_and_coordinate():
@@ -113,9 +113,9 @@ def test_a_definition_with_an_alias_round_trips_through_its_file():
     flow = d.var("flow", (N, NP), lower=0.0)
     limit = d.param("limit", (N, NP))
     d.constraint("cap", flow[N, NP] <= limit[N, NP])
-    text = d.to_yaml()
+    text = dumps(d)
     assert "aliases:\n  NP: N\n" in text
-    assert loads(text).to_yaml() == text
+    assert dumps(loads(text)) == text
 
 
 def test_a_model_writes_the_aliases_it_is_declared_over_apart_from_its_sets():
@@ -125,7 +125,7 @@ def test_a_model_writes_the_aliases_it_is_declared_over_apart_from_its_sets():
     x = m.var("x", (N, NP))
     limit = Param.from_dense("limit", (N, NP), np.ones((2, 2)))
     m.constraint("cap", x[N, NP] <= limit[N, NP])
-    text = m.to_yaml()
+    text = dumps(m)
     assert "sets: [N]\naliases:\n  NP: N\n" in text
     assert "NP of N" in repr(m.explain())
 
@@ -155,6 +155,6 @@ def test_a_model_writes_the_base_of_every_alias_it_is_declared_over():
     f = m.var("f", (B2,))
     limit = Param.from_dense("limit", (B2,), np.ones(2))
     m.constraint("cap", f[B2] <= limit[B2])
-    text = m.to_yaml()
+    text = dumps(m)
     assert "sets: [B]" in text
-    assert loads(text).to_yaml() == text
+    assert dumps(loads(text)) == text

@@ -387,24 +387,6 @@ class Model:
             ),
         )
 
-    def to_yaml(
-        self, inline: bool = False, instructions: bool = False, version: int = 4
-    ) -> str:
-        """Return this model as file text, with its data inline where asked.
-
-        The text contains the structure alone, or the structure and an inline
-        data block. `save` writes a sidecar and the line that refers to it.
-        This method writes no file. `instructions=True` prefixes the comment
-        block that explains the format. `version` is 4 or 3. Version 3 writes
-        the declarations a piecewise declaration generated in its place.
-        """
-        from nimopt.files import dumps, structure, to_inline
-
-        mapping = structure(self, version)
-        if inline:
-            mapping["data"] = to_inline(self, version)
-        return dumps(mapping, instructions)
-
     def _variable(self, name: str, other: str | None = None) -> Variable:
         """Return the named variable.
 

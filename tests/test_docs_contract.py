@@ -74,6 +74,7 @@ HOME = {
     "Constraint": "constraint",
     "Definition": "definition",
     "Solution": "solution",
+    "dumps": "files",
     "load": "files",
     "loads": "files",
     "save": "files",

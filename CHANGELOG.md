@@ -24,11 +24,17 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
   return the labels of the rows or the columns at those positions.
 - `Constraint.position_of(coords)` returns the position of the row at a
   coordinate.
+- `dumps(what, inline=False, instructions=False, version=4)` returns the text
+  of a definition's file or a model's file. `loads` reads it.
 
 ### Changed
 
 - `Model.row` and `Session.diagnose` read the labels of the rows and the
   columns they report alone. They decode no other row of the constraint.
+
+### Removed
+
+- `Model.to_yaml` and `Definition.to_yaml`. `dumps` returns the same text.
 
 ### Fixed
 

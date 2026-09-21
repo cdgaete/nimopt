@@ -5,10 +5,11 @@ description: The file a definition or a model writes, the meaning of each key, t
 
 # Files
 
-## `load`, `loads`, `save`
+## `dumps`, `load`, `loads`, `save`
 
 | Function | Does |
 | --- | --- |
+| `dumps(what, inline=False, instructions=False, version=4)` | returns the text of a definition's file, or of a model's file; a model's data is included with `inline=True` alone; a definition with `inline=True` raises `ValueError` |
 | `load(path, data=None)` | reads a file; returns a `Definition`, or a `Model` where the file contains data or `data=` gives it |
 | `loads(text, data=None)` | the same over text; a sidecar name in text raises `ValueError`. Text has no directory |
 | `save(what, path, inline=False, instructions=False, version=4)` | writes a definition's file, or a model's with an `.npz` beside it, or one file with an inline block when `inline=True`; `instructions=True` writes the comment block that describes the format at the top of the file; `version` is `4` or `3` |
@@ -16,10 +17,8 @@ description: The file a definition or a model writes, the meaning of each key, t
 `data=` is the mapping `build` takes or the path of an `.npz`. A file that
 contains data and a `data=` together raises `ValueError`.
 
-`Definition.to_yaml(instructions=False, version=4)` and
-`Model.to_yaml(inline=False, instructions=False, version=4)` return the text
-`save` writes, without a sidecar line: only `save` writes a sidecar and the
-line that identifies it.
+`dumps` returns the text `save` writes, without a sidecar line. Only `save`
+writes a sidecar and the line that identifies it.
 
 `version=4` writes each piecewise declaration under `piecewise`, and omits
 the sets, parameters, variables and constraints it generated. `version=3`
@@ -63,16 +62,16 @@ through the same operators. The file is a fixed point: reading it and writing
 it again gives the same text.
 
 ```python
-from nimopt import Definition, Sum, loads
+from nimopt import Definition, Sum, dumps, loads
 
 d = Definition("d")
 S = d.set("S")
 c = d.param("c", (S,))
 x = d.var("x", (S,), integer=True)
 d.constraint("cap", 2 * c[S] * x[S] - 1 <= 5)
-text = d.to_yaml()
+text = dumps(d)
 print(text)
-print(loads(text).to_yaml() == text)
+print(dumps(loads(text)) == text)
 ```
 
 <!-- output -->
@@ -208,13 +207,13 @@ reports the first and the last member of that range. A `NaT` member raises
 
 ```python raises=ValueError
 import numpy as np
-from nimopt import Model, Set, subset
+from nimopt import Model, Set, dumps, subset
 
 P = Set("P", np.array(["a", "b"]))
 m = Model("m")
 x = m.var("x", (P,))
 m.constraint("cap", x[P] <= 1.0, where=subset((P,), {"P": np.array(["a"])}))
-m.to_yaml()
+dumps(m)
 ```
 
 <!-- output -->

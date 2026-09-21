@@ -396,7 +396,7 @@ generated variables, constraints and parameters are not written. Loading
 the file generates them again.
 
 ```python
-from nimopt import Definition, Sum
+from nimopt import Definition, Sum, dumps
 
 d = Definition("curve", sense="min")
 G, B = d.set("G"), d.set("B")
@@ -407,7 +407,7 @@ d.constraint("demand", Sum(G, p[G]) == 25.0)
 d.piecewise("fuel", p[G], power[G, B], c[G], cost[G, B], ">=", "incremental")
 d.set_objective(Sum(G, c[G]))
 
-print(d.to_yaml())
+print(dumps(d))
 ```
 
 <!-- output -->
@@ -452,7 +452,7 @@ generate the rows from, and writing it as version 3 raises `ValueError`.
 
 ```python
 import numpy as np
-from nimopt import Model, Param, Set, Sum
+from nimopt import Model, Param, Set, Sum, dumps
 
 G = Set("G", np.array(["a"]))
 B = Set("B", np.array(["b0", "b1"]))
@@ -464,7 +464,7 @@ p = m.var("p", (G,))
 c = m.var("c", (G,))
 m.piecewise("fuel", p[G], power[G, B], c[G], cost[G, B], ">=", "tangent")
 
-print(m.to_yaml(version=3))
+print(dumps(m, version=3))
 ```
 
 <!-- output -->

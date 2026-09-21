@@ -5,7 +5,18 @@ import textwrap
 import numpy as np
 import pytest
 
-from nimopt import Definition, Model, Param, Set, Sum, load, loads, save, subset
+from nimopt import (
+    Definition,
+    Model,
+    Param,
+    Set,
+    Sum,
+    dumps,
+    load,
+    loads,
+    save,
+    subset,
+)
 from nimopt.files import (
     CONSTRAINT_KEYS,
     INSTRUCTIONS,
@@ -13,7 +24,7 @@ from nimopt.files import (
     KEYS,
     PIECEWISE_KEYS,
     VARIABLE_KEYS,
-    dumps,
+    yaml_text,
 )
 from nimopt.models import MODELS
 from nimopt.models import transport as worked_transport
@@ -71,7 +82,7 @@ def dispatch():
 
 
 def test_a_definition_writes_the_file_the_spec_shows():
-    assert dispatch().to_yaml() == DISPATCH
+    assert dumps(dispatch()) == DISPATCH
 
 
 def test_the_file_reads_back_to_a_definition_that_writes_the_same_file():
@@ -80,7 +91,7 @@ def test_the_file_reads_back_to_a_definition_that_writes_the_same_file():
     assert list(d.sets) == ["G", "T"]
     assert d.variables["gen"].upper is d.parameters["cap"]
     assert d.constraints["annual_cap"][1] is d.parameters["live"]
-    assert d.to_yaml() == DISPATCH
+    assert dumps(d) == DISPATCH
 
 
 def test_defaults_are_omitted_and_read_back_as_defaults():
@@ -88,7 +99,7 @@ def test_defaults_are_omitted_and_read_back_as_defaults():
     S = d.set("S")
     d.var("x", (S,))
     d.var("z", (S,), lower=-np.inf, upper=3.0, integer=True)
-    text = d.to_yaml()
+    text = dumps(d)
     assert (
         "  x:\n    sets: [S]\n"
         "  z:\n    sets: [S]\n    lower: -.inf\n    upper: 3.0\n    integer: true\n"
@@ -105,7 +116,7 @@ def test_a_subset_and_stated_rows_write_as_the_definition_takes_them():
     cost = d.param("cost", (P, W))
     flow = d.var("flow", (P, W), subset=cost)
     d.constraint("all", Sum(W, flow[P, W]) <= 1.0, over=(P,))
-    text = d.to_yaml()
+    text = dumps(d)
     assert "    subset: cost\n" in text
     assert "    over: [P]\n" in text
     back = loads(text)
@@ -119,7 +130,7 @@ def test_a_model_writes_its_structure_in_order_of_first_appearance():
     m = Model("m", sense="max")
     x = m.var("x", (P,), upper=cost)
     m.constraint("cap", Sum(P, cost[P] * x[P]) <= 3.0)
-    assert m.to_yaml() == textwrap.dedent(
+    assert dumps(m) == textwrap.dedent(
         """\
         version: 4
         name: m
@@ -144,11 +155,11 @@ def test_a_model_over_a_domain_with_no_name_is_refused_by_name():
     x = m.var("x", (P,))
     m.constraint("cap", x[P] <= 1.0, where=subset((P,), {"P": np.array(["a"])}))
     with pytest.raises(ValueError, match="constraint 'cap'.*no name.*parameter"):
-        m.to_yaml()
+        dumps(m)
     n = Model("n")
     n.var("y", (P,), subset=subset((P,), {"P": np.array(["a"])}))
     with pytest.raises(ValueError, match="variable 'y'.*no name.*parameter"):
-        n.to_yaml()
+        dumps(n)
 
 
 def test_a_model_whose_symbol_the_spelling_cannot_address_is_refused():
@@ -156,7 +167,7 @@ def test_a_model_whose_symbol_the_spelling_cannot_address_is_refused():
     m = Model("m")
     m.var("x", (P,))
     with pytest.raises(ValueError, match="'my-set'.*identifier"):
-        m.to_yaml()
+        dumps(m)
 
 
 HEAD = "version: 2\nname: d\nsense: min\nsets: [S]\n"
@@ -202,9 +213,9 @@ def same_model(a, b):
 def test_every_worked_model_round_trips_through_its_file(name):
     held = module(name)
     d = held.definition()
-    text = d.to_yaml()
+    text = dumps(d)
     back = loads(text)
-    assert back.to_yaml() == text
+    assert dumps(back) == text
     inputs = held.data()
     same_model(d.build(inputs), back.build(inputs))
     assert back.build(inputs).solve().objective == pytest.approx(
@@ -216,7 +227,7 @@ def test_a_file_is_saved_and_loaded_as_a_definition(tmp_path):
     path = tmp_path / "dispatch.yaml"
     save(dispatch(), path)
     assert path.read_text() == DISPATCH
-    assert load(path).to_yaml() == DISPATCH
+    assert dumps(load(path)) == DISPATCH
 
 
 def test_a_definition_has_nothing_to_inline(tmp_path):
@@ -242,7 +253,7 @@ def test_a_model_inlines_its_data_in_the_three_shapes():
     m = Model("m")
     x = m.var("x", (P, W), subset=cost, upper=cap)
     m.constraint("cap", Sum(W, cost[P, W] * x[P, W]) <= cap[P])
-    text = m.to_yaml(inline=True)
+    text = dumps(m, inline=True)
     # `cap` leads `cost` because a variable's bounds are walked before its subset
     assert text.endswith(
         textwrap.dedent(
@@ -272,7 +283,7 @@ def test_a_long_parameter_covering_its_product_inlines_as_a_grid():
     m = Model("m")
     x = m.var("x", (P,), upper=full)
     m.constraint("cap", x[P] <= full[P])
-    assert "  full: [1.0, 2.0]\n" in m.to_yaml(inline=True)
+    assert "  full: [1.0, 2.0]\n" in dumps(m, inline=True)
 
 
 def test_a_file_with_an_inline_block_loads_to_a_built_model(tmp_path):
@@ -331,7 +342,7 @@ def test_two_sources_for_one_model_are_refused(tmp_path):
     with pytest.raises(ValueError, match="two sources"):
         load(tmp_path / "t.yaml", data=inputs)
     with pytest.raises(ValueError, match="two sources"):
-        loads(m.to_yaml(inline=True), data=inputs)
+        loads(dumps(m, inline=True), data=inputs)
 
 
 def test_text_cannot_name_a_sidecar():
@@ -417,27 +428,29 @@ def test_an_objective_over_no_dimension_survives_the_file():
     x = d.var("x", (S,))
     d.constraint("tail", theta - Sum(S, x[S]) >= 0.0)
     d.set_objective(theta)
-    text = d.to_yaml()
+    text = dumps(d)
     assert "objective: theta\n" in text
-    assert loads(text).to_yaml() == text
+    assert dumps(loads(text)) == text
 
 
 def test_dumps_prefixes_the_block_where_instructions_is_asked():
-    assert dumps({"version": 2}, instructions=True) == INSTRUCTIONS_V3 + "version: 2\n"
-    assert dumps({"version": 4}, instructions=True) == INSTRUCTIONS + "version: 4\n"
-    assert dumps({"version": 2}) == "version: 2\n"
+    assert (
+        yaml_text({"version": 2}, instructions=True) == INSTRUCTIONS_V3 + "version: 2\n"
+    )
+    assert yaml_text({"version": 4}, instructions=True) == INSTRUCTIONS + "version: 4\n"
+    assert yaml_text({"version": 2}) == "version: 2\n"
 
 
 def test_a_definition_writes_the_block_only_where_instructions_is_asked():
     d = dispatch()
-    assert d.to_yaml(instructions=True) == INSTRUCTIONS + d.to_yaml()
-    assert "#" not in d.to_yaml()
+    assert dumps(d, instructions=True) == INSTRUCTIONS + dumps(d)
+    assert "#" not in dumps(d)
 
 
 def test_a_model_writes_the_block_above_its_inline_data():
     m = worked_transport.definition().build(worked_transport.data())
-    text = m.to_yaml(inline=True, instructions=True)
-    assert text == INSTRUCTIONS + m.to_yaml(inline=True)
+    text = dumps(m, inline=True, instructions=True)
+    assert text == INSTRUCTIONS + dumps(m, inline=True)
     block, head, data = (
         text.index(s) for s in ("Reading this file", "version: 4", "data:")
     )
@@ -447,24 +460,24 @@ def test_a_model_writes_the_block_above_its_inline_data():
 def test_save_writes_a_definition_with_the_block(tmp_path):
     d = dispatch()
     save(d, tmp_path / "d.yaml", instructions=True)
-    assert (tmp_path / "d.yaml").read_text() == INSTRUCTIONS + d.to_yaml()
+    assert (tmp_path / "d.yaml").read_text() == INSTRUCTIONS + dumps(d)
 
 
 def test_save_writes_a_model_with_the_block_above_the_sidecar_line(tmp_path):
     m = worked_transport.definition().build(worked_transport.data())
     save(m, tmp_path / "m.yaml", instructions=True)
     text = (tmp_path / "m.yaml").read_text()
-    assert text == INSTRUCTIONS + m.to_yaml() + "data: m.npz\n"
+    assert text == INSTRUCTIONS + dumps(m) + "data: m.npz\n"
 
 
 def test_a_file_carrying_the_block_reads_to_the_definition_the_rest_states():
     d = dispatch()
-    assert loads(d.to_yaml(instructions=True)).to_yaml() == d.to_yaml()
+    assert dumps(loads(dumps(d, instructions=True))) == dumps(d)
 
 
 def test_a_definition_with_the_block_round_trips_to_the_same_text():
-    text = dispatch().to_yaml(instructions=True)
-    assert loads(text).to_yaml(instructions=True) == text
+    text = dumps(dispatch(), instructions=True)
+    assert dumps(loads(text), instructions=True) == text
 
 
 def test_a_saved_model_with_the_block_loads_and_saves_to_the_same_file(tmp_path):
@@ -537,13 +550,13 @@ CURVE = textwrap.dedent(
 def test_a_definition_writes_its_piecewise_declaration():
     from test_definition import curve
 
-    assert curve().to_yaml() == CURVE
+    assert dumps(curve()) == CURVE
 
 
 def test_a_piecewise_declaration_reads_back_to_the_same_file():
     d = loads(CURVE)
     assert list(d.piecewise_declarations) == ["cost"]
-    assert d.to_yaml() == CURVE
+    assert dumps(d) == CURVE
 
 
 def test_an_active_expression_reads_back_to_the_same_file():
@@ -553,9 +566,9 @@ def test_an_active_expression_reads_back_to_the_same_file():
     x, y = d.var("x", (G,)), d.var("y", (G,))
     u = d.var("u", (G,), upper=1.0, integer=True)
     d.piecewise("cost", x[G], xp[G, B], y[G], xp[G, B], "==", "incremental", u[G])
-    text = d.to_yaml()
+    text = dumps(d)
     assert "    active: u[G]\n" in text
-    assert loads(text).to_yaml() == text
+    assert dumps(loads(text)) == text
 
 
 def test_a_model_saves_its_piecewise_declaration_as_version_four(tmp_path):
@@ -592,10 +605,10 @@ def test_a_model_saves_the_generated_declarations_as_version_three(tmp_path):
 def test_a_model_with_a_piecewise_declaration_round_trips_inline(version):
     from test_definition import curve, curve_data
 
-    text = curve().build(curve_data()).to_yaml(inline=True, version=version)
+    text = dumps(curve().build(curve_data()), inline=True, version=version)
     back = loads(text)
     assert back.solve().objective == pytest.approx(85.0)
-    assert back.to_yaml(inline=True, version=version) == text
+    assert dumps(back, inline=True, version=version) == text
 
 
 def test_a_definition_with_a_piecewise_declaration_is_not_written_as_version_three(
@@ -608,15 +621,15 @@ def test_a_definition_with_a_piecewise_declaration_is_not_written_as_version_thr
         "build the model first"
     )
     with pytest.raises(ValueError, match=re.escape(message)):
-        curve().to_yaml(version=3)
+        dumps(curve(), version=3)
     with pytest.raises(ValueError, match=re.escape(message)):
         save(curve(), tmp_path / "d.yaml", version=3)
 
 
 def test_a_definition_without_one_is_written_as_version_three():
-    text = dispatch().to_yaml(version=3)
+    text = dumps(dispatch(), version=3)
     assert text == DISPATCH.replace("version: 4\n", "version: 3\n")
-    assert loads(text).to_yaml() == DISPATCH
+    assert dumps(loads(text)) == DISPATCH
 
 
 @pytest.mark.parametrize("version", [2, 5, "4", True])
@@ -625,12 +638,12 @@ def test_a_file_is_written_only_as_version_three_or_four(version):
         ValueError,
         match=re.escape(f"a file is written in version 3 or 4; got {version!r}"),
     ):
-        dispatch().to_yaml(version=version)
+        dumps(dispatch(), version=version)
 
 
 def test_the_version_three_block_is_written_above_a_version_three_file():
-    text = dispatch().to_yaml(instructions=True, version=3)
-    assert text == INSTRUCTIONS_V3 + dispatch().to_yaml(version=3)
+    text = dumps(dispatch(), instructions=True, version=3)
+    assert text == INSTRUCTIONS_V3 + dumps(dispatch(), version=3)
     assert "piecewise" not in INSTRUCTIONS_V3
     assert "format version 3" in INSTRUCTIONS_V3
 
@@ -751,7 +764,7 @@ def test_a_declaration_without_where_writes_no_where_key(tmp_path):
 def test_a_where_that_identifies_an_undeclared_parameter_raises():
     from test_definition import split
 
-    text = split().to_yaml().replace("where: committed", "where: nowhere")
+    text = dumps(split()).replace("where: committed", "where: nowhere")
     message = (
         "piecewise 'on' where refers to the undeclared parameter 'nowhere'; "
         "declare it under parameters"
@@ -793,7 +806,7 @@ def test_a_model_with_a_set_named_by_a_keyword_is_not_written():
     x = m.var("x", (T,))
     m.constraint("c", x[T] <= 1.0)
     with pytest.raises(ValueError, match="'lambda'.*keyword"):
-        m.to_yaml()
+        dumps(m)
 
 
 def test_a_model_with_one_name_for_two_kinds_is_not_written():
@@ -805,4 +818,27 @@ def test_a_model_with_one_name_for_two_kinds_is_not_written():
     m.constraint("c", x[T] <= 5.0)
     message = "variable 'cap' is already declared as a parameter; declare another name"
     with pytest.raises(ValueError, match=re.escape(message)):
-        m.to_yaml(inline=True)
+        dumps(m, inline=True)
+
+
+def test_dumps_returns_the_text_save_writes_for_a_definition(tmp_path):
+    d = dispatch()
+    save(d, tmp_path / "d.yaml")
+    assert (tmp_path / "d.yaml").read_text() == dumps(d)
+
+
+def test_dumps_of_a_definition_with_inline_data_raises():
+    with pytest.raises(ValueError, match="a definition contains no data to inline"):
+        dumps(dispatch(), inline=True)
+
+
+def test_dumps_of_a_value_that_is_not_a_definition_or_a_model_raises():
+    with pytest.raises(
+        TypeError, match="a file contains a definition or a model; got int"
+    ):
+        dumps(1)
+
+
+def test_a_model_and_a_definition_have_no_to_yaml():
+    assert not hasattr(Model, "to_yaml")
+    assert not hasattr(Definition, "to_yaml")

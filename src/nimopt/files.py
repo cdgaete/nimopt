@@ -209,7 +209,7 @@ def instructions_for(version: Any) -> str:
     return INSTRUCTIONS if version == 4 else INSTRUCTIONS_V3
 
 
-def dumps(mapping: Mapping[str, Any], instructions: bool = False) -> str:
+def yaml_text(mapping: Mapping[str, Any], instructions: bool = False) -> str:
     """Return `mapping` as YAML text, its keys in the order given.
 
     `instructions=True` prefixes the comment block that explains the format
@@ -751,6 +751,36 @@ def load(path: Any, data: Any = None) -> Any:
     return _loads(path.read_text(), data, path.parent)
 
 
+def dumps(
+    what: Any, inline: bool = False, instructions: bool = False, version: int = VERSION
+) -> str:
+    """Return the text of a definition's file, or of a model's file.
+
+    A model's data is included with `inline=True` alone. The text contains no
+    sidecar line. `instructions=True` prefixes the comment block that
+    explains the format. `version` is 4 or 3. Version 3 writes the
+    declarations a piecewise declaration generated in its place, and raises
+    ValueError for a definition that contains one. Raises ValueError for a
+    definition with `inline=True`. Raises TypeError for a value that is not a
+    definition or a model.
+    """
+    if isinstance(what, Definition):
+        if inline:
+            raise ValueError(
+                "a definition contains no data to inline; pass a model, or "
+                "pass inline=False"
+            )
+        return yaml_text(structure(what, version), instructions)
+    if not isinstance(what, Model):
+        raise TypeError(
+            f"a file contains a definition or a model; got {type(what).__name__}"
+        )
+    mapping = structure(what, version)
+    if inline:
+        mapping["data"] = to_inline(what, version)
+    return yaml_text(mapping, instructions)
+
+
 def save(
     what: Any,
     path: Any,
@@ -768,24 +798,12 @@ def save(
     contains one.
     """
     path = Path(path)
-    if isinstance(what, Definition):
-        if inline:
-            raise ValueError(
-                "a definition contains no data to inline; save a model, or save "
-                "with inline=False"
-            )
-        path.write_text(dumps(structure(what, version), instructions))
-        return
-    if not isinstance(what, Model):
-        raise TypeError(
-            f"a file contains a definition or a model; got {type(what).__name__}"
-        )
-    mapping = structure(what, version)
-    if inline:
-        mapping["data"] = to_inline(what, version)
-    else:
+    if isinstance(what, Model) and not inline:
+        mapping = structure(what, version)
         arrays = _arrays(what, version)
         sidecar = path.with_suffix(".npz")
         mapping["data"] = sidecar.name
         write_npz(arrays, sidecar)
-    path.write_text(dumps(mapping, instructions))
+        path.write_text(yaml_text(mapping, instructions))
+        return
+    path.write_text(dumps(what, inline, instructions, version))

@@ -53,7 +53,7 @@ members through `array(values)` and `identity(into, coord, start)`.
 
 | From | Names |
 | --- | --- |
-| `nimopt` | `COLUMN`, `ROW`, `Absence`, `Alias`, `Assembled`, `Coefficient`, `Constraint`, `Definition`, `Diagnosis`, `Explanation`, `Expression`, `Model`, `Option`, `Param`, `Piecewise`, `Relation`, `Row`, `Session`, `Set`, `Solution`, `Sum`, `Term`, `Variable`, `available`, `capabilities`, `load`, `loads`, `options`, `product`, `save`, `subset`, `subset_of` |
+| `nimopt` | `COLUMN`, `ROW`, `Absence`, `Alias`, `Assembled`, `Coefficient`, `Constraint`, `Definition`, `Diagnosis`, `Explanation`, `Expression`, `Model`, `Option`, `Param`, `Piecewise`, `Relation`, `Row`, `Session`, `Set`, `Solution`, `Sum`, `Term`, `Variable`, `available`, `capabilities`, `dumps`, `load`, `loads`, `options`, `product`, `save`, `subset`, `subset_of` |
 | `nimblend` | `Array`, `DenseArray`, `Domain`, `EntryBuffer`, `SparseArray`, `combined_dims`, `from_long`, `from_dense`, `is_canonical`, `StoredCoord`, `ProductCoord`, `SubsetCoord` |
 
 **A coefficient composes.** A coefficient is a parameter read at its sets
@@ -787,7 +787,6 @@ beside it. `sense` is `"min"` or `"max"`, set once here.
 | `piecewise(name, x, x_points, y, y_points, sign, method, active=None, relaxed=False, where=None)` | a `Piecewise`; `build` generates its declarations and checks its breakpoints |
 | `build(data)` | a `Model` over the declarations, bound to `data` |
 | `explain()` | an `Explanation` of what is declared |
-| `to_yaml(instructions=False, version=4)` | the text of this definition's file, structure and no data; `instructions=True` adds the comment block that describes the format; `version=3` raises `ValueError` for a definition with a piecewise declaration |
 | `set_objective(expression)` | nothing; sets the objective |
 | `sense` | `"min"` or `"max"`, as declared |
 | `sets`, `aliases`, `parameters`, `variables`, `constraints`, `piecewise_declarations` | the registries, keyed by name |
@@ -1361,10 +1360,11 @@ ValueError: term 'x' already sums over ['T']; sum over each dimension once
 
 # Files
 
-## `load`, `loads`, `save`
+## `dumps`, `load`, `loads`, `save`
 
 | Function | Does |
 | --- | --- |
+| `dumps(what, inline=False, instructions=False, version=4)` | returns the text of a definition's file, or of a model's file; a model's data is included with `inline=True` alone; a definition with `inline=True` raises `ValueError` |
 | `load(path, data=None)` | reads a file; returns a `Definition`, or a `Model` where the file contains data or `data=` gives it |
 | `loads(text, data=None)` | the same over text; a sidecar name in text raises `ValueError`. Text has no directory |
 | `save(what, path, inline=False, instructions=False, version=4)` | writes a definition's file, or a model's with an `.npz` beside it, or one file with an inline block when `inline=True`; `instructions=True` writes the comment block that describes the format at the top of the file; `version` is `4` or `3` |
@@ -1372,10 +1372,8 @@ ValueError: term 'x' already sums over ['T']; sum over each dimension once
 `data=` is the mapping `build` takes or the path of an `.npz`. A file that
 contains data and a `data=` together raises `ValueError`.
 
-`Definition.to_yaml(instructions=False, version=4)` and
-`Model.to_yaml(inline=False, instructions=False, version=4)` return the text
-`save` writes, without a sidecar line: only `save` writes a sidecar and the
-line that identifies it.
+`dumps` returns the text `save` writes, without a sidecar line. Only `save`
+writes a sidecar and the line that identifies it.
 
 `version=4` writes each piecewise declaration under `piecewise`, and omits
 the sets, parameters, variables and constraints it generated. `version=3`
@@ -1419,16 +1417,16 @@ through the same operators. The file is a fixed point: reading it and writing
 it again gives the same text.
 
 ```python
-from nimopt import Definition, Sum, loads
+from nimopt import Definition, Sum, dumps, loads
 
 d = Definition("d")
 S = d.set("S")
 c = d.param("c", (S,))
 x = d.var("x", (S,), integer=True)
 d.constraint("cap", 2 * c[S] * x[S] - 1 <= 5)
-text = d.to_yaml()
+text = dumps(d)
 print(text)
-print(loads(text).to_yaml() == text)
+print(dumps(loads(text)) == text)
 ```
 
 Output:
@@ -1549,13 +1547,13 @@ reports the first and the last member of that range. A `NaT` member raises
 
 ```python raises=ValueError
 import numpy as np
-from nimopt import Model, Set, subset
+from nimopt import Model, Set, dumps, subset
 
 P = Set("P", np.array(["a", "b"]))
 m = Model("m")
 x = m.var("x", (P,))
 m.constraint("cap", x[P] <= 1.0, where=subset((P,), {"P": np.array(["a"])}))
-m.to_yaml()
+dumps(m)
 ```
 
 Raises ValueError:
@@ -1742,7 +1740,6 @@ an objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
 | `integrality()` | one flag per column |
 | `objective_coefficients()` | one coefficient per column |
 | `explain()` | an `Explanation` of what the model built |
-| `to_yaml(inline=False, instructions=False, version=4)` | the text of this model's file, with its data inline where asked and the comment block that describes the format where asked; `version=3` writes the declarations a piecewise declaration generated in its place |
 | `piecewise_declarations` | the piecewise declarations, keyed by name |
 | `objective` | the objective expression, or `None` |
 
@@ -6373,7 +6370,7 @@ generated variables, constraints and parameters are not written. Loading
 the file generates them again.
 
 ```python
-from nimopt import Definition, Sum
+from nimopt import Definition, Sum, dumps
 
 d = Definition("curve", sense="min")
 G, B = d.set("G"), d.set("B")
@@ -6384,7 +6381,7 @@ d.constraint("demand", Sum(G, p[G]) == 25.0)
 d.piecewise("fuel", p[G], power[G, B], c[G], cost[G, B], ">=", "incremental")
 d.set_objective(Sum(G, c[G]))
 
-print(d.to_yaml())
+print(dumps(d))
 ```
 
 Output:
@@ -6424,7 +6421,7 @@ generate the rows from, and writing it as version 3 raises `ValueError`.
 
 ```python
 import numpy as np
-from nimopt import Model, Param, Set, Sum
+from nimopt import Model, Param, Set, Sum, dumps
 
 G = Set("G", np.array(["a"]))
 B = Set("B", np.array(["b0", "b1"]))
@@ -6436,7 +6433,7 @@ p = m.var("p", (G,))
 c = m.var("c", (G,))
 m.piecewise("fuel", p[G], power[G, B], c[G], cost[G, B], ">=", "tangent")
 
-print(m.to_yaml(version=3))
+print(dumps(m, version=3))
 ```
 
 Output:
@@ -6477,7 +6474,7 @@ coefficient written out, every term with its own sum and sign, and the
 constant last.
 
 ```python
-from nimopt import Definition, Sum
+from nimopt import Definition, Sum, dumps
 
 d = Definition("dispatch", sense="min")
 G, T = d.set("G"), d.set("T")
@@ -6487,7 +6484,7 @@ gen = d.var("gen", (G, T), upper=cap)
 d.constraint("balance", Sum(G, gen[G, T]) == load[T])
 d.set_objective(Sum(G, T, 2 * (price[G, T] / eta[G, T]) * gen[G, T]))
 
-print(d.to_yaml())
+print(dumps(d))
 ```
 
 Output:
@@ -6569,7 +6566,7 @@ Adding a scalar, reordering terms and reversing a comparison all parse. The
 file written back is the canonical form.
 
 ```python
-from nimopt import loads
+from nimopt import dumps, loads
 
 edited = """
 version: 3
@@ -6587,7 +6584,7 @@ constraints:
     relation: load[T] == Sum(G, gen[G, T]) * 2 + 1 - 1
 objective: Sum(G, T, cost[G] * gen[G, T])
 """
-print(loads(edited).to_yaml().splitlines()[-2])
+print(dumps(loads(edited)).splitlines()[-2])
 ```
 
 Output:
@@ -6632,11 +6629,11 @@ coordinates of its product is a table of the dimensions then `value`. A file
 containing data loads to a built `Model`.
 
 ```python
-from nimopt import loads
+from nimopt import dumps, loads
 from nimopt.models import transport
 
 m = transport.definition().build(transport.data())
-text = m.to_yaml(inline=True)
+text = dumps(m, inline=True)
 print(text[text.index("data:") :])
 print(loads(text).solve().objective)
 ```
@@ -6678,7 +6675,7 @@ fixed in a relation is written as quoted text.
 
 ```python
 import numpy as np
-from nimopt import Model, Param, Set, Sum, loads
+from nimopt import Model, Param, Set, Sum, dumps, loads
 
 T = Set("T", np.array(["2030-01-01T00", "2030-01-01T01"], dtype="datetime64[h]"))
 cost = Param.from_dense("cost", (T,), np.array([2.0, 5.0]))
@@ -6687,7 +6684,7 @@ gen = m.var("gen", (T,), upper=10.0)
 m.constraint("start", gen["2030-01-01T00"] == 4.0)
 m.constraint("total", Sum(T, gen[T]) >= 6.0)
 m.set_objective(Sum(T, cost[T] * gen[T]))
-text = m.to_yaml(inline=True)
+text = dumps(m, inline=True)
 print(text[text.index("constraints:") :])
 print(loads(text).solve().objective)
 ```
@@ -6771,8 +6768,8 @@ source.
 
 ## A file that describes its own format
 
-`instructions=True` on `save`, `Definition.to_yaml` and `Model.to_yaml` writes
-a comment block at the top of the file. The block is the same in every file.
+`instructions=True` on `save` and `dumps` writes a comment block at the top of
+the file. The block is the same in every file.
 It describes the format, not the model: the keys and their order, the
 defaults, the rules that determine which rows a constraint has, and the
 expression syntax. A reader with one file interprets it without this package.
@@ -6781,16 +6778,16 @@ The block is a YAML comment. A file with it loads to the same model as one
 without it, and writing the loaded model with the flag gives the same text.
 
 ```python
-from nimopt import Definition, loads
+from nimopt import Definition, dumps, loads
 
 d = Definition("dispatch", sense="min")
 T = d.set("T")
 load, gen = d.param("load", (T,)), d.var("gen", (T,))
 d.constraint("balance", gen[T] == load[T])
-text = d.to_yaml(instructions=True)
+text = dumps(d, instructions=True)
 print("\n".join(text.splitlines()[:5]))
-print(loads(text).to_yaml() == d.to_yaml())
-print(loads(text).to_yaml(instructions=True) == text)
+print(dumps(loads(text)) == dumps(d))
+print(dumps(loads(text), instructions=True) == text)
 ```
 
 Output:

@@ -31,6 +31,7 @@ def test_the_module_exports_what_a_model_is_stated_with():
         "__version__",
         "available",
         "capabilities",
+        "dumps",
         "load",
         "loads",
         "options",

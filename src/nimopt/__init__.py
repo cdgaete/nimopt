@@ -5,7 +5,7 @@ from nimopt.coefficient import Coefficient
 from nimopt.constraint import Constraint
 from nimopt.definition import Definition
 from nimopt.explanation import Explanation
-from nimopt.files import load, loads, save
+from nimopt.files import dumps, load, loads, save
 from nimopt.model import Assembled, Model
 from nimopt.names import COLUMN, ROW
 from nimopt.param import Param
@@ -47,6 +47,7 @@ __all__ = [
     "__version__",
     "available",
     "capabilities",
+    "dumps",
     "load",
     "loads",
     "options",
