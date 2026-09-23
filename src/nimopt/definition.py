@@ -5,6 +5,7 @@ from collections.abc import Iterable, Iterator, Mapping, MutableMapping
 from typing import Any
 
 import numpy as np
+from nimblend import DenseArray, SparseArray
 
 from nimopt.coefficient import Coefficient, Derived, DerivedRef
 from nimopt.constraint import check_relation
@@ -227,7 +228,9 @@ class Definition:
         """Return a model over this definition's declarations, bound to `data`.
 
         `data` maps a declared set's name to its members and a declared
-        parameter's name to its values. A set and a parameter never share a
+        parameter's name to its values: a nimblend array, a Param, a pair of
+        label columns and a value column, or values over every cell of the
+        product. A set and a parameter never share a
         name, and the two registries merge into one key set. The declarations
         are copied before they are bound, and the definition is unchanged.
 
@@ -292,12 +295,21 @@ class Definition:
 
 
 def _values(name: str, sets: Any, given: Any) -> Param:
-    """Return a parameter over `given`, dense over the product or long.
+    """Return a parameter over `given`.
 
-    A pair is one mapping of label columns and one value column. It defines a
-    coefficient at some coordinates of the product and none at the rest. Any
-    other value is read as values over every cell.
+    `given` is a nimblend array, a Param with values, a pair of label columns
+    and a value column, or values over every cell of the product. Raises
+    ValueError for a Param with no values and for a tuple that is not a pair.
     """
+    if isinstance(given, Param):
+        if given.array is None:
+            raise ValueError(
+                f"parameter {name!r} is given a Param with no values; pass a "
+                f"Param built with values"
+            )
+        given = given.array
+    if isinstance(given, DenseArray | SparseArray):
+        return Param.from_array(name, sets, given)
     if isinstance(given, tuple):
         if len(given) != 2 or not hasattr(given[0], "keys"):
             raise ValueError(

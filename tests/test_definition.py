@@ -573,3 +573,60 @@ def test_a_definition_checks_the_sets_of_where_at_the_call():
             "incremental",
             where=(T,),
         )
+
+
+def transport_cost_forms():
+    import nimblend as nb
+
+    from nimopt import Param, Set
+    from nimopt.models import transport
+
+    data = transport.data()
+    columns, unit_cost = data["cost"]
+    P = Set("P", data["P"])
+    W = Set("W", data["W"])
+    as_array = nb.from_long(
+        ("P", "W"),
+        {"P": nb.StoredCoord(data["P"]), "W": nb.StoredCoord(data["W"])},
+        columns,
+        unit_cost,
+    )
+    as_param = Param.from_long("any", (P, W), columns, unit_cost)
+    return transport, data, as_array, as_param
+
+
+def test_build_accepts_a_nimblend_array_and_a_param_as_data():
+    transport, data, as_array, as_param = transport_cost_forms()
+    expected = transport.definition().build(data).solve().objective
+    assert expected == pytest.approx(transport.reference(data))
+    for given in (as_array, as_param):
+        model = transport.definition().build({**data, "cost": given})
+        assert model.solve().objective == pytest.approx(expected)
+
+
+def test_build_rejects_a_declared_param_as_data():
+    from nimopt import Param, Set
+
+    transport, data, _, _ = transport_cost_forms()
+    declared = Param("cost", (Set("P"), Set("W")))
+    with pytest.raises(
+        ValueError, match="parameter 'cost' is given a Param with no values"
+    ):
+        transport.definition().build({**data, "cost": declared})
+
+
+def test_duals_of_one_model_are_data_of_the_next():
+    from nimopt.models import transport
+
+    data = transport.data()
+    solved = transport.definition().build(data).solve()
+    d = Definition("second", sense="max")
+    W = d.set("W")
+    price = d.param("price", (W,))
+    y = d.var("y", (W,), upper=1.0)
+    d.set_objective(Sum(W, price[W] * y[W]))
+    second = d.build({"W": data["W"], "price": solved.dual("demand")})
+    # each served warehouse's dual is its cheapest arc cost
+    assert second.solve().objective == pytest.approx(
+        transport.reference(data) / transport.DEMAND
+    )
