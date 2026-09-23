@@ -136,6 +136,45 @@ print(cost.array.to_dense())
 
 A position outside its set raises `ValueError`, as does a member given twice.
 
+### `Param.from_array(name, sets, array)`
+
+Coefficients from a nimblend array over the sets' names, in any order. The
+labels are members of the sets, in any order and extent. The parameter has
+an entry where the array has one, under absence `'empty'` and `'unknown'`
+alike. A label outside its set, other dimension names and a set with no
+members raise `ValueError`; an object that is not a nimblend array raises
+`TypeError`.
+
+```python
+import numpy as np
+import nimblend as nb
+from nimopt import Param, Set
+
+P = Set("P", np.array(["lisbon", "porto"]))
+W = Set("W", np.array(["berlin", "paris", "rome"]))
+
+cost = Param.from_array(
+    "cost",
+    (P, W),
+    nb.from_dense(
+        np.array([[1.0]]), {"P": np.array(["porto"]), "W": np.array(["paris"])}
+    ),
+)
+print(cost.array.to_dense())
+```
+
+<!-- output -->
+<details open>
+<summary>Output</summary>
+
+```text
+[[0. 0. 0.]
+ [0. 1. 0.]]
+```
+
+</details>
+<!-- /output -->
+
 ### Members
 
 | Member | Returns |

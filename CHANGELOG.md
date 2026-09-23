@@ -20,9 +20,14 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ### Added
 
+- `Param.from_array` builds a parameter from a nimblend array whose labels are
+  members of the sets, in any order and extent, including a solved model's
+  primals and duals.
 - `Param.from_positions(name, sets, index, values)` returns a parameter from
   an index matrix with one row per set and one value column. It resolves no
   labels.
+- `Definition.build` accepts a nimblend array or a `Param` as the data of a
+  parameter.
 - `tests/test_pdlp.py` solves with `options={"method": "pdlp"}` and checks
   the optimum, the row duals against simplex and the PDLP line of the HiGHS
   log. It is skipped unless `NIMOPT_TEST_PDLP=1`. PDLP on a GPU requires an
@@ -30,6 +35,8 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ### Changed
 
+- `Param(name, sets, array)` raises `ValueError` at construction for an array
+  whose labels differ from its sets' labels.
 - A constraint with `over=` or `where=` materialises its expression within
   those rows. Each term restricts its variable's columns and its coefficient
   to the rows before the product. `Model.absent` materialises the whole

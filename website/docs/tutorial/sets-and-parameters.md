@@ -169,4 +169,44 @@ routes, but the parameter stores nothing there: an unlisted route is absent,
 not zero. The distinction matters on the last page of the tutorial, where a
 variable declared over exactly these routes has no column for the others.
 
+## From a nimblend array
+
+`Param.from_array` takes a nimblend array over the sets' names. Its labels
+are members of the sets, in any order and extent. The parameter has an entry
+where the array has one.
+
+```python
+import numpy as np
+import nimblend as nb
+from nimopt import Param, Set
+
+P = Set("P", np.array(["lisbon", "porto"]))
+W = Set("W", np.array(["berlin", "paris", "rome"]))
+
+routes = nb.from_dense(
+    np.array([[5.0, 2.0]]),
+    {"P": np.array(["lisbon"]), "W": np.array(["rome", "berlin"])},
+)
+cost = Param.from_array("cost", (P, W), routes)
+
+print(cost.nnz)
+print(cost.materialise().to_dense())
+```
+
+<!-- output -->
+<details open>
+<summary>Output</summary>
+
+```text
+2
+[[2. 0. 5.]
+ [0. 0. 0.]]
+```
+
+</details>
+<!-- /output -->
+
+A solved model's `primal` and `dual` arrays are nimblend arrays, and
+`Param.from_array` turns them into another model's coefficients.
+
 Next: [Variables](/tutorial/variables).

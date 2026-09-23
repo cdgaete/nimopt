@@ -2051,6 +2051,40 @@ Output:
 
 A position outside its set raises `ValueError`, as does a member given twice.
 
+### `Param.from_array(name, sets, array)`
+
+Coefficients from a nimblend array over the sets' names, in any order. The
+labels are members of the sets, in any order and extent. The parameter has
+an entry where the array has one, under absence `'empty'` and `'unknown'`
+alike. A label outside its set, other dimension names and a set with no
+members raise `ValueError`; an object that is not a nimblend array raises
+`TypeError`.
+
+```python
+import numpy as np
+import nimblend as nb
+from nimopt import Param, Set
+
+P = Set("P", np.array(["lisbon", "porto"]))
+W = Set("W", np.array(["berlin", "paris", "rome"]))
+
+cost = Param.from_array(
+    "cost",
+    (P, W),
+    nb.from_dense(
+        np.array([[1.0]]), {"P": np.array(["porto"]), "W": np.array(["paris"])}
+    ),
+)
+print(cost.array.to_dense())
+```
+
+Output:
+
+```text
+[[0. 0. 0.]
+ [0. 1. 0.]]
+```
+
 ### Members
 
 | Member | Returns |
@@ -4260,6 +4294,41 @@ Three routes, three entries. `to_dense()` prints zeros at the three missing
 routes, but the parameter stores nothing there: an unlisted route is absent,
 not zero. The distinction matters on the last page of the tutorial, where a
 variable declared over exactly these routes has no column for the others.
+
+## From a nimblend array
+
+`Param.from_array` takes a nimblend array over the sets' names. Its labels
+are members of the sets, in any order and extent. The parameter has an entry
+where the array has one.
+
+```python
+import numpy as np
+import nimblend as nb
+from nimopt import Param, Set
+
+P = Set("P", np.array(["lisbon", "porto"]))
+W = Set("W", np.array(["berlin", "paris", "rome"]))
+
+routes = nb.from_dense(
+    np.array([[5.0, 2.0]]),
+    {"P": np.array(["lisbon"]), "W": np.array(["rome", "berlin"])},
+)
+cost = Param.from_array("cost", (P, W), routes)
+
+print(cost.nnz)
+print(cost.materialise().to_dense())
+```
+
+Output:
+
+```text
+2
+[[2. 0. 5.]
+ [0. 0. 0.]]
+```
+
+A solved model's `primal` and `dual` arrays are nimblend arrays, and
+`Param.from_array` turns them into another model's coefficients.
 
 Next: [Variables](/tutorial/variables).
 
