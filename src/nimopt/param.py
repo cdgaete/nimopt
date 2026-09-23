@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import numpy.typing as npt
-from nimblend import Domain, SparseArray, from_long
+from nimblend import DenseArray, Domain, SparseArray, from_long
 
 from nimopt.sets import as_members, as_sets, coords_of, subset_of
 from nimopt.symbol import Symbol
@@ -131,6 +131,55 @@ class Param(Symbol):
         ordered = np.empty(members.size, dtype=np.float64)
         ordered[members.positions_of_coordinates(index)] = values
         return cls(name, sets, members.array(ordered))
+
+    @classmethod
+    def from_array(
+        cls, name: str, sets: Iterable[Any], array: DenseArray | SparseArray
+    ) -> "Param":
+        """Return a parameter holding the present entries of a nimblend array.
+
+        The array is over the sets' names, in any order. Its labels are
+        members of the sets, in any order and extent. An absent coordinate
+        has no coefficient, under absence 'empty' and 'unknown' alike. Raises
+        TypeError for an object that is not a nimblend array, and ValueError
+        for other dimension names, a set with no members and a label outside
+        its set.
+        """
+        if not isinstance(array, DenseArray | SparseArray):
+            raise TypeError(
+                f"parameter {name!r} is given {type(array).__name__}; pass a "
+                f"nimblend DenseArray or SparseArray"
+            )
+        sets = as_sets(sets, f"parameter {name!r}")
+        dims = tuple(s.name for s in sets)
+        if sorted(array.dims) != sorted(dims):
+            raise ValueError(
+                f"parameter {name!r} is declared over {dims} and its array is "
+                f"over {tuple(array.dims)}; pass an array over {dims}"
+            )
+        labels = array.domain().labels()
+        for held in sets:
+            if held.labels is None:
+                raise ValueError(
+                    f"set {held.name!r} of parameter {name!r} has no members; "
+                    f"bind the set before the parameter"
+                )
+            members = np.asarray(
+                as_members(
+                    labels[held.name],
+                    held.labels.dtype,
+                    f"array of parameter {name!r}",
+                )
+            )
+            foreign = ~np.isin(members, held.labels)
+            if foreign.any():
+                first = members[foreign].tolist()[0]
+                raise ValueError(
+                    f"parameter {name!r} has label {first!r} on "
+                    f"{held.name!r} outside the set; pass labels of the set"
+                )
+            labels[held.name] = members
+        return cls.from_long(name, sets, labels, array.values())
 
     @property
     def dims(self) -> tuple[str, ...]:
