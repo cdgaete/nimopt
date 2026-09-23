@@ -18,6 +18,8 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+## 0.20260923.0 - 2026-09-23
+
 ### Added
 
 - `Param.from_array` builds a parameter from a nimblend array whose labels are
