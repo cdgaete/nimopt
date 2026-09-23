@@ -329,3 +329,46 @@ def test_a_dual_and_a_primal_become_coefficients():
         y = second.var("y", (T,), upper=1.0)
         second.set_objective(Sum(T, priced[T] * y[T]))
         assert second.solve().objective == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [["c", "b", "a"], ["a", "b", "z"], ["a", "c"]],
+)
+def test_binding_raises_for_other_labels(labels):
+    S = sets_abc()
+    array = nb.from_dense(np.ones(len(labels)), {"S": np.array(labels)})
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"parameter 'p' is bound to an array whose labels on 'S' differ "
+            r".*Param.from_array"
+        ),
+    ):
+        Param("p", (S,), array)
+
+
+def test_binding_raises_for_a_declared_set():
+    array = nb.from_dense(np.array([1.0]), {"G": np.array(["g1"])})
+    with pytest.raises(ValueError, match="set 'G' of parameter 'p' has no members"):
+        Param("p", (Set("G"),), array)
+
+
+def test_arrays_from_every_constructor_bind():
+    P, W = sets_2x3()
+    built = [
+        Param.from_dense("a", (P, W), np.ones((2, 3))),
+        Param.from_long(
+            "b", (P, W), {"P": np.array(["p1"]), "W": np.array(["w2"])}, [1.0]
+        ),
+        Param.from_positions("c", (P, W), [[0], [1]], [1.0]),
+        Param.from_array(
+            "d",
+            (P, W),
+            nb.from_dense(
+                np.ones((1, 1)), {"P": np.array(["p2"]), "W": np.array(["w3"])}
+            ),
+        ),
+    ]
+    for param in built:
+        assert Param(param.name, (P, W), param.array).nnz == param.nnz

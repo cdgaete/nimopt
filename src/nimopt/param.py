@@ -19,8 +19,8 @@ class Param(Symbol):
 
     A `Param` is a named `nimblend` array. Its values enter a constraint
     through the array's own product and reduction, with no conversion step.
-    A solved model's duals are usable directly as another model's
-    coefficients.
+    `Param.from_array` builds a parameter from any nimblend array over the
+    sets, including a solved model's primals and duals.
     """
 
     def __init__(
@@ -49,6 +49,18 @@ class Param(Symbol):
                 f"absence {array.absence!r}; bind an array declaring absence "
                 f"'empty'"
             )
+        for held in self.sets:
+            if held.coord is None:
+                raise ValueError(
+                    f"set {held.name!r} of parameter {self.name!r} has no "
+                    f"members; bind the set before the parameter"
+                )
+            if array.coords[held.name] != held.coord:
+                raise ValueError(
+                    f"parameter {self.name!r} is bound to an array whose labels "
+                    f"on {held.name!r} differ from the labels of the set; build "
+                    f"the parameter with Param.from_array"
+                )
         self.array = array
 
     @classmethod
