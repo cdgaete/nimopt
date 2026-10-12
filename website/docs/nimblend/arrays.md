@@ -181,7 +181,7 @@ not already an ndarray.
 
 | Constructor | Returns |
 | --- | --- |
-| `from_long(dims, coords, labels, values)` | one label column per dimension and one value column |
+| `from_long(dims, coords, labels, values, absence, on_duplicate)` | one label column per dimension and one value column |
 | `from_dense(values, labels)` | every cell of an ndarray |
 | `is_canonical(index, shape)` | whether buffers are in the order `from_canonical` takes |
 
@@ -189,6 +189,8 @@ not already an ndarray.
 already has. A caller with coordinates of its own therefore gives its entries
 as labels and resolves no position itself. The columns are read in parallel
 and must have equal length.
+A coordinate given twice raises `ValueError`. With `on_duplicate="sum"` the
+values at that coordinate are added, and the result has one entry for it.
 
 ```python
 import numpy as np
