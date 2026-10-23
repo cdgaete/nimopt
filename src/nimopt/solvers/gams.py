@@ -21,6 +21,11 @@ adapter raises on. A status in none of them raises.
 
 The options file sets `rerun yes`. Where presolve reports a model infeasible or
 unbounded, CPLEX then solves it again without presolve.
+
+The option `separate_process` runs CPLEX in a process of its own. GEV then
+writes the model, the solution and the log to the scratch directory. The
+adapter writes the log to standard output after the solve and removes the
+files.
 """
 
 import atexit
@@ -206,7 +211,7 @@ SENSES = {"min": 0, "max": 1}
 
 ITERATIONS, OBJECTIVE, NODES, MIP_BOUND = 3, 5, 11, 15
 
-SAME_STREAMS, QUIET = 0, 1
+SAME_STREAMS, QUIET, OWN_FILE = 0, 1, 2
 
 _P, _I, _D, _S = ctypes.c_void_p, ctypes.c_int, ctypes.c_double, ctypes.c_char_p
 
@@ -713,14 +718,20 @@ def solve(
         option_file = _option_file(scratch, settings)
         library.gmoOptFileSet(model, 1)
         library.gmoNameOptFileSet(model, str(option_file).encode())
-        if library.gevCallSolver(
+        solvelink = int(call["solvelink"])
+        logging, log_file = QUIET, None
+        if call["logoption"] and solvelink == CALL_MODULE:
+            logging, log_file = OWN_FILE, scratch / "solver.log"
+        elif call["logoption"]:
+            logging = SAME_STREAMS
+        failed = library.gevCallSolver(
             environment,
             model,
             b"",
             b"cplex",
-            int(call["solvelink"]),
-            SAME_STREAMS if call["logoption"] else QUIET,
-            b"",
+            solvelink,
+            logging,
+            b"" if log_file is None else str(log_file).encode(),
             b"",
             float(call["reslim"]),
             int(call["iterlim"]),
@@ -729,8 +740,12 @@ def solve(
             float(call["optca"]),
             None,
             message,
-        ):
-            raise RuntimeError(_call_failed(int(call["solvelink"]), _text(message)))
+        )
+        if log_file is not None and log_file.exists():
+            sys.stdout.write(log_file.read_text(errors="replace"))
+            sys.stdout.flush()
+        if failed:
+            raise RuntimeError(_call_failed(solvelink, _text(message)))
         return _read(library, model, assembled, limits)
     finally:
         if kept is not None:

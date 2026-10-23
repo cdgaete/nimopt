@@ -238,7 +238,7 @@ print(solution.status, solution.objective)
 
 GMO has no call that loads a whole matrix. The adapter adds each column and each row in a call of its own. The adapter frees GMO and GEV after it reads the values, and a session on it stores no backend after a solve.
 
-CPLEX runs in the Python process by default. The option `separate_process=True` runs CPLEX in a process of its own: GEV writes the model and the solution to the scratch directory, and the adapter removes both files after the solve. On a model with 19.4 million rows, the separate process adds 20 s and 0.9 GB of scratch files, and the Python process does not store the CPLEX copy of the model.
+CPLEX runs in the Python process by default. The option `separate_process=True` runs CPLEX in a process of its own: GEV writes the model, the solution and the log to the scratch directory. The adapter writes the log to standard output after the solve and removes the files. On a model with 19.4 million rows, the separate process adds 20 s and 0.9 GB of scratch files, and the Python process does not store the CPLEX copy of the model.
 
 On Linux, numpy loads the system C++ runtime into the Python process. A GAMS release can require a newer one: GAMS 54.6 requires `CXXABI_1.3.15`, from GCC 14. CPLEX then does not load into the process, and the solve raises `RuntimeError` with the action `separate_process=True`. A process of its own loads the C++ runtime that GAMS ships.
 
