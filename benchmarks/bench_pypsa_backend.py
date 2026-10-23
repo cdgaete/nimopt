@@ -39,7 +39,7 @@ TRACES = LARGE / "traces"
 
 METHODS = ("choose", "simplex", "barrier")
 CROSSOVER = ("choose", "off", "on")
-SOLVERS = ("highs", "gurobi", "mosek")
+SOLVERS = ("highs", "gurobi", "mosek", "gams")
 LINOPY_METHOD = {"choose": "choose", "simplex": "simplex", "barrier": "ipm"}
 
 # linopy adds the objective constant as a column fixed to its value, with no

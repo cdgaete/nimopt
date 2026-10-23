@@ -10,8 +10,8 @@ from nimopt.solvers.options import OPTIONS as VOCABULARY
 from nimopt.term import Sum
 
 
-def test_the_vocabulary_names_fifteen_options_each_stating_what_it_does():
-    assert len(OPTIONS) == 15
+def test_the_vocabulary_names_sixteen_options_each_stating_what_it_does():
+    assert len(OPTIONS) == 16
     assert all(isinstance(o, Option) for o in OPTIONS)
     assert all(o.does for o in OPTIONS), "every option says what it does"
     assert set(BY_NAME) == {o.name for o in OPTIONS}
@@ -24,6 +24,7 @@ def test_a_choice_states_its_values_and_a_scalar_states_none():
     assert BY_NAME["newton_system"].choices == ("choose", "augmented", "normaleq")
     assert BY_NAME["crossover"].choices == ("choose", "off", "on")
     assert BY_NAME["time_limit"].choices == ()
+    assert BY_NAME["separate_process"].kind == "bool"
 
 
 def test_no_options_are_no_options():
@@ -222,6 +223,8 @@ def test_every_native_highs_name_resolves_in_highs():
     probe = {"float": 1.0, "int": 1, "bool": False, "choice": None}
     unresolved = []
     for option in options("highs"):
+        if option.native is None:
+            continue
         value = (
             dict(option.native_choices)[option.choices[0]]
             if option.kind == "choice"

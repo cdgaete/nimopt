@@ -65,6 +65,9 @@ OPTIONS = (
     Option(
         "pdlp_tol", "float", "relative tolerance at which the first-order method stops"
     ),
+    Option(
+        "separate_process", "bool", "whether the solver runs in a process of its own"
+    ),
 )
 
 BY_NAME = {option.name: option for option in OPTIONS}
@@ -109,7 +112,7 @@ def checked(options: Mapping[str, Any] | None) -> dict[str, Any]:
 def translated(
     options: Mapping[str, Any] | None,
     names: Mapping[str, str | None],
-    values: Mapping[str, Mapping[str, Any]],
+    values: Mapping[str, Mapping[Any, Any]],
     solver: str = "the solver",
 ) -> dict[str, Any]:
     """Return `options` under a solver's own names and its own values.

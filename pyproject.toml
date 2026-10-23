@@ -84,6 +84,7 @@ ignore = ["ANN401"]
 "tests/**" = ["S101", "S603", "ANN"]
 "benchmarks/**" = ["S101", "S603", "ANN"]
 "website/scripts/**" = ["ANN", "S310"]
+"src/nimopt/solvers/gams.py" = ["S603"]
 
 [tool.ty.src]
 include = ["src"]

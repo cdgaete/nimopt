@@ -10,8 +10,6 @@ from nimopt.solvers import ADAPTERS, adapter
 from nimopt.solvers.base import check_sense
 from nimopt.term import Sum
 
-BACKENDS = {"highs": "highspy", "gurobi": "gurobipy", "mosek": "mosek"}
-
 
 def assembled_model():
     T = Set("T", np.array([0, 1]))
@@ -37,7 +35,8 @@ def test_the_model_and_the_definition_import_the_one_check_sense():
 
 @pytest.mark.parametrize("name", ADAPTERS)
 def test_every_adapter_raises_the_same_message_for_a_bad_sense(name):
-    pytest.importorskip(BACKENDS[name])
     held = adapter(name)
+    if not held.installed():
+        pytest.skip(f"the {name} adapter is not installed here")
     with pytest.raises(ValueError, match="sense is 'min' or 'max'"):
         held.solve(assembled_model(), "minimize")

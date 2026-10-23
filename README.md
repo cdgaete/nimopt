@@ -26,7 +26,7 @@ pip install "nimopt[highs]"
 
 The extra installs `nimopt` and its dependency `nimblend` from PyPI, with HiGHS as the solver backend.
 
-HiGHS is the default solver, and `[highs]` installs it. `[gurobi]` and `[mosek]` add those adapters instead, `[bench]` adds the comparison suite and `[dev]` the test and lint tooling. `available()` reports the solvers whose backend can be imported in the current environment. `capabilities(name)` reports what one adapter supports, whether or not its backend is installed.
+HiGHS is the default solver, and `[highs]` installs it. `[gurobi]` and `[mosek]` add those adapters instead, `[bench]` adds the comparison suite and `[dev]` the test and lint tooling. The `gams` adapter needs no extra: it requires a GAMS installation on `PATH` with a license that includes CPLEX. `available()` reports the solvers whose backend is installed in the current environment. `capabilities(name)` reports what one adapter supports, whether or not its backend is installed.
 
 Development installs come from a checkout. `nimblend` is a dependency and installs first, from its clone. `nimopt` then installs from its own root:
 

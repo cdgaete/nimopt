@@ -7,14 +7,13 @@ backend is installed. A descriptor describes the adapter as shipped.
 
 from dataclasses import replace
 from importlib import import_module
-from importlib.util import find_spec
 from types import ModuleType
 
 from nimopt.solvers.base import Capabilities
 from nimopt.solvers.options import OPTIONS
 from nimopt.solvers.options import Option as Option
 
-ADAPTERS = ("highs", "gurobi", "mosek")
+ADAPTERS = ("highs", "gurobi", "mosek", "gams")
 
 
 def adapter(name: str) -> ModuleType:
@@ -33,12 +32,8 @@ def capabilities(name: str) -> Capabilities:
 
 
 def available() -> dict[str, Capabilities]:
-    """Return every adapter whose backend can be imported, with its descriptor."""
-    return {
-        name: capabilities(name)
-        for name in ADAPTERS
-        if find_spec(adapter(name).BACKEND) is not None
-    }
+    """Return every adapter whose backend is installed, with its descriptor."""
+    return {name: capabilities(name) for name in ADAPTERS if adapter(name).installed()}
 
 
 def options(solver: str | None = None) -> tuple[Option, ...]:

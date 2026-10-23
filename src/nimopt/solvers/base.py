@@ -3,11 +3,12 @@
 An adapter is a module. There is no base class to inherit. Each adapter
 defines
 
-    BACKEND       the import name of the solver library it calls
+    BACKEND       the name of the solver library it calls
     CAPABILITIES  a `Capabilities` describing the adapter as shipped
 
-and three functions
+and four functions
 
+    installed() -> bool
     solve(assembled, sense, options=None) -> Result
     conflict(backend) -> (rows, columns)
     ray(backend) -> ndarray | None
@@ -31,6 +32,7 @@ adapter reformulates a model.
 
 from collections.abc import Collection
 from dataclasses import dataclass
+from importlib.util import find_spec
 from typing import Any
 
 import numpy as np
@@ -169,6 +171,11 @@ class Capabilities:
         `integer` is True for a model with integer columns.
         """
         return not (integer and self.rejects("integrality", "duals"))
+
+
+def importable(name: str) -> bool:
+    """Return whether the module `name` can be imported, without importing it."""
+    return find_spec(name) is not None
 
 
 def check_sense(sense: str) -> None:

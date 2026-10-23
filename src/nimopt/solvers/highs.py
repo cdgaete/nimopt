@@ -22,6 +22,7 @@ from nimopt.solvers.base import (
     Result,
     check_reported,
     check_sense,
+    importable,
     proved_bound,
 )
 from nimopt.solvers.options import translated
@@ -88,6 +89,7 @@ OPTION_NAMES = {
     "newton_system": "hipo_system",
     "crossover": "run_crossover",
     "pdlp_tol": "pdlp_optimality_tolerance",
+    "separate_process": None,
 }
 
 OPTION_VALUES = {
@@ -141,6 +143,11 @@ def _bound(integer: bool, status: str, objective: float, info: Any) -> float | N
     return proved_bound(
         status, objective, float(info.mip_dual_bound) if integer else None
     )
+
+
+def installed() -> bool:
+    """Return whether `highspy` can be imported."""
+    return importable(BACKEND)
 
 
 def solve(

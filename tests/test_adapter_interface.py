@@ -23,6 +23,14 @@ def test_an_adapter_declares_a_backend_name_and_a_descriptor(name):
 
 
 @pytest.mark.parametrize("name", ADAPTERS)
+def test_an_adapter_reports_whether_its_backend_is_installed(name):
+    held = adapter(name)
+    assert callable(held.installed)
+    assert names(held.installed) == ()
+    assert isinstance(held.installed(), bool)
+
+
+@pytest.mark.parametrize("name", ADAPTERS)
 def test_an_adapters_solve_takes_the_documented_parameters(name):
     held = adapter(name)
     assert callable(held.solve)

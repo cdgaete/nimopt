@@ -30,6 +30,7 @@ from nimopt.solvers.base import (
     Result,
     check_reported,
     check_sense,
+    importable,
     proved_bound,
 )
 from nimopt.solvers.options import translated
@@ -97,6 +98,7 @@ OPTION_NAMES = {
     "newton_system": None,
     "crossover": "intpnt_basis",
     "pdlp_tol": None,
+    "separate_process": None,
 }
 
 OPTION_VALUES = {
@@ -213,6 +215,11 @@ def _bound(
     return proved_bound(
         status, objective, float(task.getdouinf(mosek.dinfitem.mio_obj_bound))
     )
+
+
+def installed() -> bool:
+    """Return whether `mosek` can be imported."""
+    return importable(BACKEND)
 
 
 def solve(

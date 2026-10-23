@@ -65,7 +65,7 @@ def test_a_solver_the_seam_does_not_adapt_is_refused():
 
 def test_what_is_available_is_what_is_installed():
     got = available()
-    assert set(got) <= set(ADAPTERS)
+    assert set(got) == {name for name in ADAPTERS if adapter(name).installed()}
     assert "highs" in got
     assert got["highs"] is capabilities("highs")
 

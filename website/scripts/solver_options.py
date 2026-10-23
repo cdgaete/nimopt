@@ -15,7 +15,7 @@ PAGE = DOCS / "reference" / "solvers.md"
 
 REGION = re.compile(r"<!-- options -->\n.*?<!-- /options -->", re.S)
 
-SOLVERS = ("highs", "gurobi", "mosek")
+SOLVERS = ("highs", "gurobi", "mosek", "gams")
 
 
 def cell(text):

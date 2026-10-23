@@ -29,6 +29,7 @@ from nimopt.solvers.base import (
     Result,
     check_reported,
     check_sense,
+    importable,
     proved_bound,
 )
 from nimopt.solvers.options import translated
@@ -92,6 +93,7 @@ OPTION_NAMES = {
     "newton_system": None,
     "crossover": "Crossover",
     "pdlp_tol": None,
+    "separate_process": None,
 }
 
 OPTION_VALUES = {
@@ -140,6 +142,11 @@ def _bound(model: Any, integer: bool, status: str, objective: float) -> float | 
     `optimal` and None at any other status.
     """
     return proved_bound(status, objective, float(model.ObjBound) if integer else None)
+
+
+def installed() -> bool:
+    """Return whether `gurobipy` can be imported."""
+    return importable(BACKEND)
 
 
 def solve(
