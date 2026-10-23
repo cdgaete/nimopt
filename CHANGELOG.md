@@ -18,6 +18,8 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+## 0.20261023.0 - 2026-10-23
+
 ### Added
 
 - The `gams` adapter solves with CPLEX through the GMO and GEV libraries of a GAMS installation, loaded with `ctypes`, on Linux, macOS and Windows. It passes the matrix in memory and requires no GAMS Python package. It requires the `gams` executable on `PATH` and a GAMS license that includes CPLEX. It computes no conflict and no ray.
