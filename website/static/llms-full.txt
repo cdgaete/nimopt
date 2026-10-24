@@ -2730,7 +2730,7 @@ An `Option` has a `name`, the `kind` it takes, what it `does`, and its
 | `presolve` | `off` / `choose` / `on` | how hard the solver presolves | `presolve` | `Presolve` | `presolve_use` | `preind` |
 | `method` | `choose` / `simplex` / `barrier` / `hipo` / `pdlp` | the algorithm the solver runs | `solver` | `Method` | `optimizer` | `lpmethod` |
 | `newton_system` | `choose` / `augmented` / `normaleq` | the Newton system an interior point method factorizes | `hipo_system` | not supported | not supported | not supported |
-| `crossover` | `choose` / `off` / `on` | whether an interior point is moved to a vertex after the solve | `run_crossover` | `Crossover` | `intpnt_basis` | `barcrossalg` |
+| `crossover` | `choose` / `off` / `on` | whether an interior point is moved to a vertex after the solve | `run_crossover` | `Crossover` | `intpnt_basis` | `solutiontype` |
 | `pdlp_tol` | float | relative tolerance at which the first-order method stops | `pdlp_optimality_tolerance` | not supported | not supported | not supported |
 | `separate_process` | bool | whether the solver runs in a process of its own | not supported | not supported | not supported | `solvelink` |
 

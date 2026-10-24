@@ -163,7 +163,7 @@ OPTION_NAMES = {
     "presolve": "preind",
     "method": "lpmethod",
     "newton_system": None,
-    "crossover": "barcrossalg",
+    "crossover": "solutiontype",
     "pdlp_tol": None,
     "separate_process": "solvelink",
 }
@@ -173,7 +173,7 @@ LOAD_LIBRARY, CALL_MODULE = 5, 2
 OPTION_VALUES: dict[str, dict[Any, int]] = {
     "presolve": {"off": 0, "choose": 1, "on": 1},
     "method": {"choose": 0, "simplex": 2, "barrier": 4},
-    "crossover": {"choose": 0, "off": -1, "on": 0},
+    "crossover": {"choose": 0, "off": 2, "on": 1},
     "separate_process": {False: LOAD_LIBRARY, True: CALL_MODULE},
 }
 
@@ -631,11 +631,17 @@ def _status(
     if solve_status == TERMINATED:
         counts = {"iteration_limit": iterations, "node_limit": nodes}
         reached = [name for name, limit in limits.items() if counts[name] >= limit]
-        if len(reached) != 1:
+        if not reached:
             raise RuntimeError(
-                f"CPLEX under GAMS terminated at model status {model_status!r} "
-                f"after {iterations:g} iterations and {nodes:g} nodes, under the "
-                f"limits {dict(limits)}; check the model and the options"
+                f"CPLEX under GAMS terminated at model status {model_status!r} and "
+                f"reached no limit the options set; pass the option log=True to "
+                f"read the cause in the CPLEX log"
+            )
+        if len(reached) > 1:
+            raise RuntimeError(
+                f"CPLEX under GAMS terminated at model status {model_status!r} with "
+                f"both the iteration limit and the node limit reached; set one of "
+                f"the two limits"
             )
         return reached[0]
     check_reported(model_status, (), OUTCOME, "CPLEX under GAMS", "model status")

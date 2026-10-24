@@ -18,6 +18,11 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+### Fixed
+
+- The `gams` adapter passes `crossover` to CPLEX as `solutiontype`: `choose` is 0, `off` is 2 and `on` is 1. CPLEX 22 replaces `barcrossalg -1` with `solutiontype 2` and reports the replacement in its log.
+- Where CPLEX terminates without reaching a limit the options set, the `gams` adapter raises a `RuntimeError` that states it and points to the CPLEX log through `log=True`.
+
 ## 0.20261023.0 - 2026-10-23
 
 ### Added

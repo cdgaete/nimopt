@@ -154,6 +154,19 @@ def test_no_status_without_an_optimum_reads_a_feasible_point():
     assert not unsolved & set(gams.FEASIBLE)
 
 
+def test_a_termination_without_a_limit_points_to_the_cplex_log():
+    # CPLEX barrier on a week of the European network stops with "not proven
+    # optimal due to numerical difficulties": model status 7, solve status 4
+    with pytest.raises(RuntimeError, match="reached no limit.*log=True"):
+        gams._status("feasible solution", "terminated by solver", {}, 102.0, 2e300)
+
+
+def test_a_termination_at_two_limits_asks_for_one():
+    limits = {"iteration_limit": 0, "node_limit": 0}
+    with pytest.raises(RuntimeError, match="set one of the two"):
+        gams._status("integer solution", "terminated by solver", limits, 0.0, 0.0)
+
+
 def test_a_signature_the_library_does_not_confirm_raises_naming_it():
     # a GAMS release whose entry point takes other arguments would be called
     # with the wrong stack; the adapter raises before the first call
@@ -397,6 +410,27 @@ def test_each_method_returns_the_reference(method, mode):
     )
     assert solved.status == "optimal"
     assert solved.objective == pytest.approx(held.reference(inputs), rel=1e-6)
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_crossover_off_uses_no_deprecated_cplex_option(capfd, mode):
+    # CPLEX 22 replaces `barcrossalg -1` with `solutiontype 2` and reports
+    # "Depreciated value -1 for BarCrossAlg" in its log
+    held = MODULES["dispatch"]
+    inputs = held.data(scale=SCALES["dispatch"])
+    solved = (
+        held.definition()
+        .build(inputs)
+        .solve(
+            solver="gams",
+            options={"method": "barrier", "crossover": "off", "log": True, **mode},
+        )
+    )
+    assert solved.status == "optimal"
+    assert solved.objective == pytest.approx(held.reference(inputs), rel=1e-6)
+    log = capfd.readouterr().out
+    assert "IBM ILOG CPLEX" in log
+    assert "Depreciated" not in log
 
 
 @pytest.mark.parametrize("mode", MODES)
