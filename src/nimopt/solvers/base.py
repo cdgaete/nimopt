@@ -13,7 +13,14 @@ and four functions
     conflict(backend) -> (rows, columns)
     ray(backend) -> ndarray | None
 
+and, where it declares the capability `mutation`, three more
+
+    change_column_bounds(backend, columns, lower, upper) -> None
+    append_rows(backend, row_lower, row_upper, indptr, indices, values) -> None
+    resume(backend, options=None) -> Result
+
 An adapter that declares neither a conflict nor a ray is never called for one.
+An adapter that declares no mutation defines none of the three functions.
 
 `Result.status` is a member of `STATUS`. `Result.feasible` is True where the
 solver reports `col_value` as a primal-feasible point. Each adapter reads that
@@ -57,7 +64,7 @@ STATUS = (
     "interrupt",
 )
 
-CAPABILITIES = ("integrality", "duals", "conflict", "ray")
+CAPABILITIES = ("integrality", "duals", "conflict", "ray", "mutation")
 
 SUPPORT = ("native", "absent")
 

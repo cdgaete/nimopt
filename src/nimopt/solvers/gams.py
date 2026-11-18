@@ -72,6 +72,7 @@ CAPABILITIES = Capabilities(
         "duals": "native",
         "conflict": "absent",
         "ray": "absent",
+        "mutation": "absent",
     },
     rejected=(("integrality", "duals"),),
 )

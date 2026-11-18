@@ -8,6 +8,9 @@ from nimopt.solvers.base import Capabilities
 SOLVE = ("assembled", "sense", "options")
 CONFLICT = ("backend",)
 RAY = ("backend",)
+CHANGE = ("backend", "columns", "lower", "upper")
+APPEND = ("backend", "row_lower", "row_upper", "indptr", "indices", "values")
+RESUME = ("backend", "options")
 
 
 def names(held):
@@ -54,3 +57,19 @@ def test_an_adapter_that_supports_ray_takes_the_documented_parameters(name):
         return
     assert callable(held.ray)
     assert names(held.ray) == RAY
+
+
+@pytest.mark.parametrize("name", ADAPTERS)
+def test_an_adapter_that_supports_mutation_takes_the_documented_parameters(name):
+    held = adapter(name)
+    if not held.CAPABILITIES.supports("mutation"):
+        return
+    assert names(held.change_column_bounds) == CHANGE
+    assert names(held.append_rows) == APPEND
+    assert names(held.resume) == RESUME
+
+
+def test_highs_changes_a_loaded_model_and_the_other_adapters_do_not():
+    assert adapter("highs").CAPABILITIES.supports("mutation")
+    for name in ("gurobi", "mosek", "gams"):
+        assert not adapter(name).CAPABILITIES.supports("mutation")

@@ -2475,10 +2475,10 @@ Output:
 
 ```text
 True
-highs  integrality native · duals native · conflict native · ray native  rejects duals+integrality
-gurobi  integrality native · duals native · conflict native · ray native  rejects duals+integrality
-mosek  integrality native · duals native · conflict absent · ray native  rejects duals+integrality
-gams  integrality native · duals native · conflict absent · ray absent  rejects duals+integrality
+highs  integrality native · duals native · conflict native · ray native · mutation native  rejects duals+integrality
+gurobi  integrality native · duals native · conflict native · ray native · mutation absent  rejects duals+integrality
+mosek  integrality native · duals native · conflict absent · ray native · mutation absent  rejects duals+integrality
+gams  integrality native · duals native · conflict absent · ray absent · mutation absent  rejects duals+integrality
 ```
 
 ## `Capabilities`
@@ -2491,11 +2491,13 @@ gams  integrality native · duals native · conflict absent · ray absent  rejec
 | `supports(capability)` | whether the adapter handles it at all |
 | `rejects(one, other)` | whether it rejects the two together |
 
-The capabilities are `integrality`, `duals`, `conflict` and `ray`. A flat
+The capabilities are `integrality`, `duals`, `conflict`, `ray` and `mutation`. A flat
 set is insufficient: a solver can support two and reject their
 combination. Every adapter rejects `integrality` with `duals`. A
 mixed-integer model's duals are not the relaxation's. A model with integer
 columns has no duals at all, and `Solution.dual` raises.
+
+An adapter that declares `mutation` changes the model the solver has loaded, and defines three functions. `change_column_bounds(backend, columns, lower, upper)` changes the bounds of `columns` on the loaded model. `append_rows(backend, row_lower, row_upper, indptr, indices, values)` appends rows to the loaded model over the columns it has. `resume(backend, options=None)` solves the loaded model again and returns a `Result`. The HiGHS adapter declares `mutation` `native`, and the Gurobi, Mosek and GAMS adapters declare it `absent`.
 
 ```python raises=ValueError
 import numpy as np

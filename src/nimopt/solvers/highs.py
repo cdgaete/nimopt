@@ -4,10 +4,15 @@ HiGHS reads a row-wise matrix as the same three arrays `Assembled` contains.
 The adapter passes those arrays without building another form. The column
 kinds are passed as one array over the columns.
 
+`change_column_bounds`, `append_rows` and `resume` change and solve the model
+HiGHS loaded, and copy no part of it out of HiGHS. `resume` reports the
+iterations of its own run.
+
 `OUTCOME` maps a HiGHS model status into `STATUS`. `FAILED` lists the HiGHS
 statuses this adapter raises on. A status in neither raises.
 """
 
+import weakref
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -36,6 +41,7 @@ CAPABILITIES = Capabilities(
         "duals": "native",
         "conflict": "native",
         "ray": "native",
+        "mutation": "native",
     },
     rejected=(("integrality", "duals"),),
 )
@@ -104,6 +110,8 @@ OPTION_VALUES = {
 
 _PROBED = {}
 
+_INTEGER: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
 
 def hipo_available() -> bool:
     """Return whether this HiGHS provides HiPO's extras library.
@@ -148,6 +156,48 @@ def _bound(integer: bool, status: str, objective: float, info: Any) -> float | N
 def installed() -> bool:
     """Return whether `highspy` can be imported."""
     return importable(BACKEND)
+
+
+def _settings(options: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Return the HiGHS options `solve` sets for `options`.
+
+    Raises RuntimeError for a method of `hipo` on a HiGHS without HiPO's
+    extras library.
+    """
+    settings = translated(options, OPTION_NAMES, OPTION_VALUES, solver="highs")
+    if settings.get("solver") == "hipo" and not hipo_available():
+        raise RuntimeError(
+            "method is 'hipo' and this HiGHS provides no HiPO extras library; "
+            "install a HiGHS with `libhighs_extras` beside `libhighs`, or "
+            "choose another method"
+        )
+    return settings
+
+
+def _apply(highs: Any, settings: Mapping[str, Any]) -> None:
+    """Set `settings` on the HiGHS handle `highs`.
+
+    Raises ValueError for an option HiGHS rejects.
+    """
+    import highspy
+
+    highs.setOptionValue("output_flag", False)
+    for key, value in settings.items():
+        if highs.setOptionValue(key, value) != highspy.HighsStatus.kOk:
+            raise ValueError(
+                f"HiGHS rejected option {key!r} at {value!r}; pass a name and "
+                f"a value HiGHS accepts"
+            )
+
+
+def _threads(options: Mapping[str, Any] | None) -> str:
+    """Return the note on the thread count for a solve that sets `threads`."""
+    if "threads" not in (options or {}):
+        return ""
+    return (
+        " HiGHS fixes its thread count at the first solve of a process. A "
+        "later `threads` value does not change it."
+    )
 
 
 def _check_vectors(assembled: "Assembled") -> None:
@@ -196,27 +246,15 @@ def solve(
 
     `Result.backend` is the model HiGHS built. A session reads a conflict or a
     ray from that solved instance. `Result.row_dual` is None for a model with
-    integer columns.
+    integer columns. `resume` solves that same model again.
     """
     import highspy
 
     check_sense(sense)
-    settings = translated(options, OPTION_NAMES, OPTION_VALUES, solver="highs")
-    if settings.get("solver") == "hipo" and not hipo_available():
-        raise RuntimeError(
-            "method is 'hipo' and this HiGHS provides no HiPO extras library; "
-            "install a HiGHS with `libhighs_extras` beside `libhighs`, or "
-            "choose another method"
-        )
+    settings = _settings(options)
     _check_vectors(assembled)
     highs = highspy.Highs()
-    highs.setOptionValue("output_flag", False)
-    for key, value in settings.items():
-        if highs.setOptionValue(key, value) != highspy.HighsStatus.kOk:
-            raise ValueError(
-                f"HiGHS rejected option {key!r} at {value!r}; pass a name and "
-                f"a value HiGHS accepts"
-            )
+    _apply(highs, settings)
     passed = highs.passModel(
         assembled.n_cols,
         assembled.n_rows,
@@ -240,24 +278,47 @@ def solve(
             f"{assembled.n_cols} columns and {assembled.values.size} nonzeros; "
             f"solve with `log=True` and read the reason in the HiGHS log"
         )
-    threads = (
-        " HiGHS fixes its thread count at the first solve of a process. A "
-        "later `threads` value does not change it."
-        if "threads" in (options or {})
-        else ""
-    )
+    integer = bool(assembled.integrality.any())
+    _INTEGER[highs] = integer
+    threads = _threads(options)
     if highs.run() == highspy.HighsStatus.kError:
         raise RuntimeError(
             f"HiGHS returned an error running the model and reported no "
             f"outcome; check the model and the options.{threads}"
         )
+    return _solved(highs, integer, threads)
+
+
+def resume(backend: Any, options: Mapping[str, Any] | None = None) -> Result:
+    """Solve the model HiGHS loaded again and return its status and its values.
+
+    `backend` is the `Result.backend` of a `solve` of this adapter. `options`
+    are applied to the handle as `solve` applies them. `Result.iterations` is
+    the simplex iterations of this run. `Result.row_dual` is None where the
+    loaded model has integer columns.
+    """
+    import highspy
+
+    settings = _settings(options)
+    _apply(backend, settings)
+    threads = _threads(options)
+    if backend.run() == highspy.HighsStatus.kError:
+        raise RuntimeError(
+            f"HiGHS returned an error running the model and reported no "
+            f"outcome; check the model and the options.{threads}"
+        )
+    return _solved(backend, _integer(backend), threads)
+
+
+def _solved(highs: Any, integer: bool, threads: str) -> Result:
+    """Return the result of the solve HiGHS ran on the model it loaded."""
+    import highspy
 
     reported = str(highs.getModelStatus()).split(".")[-1]
     check_reported(
         reported, FAILED, OUTCOME, "HiGHS", "model status", tail=f".{threads}"
     )
     solution = highs.getSolution()
-    integer = bool(assembled.integrality.any())
     duals = None
     if CAPABILITIES.reports_duals(integer):
         duals = np.asarray(solution.row_dual, dtype=np.float64)
@@ -277,6 +338,96 @@ def solve(
         highs,
         int(info.simplex_iteration_count),
     )
+
+
+def _integer(backend: Any) -> bool:
+    """Return whether the model this adapter passed to `backend` has integer columns.
+
+    Raises RuntimeError for a backend this adapter did not solve.
+    """
+    try:
+        return _INTEGER[backend]
+    except KeyError:
+        raise RuntimeError(
+            "backend is not a model this adapter solved; pass the backend of "
+            "a Result that `solve` returned"
+        ) from None
+
+
+def _length(name: str, found: int, expected: int, action: str) -> None:
+    """Raise RuntimeError where `found` differs from `expected`."""
+    if found != expected:
+        raise RuntimeError(f"{name} has length {found}, not {expected}; {action}")
+
+
+def change_column_bounds(backend: Any, columns: Any, lower: Any, upper: Any) -> None:
+    """Change the bounds of `columns` on the model HiGHS loaded.
+
+    `columns` are absolute column indices, and `lower` and `upper` have one
+    value per column. Raises RuntimeError for arrays of other lengths and
+    where HiGHS rejects the change.
+    """
+    import highspy
+
+    count = int(columns.size)
+    _length("lower", int(lower.size), count, "pass one lower bound per column")
+    _length("upper", int(upper.size), count, "pass one upper bound per column")
+    if backend.changeColsBounds(count, columns, lower, upper) == (
+        highspy.HighsStatus.kError
+    ):
+        raise RuntimeError(
+            f"HiGHS rejected the change of {count} column bounds; pass columns "
+            f"of the loaded model"
+        )
+
+
+def append_rows(
+    backend: Any,
+    row_lower: Any,
+    row_upper: Any,
+    indptr: Any,
+    indices: Any,
+    values: Any,
+) -> None:
+    """Append rows to the model HiGHS loaded.
+
+    `indptr`, `indices` and `values` are the CSR form of the appended rows
+    over the columns of the loaded model. Raises RuntimeError for arrays of
+    other lengths and where HiGHS rejects the rows.
+    """
+    import highspy
+
+    rows = int(row_lower.size)
+    _length(
+        "row_upper",
+        int(row_upper.size),
+        rows,
+        "pass one upper bound per row of row_lower",
+    )
+    _length(
+        "indptr",
+        int(indptr.size),
+        rows + 1,
+        "pass one entry per row of row_lower and one more",
+    )
+    nonzeros = int(indptr[-1])
+    _length(
+        "indices",
+        int(indices.size),
+        nonzeros,
+        "pass one column index per entry of indptr",
+    )
+    _length("values", int(values.size), nonzeros, "pass one value per entry of indptr")
+    if (
+        backend.addRows(
+            rows, row_lower, row_upper, nonzeros, indptr[:-1], indices, values
+        )
+        == highspy.HighsStatus.kError
+    ):
+        raise RuntimeError(
+            f"HiGHS rejected {rows} appended rows; pass rows over the columns "
+            f"of the loaded model"
+        )
 
 
 def conflict(backend: Any) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]:
