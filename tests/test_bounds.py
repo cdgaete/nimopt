@@ -435,3 +435,48 @@ def test_a_parameter_fix_is_restored_after_the_given_vectors_are_written():
     lower_x, upper_x = bounds.bounds_of(x)
     assert lower_x.tolist() == [0.0] * 6
     assert upper_x.tolist() == [100.0] * 6
+
+
+def test_a_change_that_is_not_rolled_back_is_recorded():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    with bounds.changing(x):
+        bounds.fix(x, np.array([0]), 4.0, whole=False)
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x[0] == upper_x[0] == 4.0
+
+
+def test_a_rolled_back_change_removes_an_entry_that_was_absent():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    with pytest.raises(RuntimeError, match="rejected"), bounds.changing(x):
+        bounds.fix(x, np.array([0]), 4.0, whole=False)
+        raise RuntimeError("rejected")
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert (lower_x.tolist(), upper_x.tolist()) == ([0.0] * 6, [100.0] * 6)
+    with pytest.raises(ValueError, match="has no fixed column"):
+        bounds.unfix(x, np.arange(x.n_columns))
+    # no declared layer remains, and a later change starts from the given vectors
+    lower[0:6] = 7.0
+    assert bounds.bounds_of(x)[0].tolist() == [7.0] * 6
+
+
+def test_a_rolled_back_change_keeps_an_earlier_fix_and_bound():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    bounds.fix(x, np.array([0]), 4.0, whole=False)
+    bounds.set_bound(x, np.arange(x.n_columns), 1.0, 50.0, whole=True)
+    with pytest.raises(RuntimeError, match="rejected"), bounds.changing(x):
+        bounds.fix(x, np.array([1]), 9.0, whole=False)
+        bounds.set_bound(x, np.arange(x.n_columns), 2.0, 60.0, whole=True)
+        raise RuntimeError("rejected")
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert (lower_x[0], upper_x[0]) == (4.0, 4.0)
+    assert (lower_x[1], upper_x[1]) == (1.0, 50.0)
+
+
+def test_an_unfixed_entry_comes_back_where_the_body_raises():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    bounds.fix(x, np.array([0]), 4.0, whole=False)
+    with pytest.raises(RuntimeError, match="rejected"), bounds.changing(x):
+        bounds.unfix(x, np.array([0]))
+        raise RuntimeError("rejected")
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x[0] == upper_x[0] == 4.0

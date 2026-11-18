@@ -508,3 +508,61 @@ def test_a_row_bound_no_solution_satisfies_raises_and_changes_nothing(loaded):
         session.add_row("open", Sum(i, x[i]) >= -np.inf)
         assert session.n_rows == 3
         assert session.solve().objective == pytest.approx(4.0)
+
+
+def test_a_bound_the_solver_rejects_changes_nothing():
+    m, _, x = two()
+    with m.session() as session:
+        session.solve()
+        with pytest.raises(RuntimeError, match="HiGHS rejected"):
+            session.set_bound(x, upper=-np.inf)
+        assert session.assembled.col_lower.tolist() == [0.0, 0.0]
+        assert session.assembled.col_upper.tolist() == [10.0, 10.0]
+        assert session.solve().objective == pytest.approx(4.0)
+        # the model the session loads again has the bounds before the call
+        session.close()
+        assert session.solve().objective == pytest.approx(4.0)
+        session.set_bound(x["a"], upper=2.0)
+        assert session.assembled.col_upper.tolist() == [2.0, 10.0]
+
+
+def test_a_fix_the_solver_rejects_leaves_no_fixed_column():
+    m, _, x = two()
+    with m.session() as session:
+        session.solve()
+        with pytest.raises(RuntimeError, match="HiGHS rejected"):
+            session.fix(x["a"], 1e25)
+        assert session.assembled.col_lower.tolist() == [0.0, 0.0]
+        assert session.assembled.col_upper.tolist() == [10.0, 10.0]
+        with pytest.raises(ValueError, match="has no fixed column"):
+            session.unfix(x)
+        session.fix(x["a"], 6.0)
+        assert session.solve().objective == pytest.approx(7.0)
+        session.unfix(x["a"])
+        assert session.solve().objective == pytest.approx(4.0)
+
+
+def test_a_rejected_fix_keeps_an_earlier_fix_of_the_variable():
+    m, _, x = two()
+    with m.session() as session:
+        session.solve()
+        session.fix(x["b"], 3.0)
+        with pytest.raises(RuntimeError, match="HiGHS rejected"):
+            session.fix(x["a"], 1e25)
+        assert session.assembled.col_lower.tolist() == [0.0, 3.0]
+        assert session.assembled.col_upper.tolist() == [10.0, 3.0]
+        # x_b is 3 and the total of 4 requires x_a of 1
+        assert session.solve().objective == pytest.approx(4.0)
+        session.unfix(x["b"])
+        assert session.assembled.col_upper.tolist() == [10.0, 10.0]
+
+
+def test_a_bound_recorded_before_the_first_solve_is_rejected_at_the_solve():
+    m, _, x = two()
+    with m.session() as session:
+        session.set_bound(x, upper=-np.inf)
+        with pytest.raises(RuntimeError, match="HiGHS rejected the model"):
+            session.solve()
+        assert not session.backend_open
+        session.set_bound(x, upper=10.0)
+        assert session.solve().objective == pytest.approx(4.0)

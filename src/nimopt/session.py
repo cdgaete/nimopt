@@ -175,8 +175,9 @@ class Session:
         self._require_current()
         self._require_mutation()
         variable, positions, whole = target_of(self._copy.variables, target)
-        self._bounds.fix(variable, positions, value, whole)
-        self._write_bounds(variable)
+        with self._bounds.changing(variable):
+            self._bounds.fix(variable, positions, value, whole)
+            self._write_bounds(variable)
 
     def unfix(self, target: Any) -> None:
         """Remove the pin of the columns a target selects.
@@ -192,8 +193,9 @@ class Session:
         self._require_current()
         self._require_mutation()
         variable, positions, _ = target_of(self._copy.variables, target)
-        self._bounds.unfix(variable, positions)
-        self._write_bounds(variable)
+        with self._bounds.changing(variable):
+            self._bounds.unfix(variable, positions)
+            self._write_bounds(variable)
 
     def set_bound(
         self,
@@ -215,8 +217,9 @@ class Session:
         self._require_current()
         self._require_mutation()
         variable, positions, whole = target_of(self._copy.variables, target)
-        self._bounds.set_bound(variable, positions, lower, upper, whole)
-        self._write_bounds(variable)
+        with self._bounds.changing(variable):
+            self._bounds.set_bound(variable, positions, lower, upper, whole)
+            self._write_bounds(variable)
 
     def add_row(
         self,
@@ -367,11 +370,12 @@ class Session:
                 )
 
     def _write_bounds(self, variable: Variable) -> None:
-        """Write a variable's bounds into the assembled vectors and the backend."""
+        """Write a variable's bounds into the solver's model, then the vectors.
+
+        Raises where the solver rejects them, and writes no vector then.
+        """
         lower, upper = self._bounds.bounds_of(variable)
         columns = variable._columns()
-        self.assembled.col_lower[columns] = lower
-        self.assembled.col_upper[columns] = upper
         if self._backend is not None:
             self._adapter.change_column_bounds(
                 self._backend,
@@ -379,6 +383,8 @@ class Session:
                 lower,
                 upper,
             )
+        self.assembled.col_lower[columns] = lower
+        self.assembled.col_upper[columns] = upper
 
     def _rows_of(self) -> dict[str, slice]:
         """Return the row range of every constraint of the loaded model."""

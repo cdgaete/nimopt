@@ -1,6 +1,7 @@
 """The declared bounds and the pins of the variables a session changes."""
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from typing import Any
 
 import numpy as np
@@ -13,6 +14,7 @@ from nimopt.variable import Variable
 _NOT_A_TARGET = "a target is a variable or one reference to one variable"
 
 _Layer = tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]
+_Pins = npt.NDArray[np.float64]
 
 
 def target_of(
@@ -223,6 +225,39 @@ class Bounds:
         declared = self._entry(variable)
         for which, at_side, values in writes:
             declared[which][at_side] = values
+
+    @contextmanager
+    def changing(self, variable: Variable) -> Iterator[None]:
+        """Restore the entry of `variable` where the body raises."""
+        saved = self._saved(variable)
+        try:
+            yield
+        except BaseException:
+            self._restore(variable, saved)
+            raise
+
+    def _saved(self, variable: Variable) -> tuple[_Layer | None, _Pins | None]:
+        """Return copies of the two layers of `variable`, None where absent."""
+        declared = self._declared.get(variable.name)
+        pins = self._pins.get(variable.name)
+        return (
+            None if declared is None else (declared[0].copy(), declared[1].copy()),
+            None if pins is None else pins.copy(),
+        )
+
+    def _restore(
+        self, variable: Variable, saved: tuple[_Layer | None, _Pins | None]
+    ) -> None:
+        """Write back the two layers of `variable` that `_saved` returned."""
+        declared, pins = saved
+        if declared is None:
+            self._declared.pop(variable.name, None)
+        else:
+            self._declared[variable.name] = (declared[0].copy(), declared[1].copy())
+        if pins is None:
+            self._pins.pop(variable.name, None)
+        else:
+            self._pins[variable.name] = pins.copy()
 
     def _entry(self, variable: Variable) -> _Layer:
         """Return the declared layer of `variable`, copied at the first change."""
