@@ -275,6 +275,7 @@ def solve(
         np.asarray(solution.col_value, dtype=np.float64),
         duals,
         highs,
+        int(info.simplex_iteration_count),
     )
 
 

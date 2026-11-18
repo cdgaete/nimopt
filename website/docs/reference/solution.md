@@ -20,6 +20,7 @@ they were declared over.
 | `primal(name)` | the named variable's values over its own sets |
 | `dual(name, kind=None)` | a constraint's duals over its free sets, or a variable's reduced costs over its own sets |
 | `has_duals` | whether `dual` returns values: status `optimal`, and a solver that reports duals |
+| `iterations` | the simplex iterations the solver reports for the solve, or `None` for an adapter that reports none |
 
 `status` and `feasible` are readable whatever the solver reported.
 `objective` and `primal` raise `ValueError` where `feasible` is False. They

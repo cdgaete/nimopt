@@ -340,3 +340,18 @@ def test_an_infeasible_model_has_no_duals():
     solved = small_model(floor=3.0).solve()
     assert solved.status == "infeasible"
     assert solved.has_duals is False
+
+
+def test_a_highs_solution_reports_its_simplex_iterations():
+    from nimopt.models import transport
+
+    solution = transport.definition().build(transport.data(4)).solve()
+    assert isinstance(solution.iterations, int)
+    assert solution.iterations > 0
+
+
+def test_a_result_without_an_iteration_count_reports_none():
+    from nimopt.solvers.base import Result
+
+    result = Result("optimal", True, 1.0, 1.0, np.zeros(1), None, object())
+    assert result.iterations is None

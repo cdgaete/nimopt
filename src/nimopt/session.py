@@ -177,6 +177,7 @@ class Session:
             self.assembled,
             rows_of,
             self.solver,
+            result.iterations,
         )
 
     def diagnose(self) -> Diagnosis:

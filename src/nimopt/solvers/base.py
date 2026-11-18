@@ -24,6 +24,8 @@ and an upper bound under sense `max`. `Result.bound` is None where the solver
 reports none. `Result.row_dual` is None for a model whose duals the adapter
 does not report. `Result.backend` is the adapter's own solver model. The
 session stores it and passes it to the adapter that built it.
+`Result.iterations` is the simplex iterations the solver reports for the
+solve, and is None for an adapter that reports no count.
 
 A descriptor describes the adapter, not the library behind it. A solver
 feature the adapter does not call is `absent`. Support has two values. No
@@ -70,6 +72,8 @@ class Result:
     `bound` is the bound on the optimal objective the solver proved, or None
     where the solver reports none. `row_dual` is None for a model whose duals
     the adapter does not report. `backend` is the solver's own model.
+    `iterations` is the simplex iterations the solver reports for the solve,
+    or None.
     """
 
     status: str
@@ -79,6 +83,7 @@ class Result:
     col_value: npt.NDArray[np.float64]
     row_dual: npt.NDArray[np.float64] | None
     backend: Any
+    iterations: int | None = None
 
     def __post_init__(self) -> None:
         if self.status not in STATUS:

@@ -22,6 +22,7 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 - `Expression.block()` returns the coefficients of an expression as a nimblend array and computes no row domain. `Expression.to_dense()` returns them as an ndarray over the frame and the column dimension, with each term added into one array.
 - `Param.domain()` returns the coordinates at which a parameter has a value. Callers that keep the domain of one bound array share one object.
+- `Solution.iterations` returns the simplex iterations the solver reports for the solve. The HiGHS adapter reports the count. The value is `None` for the Gurobi, Mosek and GAMS adapters.
 
 ### Changed
 

@@ -39,12 +39,13 @@ class Solution:
     members alone and is a `SparseArray`. A dual follows its constraint's row
     domain by the same rule.
 
-    `status` and `feasible` are readable after any solve. `objective` and
-    `primal` raise ValueError where `feasible` is False. They raise ValueError
-    at status `unbounded` and `unbounded_or_infeasible`, whatever `feasible`
-    reports. `bound` and `gap` are None where no value is defined, at those two
-    statuses included. `dual` raises ValueError where `status` is not
-    `optimal`, and for a model with integer columns.
+    `status` and `feasible` are readable after any solve. `iterations` is the
+    simplex iterations the solver reports for the solve, or None. `objective`
+    and `primal` raise ValueError where `feasible` is False. They raise
+    ValueError at status `unbounded` and `unbounded_or_infeasible`, whatever
+    `feasible` reports. `bound` and `gap` are None where no value is defined,
+    at those two statuses included. `dual` raises ValueError where `status` is
+    not `optimal`, and for a model with integer columns.
 
     The reduced costs are computed from `assembled` and the row duals when
     the solution is constructed. The solution stores no reference to
@@ -63,10 +64,12 @@ class Solution:
         assembled: "Assembled",
         rows_of: Mapping[str, Any],
         solver: str,
+        iterations: int | None = None,
     ) -> None:
         self.model = model
         self.status = status
         self.solver = solver
+        self.iterations = iterations
         self.feasible = feasible
         self._objective = objective
         self._bound = bound
