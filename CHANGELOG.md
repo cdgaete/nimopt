@@ -30,6 +30,7 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 - `Model.objective_coefficients` adds each term of the objective into one vector and merges no term blocks.
 - A constraint computes no row domain from its terms where it is written into the matrix, and where its rows are declared with `over=`.
 - A constraint whose right-hand side is a number stores one float for it, and no value per row. Constraints declared with `over=` one parameter share one row domain.
+- Declaring a variable takes the same time whatever the number of variables the model declares. A model declares 32,000 variables in 0.11 s instead of 7.0 s.
 
 ### Fixed
 

@@ -29,7 +29,7 @@ from nimopt.solvers.base import check_sense
 from nimopt.symbol import read_at_its_sets
 from nimopt.syntax import render
 from nimopt.term import Expression
-from nimopt.variable import Variable
+from nimopt.variable import ColumnSpace, Variable
 
 if TYPE_CHECKING:
     from nimopt.solution import Solution
@@ -71,7 +71,7 @@ class Model:
         self.constraints = {}
         self.piecewise_declarations = {}
         self._objective = None
-        self._n_columns = 0
+        self._columns = ColumnSpace()
         self._n_rows = 0
 
     @property
@@ -98,7 +98,7 @@ class Model:
     @property
     def n_columns(self) -> int:
         """Return the number of columns declared."""
-        return self._n_columns
+        return self._columns.total
 
     @property
     def n_rows(self) -> int:
@@ -134,16 +134,15 @@ class Model:
         variable = Variable(
             name,
             sets,
-            start=self._n_columns,
-            total_columns=self._n_columns,
+            start=self.n_columns,
+            total_columns=self._columns,
             subset=subset,
             lower=lower,
             upper=upper,
             integer=integer,
         )
         self.variables[name] = variable
-        self._n_columns += variable.n_columns
-        self._renumber()
+        self._columns.total += variable.n_columns
         return variable
 
     def _adopt(self, variable: Variable) -> None:
@@ -152,15 +151,9 @@ class Model:
                 f"variable {variable.name!r} is already declared; declare another name"
             )
         check_not_generated(variable.name, "variable", self.piecewise_declarations)
-        variable._bind(self._n_columns, self._n_columns)
+        variable._bind(self.n_columns, self._columns)
         self.variables[variable.name] = variable
-        self._n_columns += variable.n_columns
-        self._renumber()
-
-    def _renumber(self) -> None:
-        """Set the column space's current size on every variable."""
-        for variable in self.variables.values():
-            variable.total_columns = self._n_columns
+        self._columns.total += variable.n_columns
 
     def constraint(
         self, name: str, relation: Any, where: Any = None, over: Any = None
@@ -260,23 +253,22 @@ class Model:
         declared after it.
         """
         if self._objective is None or not self._objective.terms:
-            return np.zeros(self._n_columns, dtype=np.float64)
-        self._renumber()
+            return np.zeros(self.n_columns, dtype=np.float64)
         return self._objective.to_dense()
 
     def column_bounds(
         self,
     ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """Return the `(lower, upper)` bound of every column."""
-        lower = np.empty(self._n_columns, dtype=np.float64)
-        upper = np.empty(self._n_columns, dtype=np.float64)
+        lower = np.empty(self.n_columns, dtype=np.float64)
+        upper = np.empty(self.n_columns, dtype=np.float64)
         for variable in self.variables.values():
             variable.write_bounds(lower, upper)
         return lower, upper
 
     def integrality(self) -> npt.NDArray[np.int32]:
         """Return one flag per column, 1 where its variable is integer."""
-        flags = np.zeros(self._n_columns, dtype=np.int32)
+        flags = np.zeros(self.n_columns, dtype=np.int32)
         for variable in self.variables.values():
             if variable.integer:
                 flags[variable._columns()] = 1
@@ -309,7 +301,7 @@ class Model:
             ),
             objective=objective_text(self._objective),
             objective_constant=objective_constant(self._objective),
-            columns=self._n_columns,
+            columns=self.n_columns,
             rows=self._n_rows,
             nonzeros=self.nnz,
             piecewise=tuple(

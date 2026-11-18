@@ -16,6 +16,20 @@ from nimopt.sets import as_sets, condition_dims, coords_of, label_text, rows_of
 from nimopt.symbol import Symbol
 
 
+class ColumnSpace:
+    """The number of columns of one model, read by each of its variables.
+
+    A model adds the columns of each variable it declares to `total`. A
+    variable numbered in the space reads `total` where it builds its columns.
+    """
+
+    def __init__(self) -> None:
+        self.total = 0
+
+    def __repr__(self) -> str:
+        return f"ColumnSpace({self.total} columns)"
+
+
 class Variable(Symbol):
     """A variable over a set product, or over a subset of one.
 
@@ -30,7 +44,7 @@ class Variable(Symbol):
         name: str,
         sets: Iterable[Any],
         start: int | None = None,
-        total_columns: int | None = None,
+        total_columns: "int | ColumnSpace | None" = None,
         subset: Any = None,
         lower: float | Param = 0.0,
         upper: float | Param = np.inf,
@@ -45,7 +59,7 @@ class Variable(Symbol):
         self.upper = self._bound(upper, "upper")
         self.integer = bool(integer)
         self.start = None
-        self.total_columns = None
+        self._total = None
         self.coord = None
         self._domain = None
         if start is not None:
@@ -61,9 +75,23 @@ class Variable(Symbol):
         """True where this variable has no numbering."""
         return self.coord is None
 
-    def _bind(self, start: int, total_columns: int) -> None:
+    @property
+    def total_columns(self) -> int | None:
+        """Return the number of columns of the space this variable is numbered in.
+
+        A variable of a model returns the columns the model declares now.
+        Returns None for a variable with no numbering.
+        """
+        if isinstance(self._total, ColumnSpace):
+            return self._total.total
+        return self._total
+
+    def _bind(self, start: int, total_columns: "int | ColumnSpace") -> None:
         self.start = int(start)
-        self.total_columns = int(total_columns)
+        if isinstance(total_columns, ColumnSpace):
+            self._total = total_columns
+        else:
+            self._total = int(total_columns)
         sizes = tuple(len(s) for s in self.sets)
         if self.subset is None:
             self.coord = ProductCoord(sizes)

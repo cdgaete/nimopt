@@ -172,3 +172,36 @@ def test_a_model_refuses_to_adopt_a_name_it_already_carries():
     m._adopt(Variable("x", (S,)))
     with pytest.raises(ValueError, match="variable 'x' is already declared"):
         m._adopt(Variable("x", (S,)))
+
+
+def _lines_run(work):
+    """Return the number of source lines the interpreter runs inside `work`."""
+    import sys
+
+    count = 0
+
+    def tracer(frame, event, arg):
+        nonlocal count
+        if event == "line":
+            count += 1
+        return tracer
+
+    previous = sys.gettrace()
+    sys.settrace(tracer)
+    try:
+        work()
+    finally:
+        sys.settrace(previous)
+    return count
+
+
+def test_declaring_a_variable_costs_the_same_after_many_others():
+    # a pass over the earlier variables adds lines for each of them
+    T = Set("T", np.arange(3))
+    m = Model("many")
+    m.var("first", (T,))
+    early = _lines_run(lambda: m.var("second", (T,)))
+    for at in range(200):
+        m.var(f"x{at}", (T,))
+    late = _lines_run(lambda: m.var("last", (T,)))
+    assert late == early
