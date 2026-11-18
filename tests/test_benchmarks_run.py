@@ -138,3 +138,32 @@ def test_the_shape_pass_benchmark_bounds_the_value_time():
     # the value-only time is part of the profiled build
     assert 0.0 <= got["value_low_s"] <= got["value_high_s"] <= got["profiled_s"]
     assert 0.0 <= got["saving_low"] <= got["saving_high"] < 1.0
+
+
+def test_the_session_benchmark_resumes_with_fewer_iterations_than_a_rebuild():
+    from bench_session import sweep
+
+    got = sweep(4, 2, 48, 3)
+    assert {
+        "rebuild_ms",
+        "session_ms",
+        "rebuild_iterations",
+        "session_iterations",
+    } <= set(got)
+    assert got["session_ms"] > 0
+    assert len(got["rebuild_iterations"]) == 3
+    # the first entry is the first solve of the session; three resumed solves follow
+    assert len(got["session_iterations"]) == 4
+    assert max(got["session_iterations"][1:]) <= max(got["rebuild_iterations"])
+
+
+def test_a_binding_sweep_returns_the_objectives_of_a_rebuild():
+    from bench_session import sweep
+
+    got = sweep(32, 4, 48, 3)
+    # the declared capacity of the column is 100, and every value is below it
+    assert got["binding"] == 3
+    assert got["largest_disagreement"] < 1e-6 * max(1.0, abs(got["objectives"][-1]))
+    # a tighter upper bound on a minimized model does not lower the cost
+    objectives = got["objectives"]
+    assert all(later >= earlier for earlier, later in zip(objectives, objectives[1:]))

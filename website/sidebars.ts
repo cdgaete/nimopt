@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
         "guides/piecewise",
         "guides/at-scale",
         "guides/highs-methods",
+        "guides/sessions",
         "guides/saving-and-loading",
       ],
     },

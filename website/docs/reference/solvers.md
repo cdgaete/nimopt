@@ -60,7 +60,7 @@ combination. Every adapter rejects `integrality` with `duals`. A
 mixed-integer model's duals are not the relaxation's. A model with integer
 columns has no duals at all, and `Solution.dual` raises.
 
-An adapter that declares `mutation` changes the model the solver has loaded, and defines three functions. `change_column_bounds(backend, columns, lower, upper)` changes the bounds of `columns` on the loaded model. `append_rows(backend, row_lower, row_upper, indptr, indices, values)` appends rows to the loaded model over the columns it has. `resume(backend, options=None)` solves the loaded model again and returns a `Result`. The HiGHS adapter declares `mutation` `native`, and the Gurobi, Mosek and GAMS adapters declare it `absent`.
+An adapter that declares `mutation` changes the model the solver has loaded, and defines three functions. `change_column_bounds(backend, columns, lower, upper)` changes the bounds of `columns` on the loaded model. `append_rows(backend, row_lower, row_upper, indptr, indices, values)` appends rows to the loaded model over the columns it has. `resume(backend, options=None)` solves the loaded model again and returns a `Result`. The HiGHS adapter declares `mutation` `native`, and the Gurobi, Mosek and GAMS adapters declare it `absent`. `Session.fix`, `Session.unfix`, `Session.set_bound` and `Session.add_row` require it.
 
 ```python raises=ValueError
 import numpy as np
@@ -96,10 +96,15 @@ matrix to the solver, and a later query reads the same solved instance.
 
 | Member | Returns |
 | --- | --- |
-| `assembled` | the matrix the session was opened on |
+| `assembled` | the matrix the session was opened on, with the current column bounds |
 | `solver`, `capabilities` | which adapter, and what it can do |
 | `status` | what the last solve reported, or `None` before one |
 | `solve()` | a `Solution` |
+| `fix(target, value)` | pins the columns of a target at a value |
+| `unfix(target)` | restores the bounds of the columns of a target |
+| `set_bound(target, lower=None, upper=None)` | replaces the bounds of the columns of a target |
+| `add_row(name, relation, where=None, over=None)` | appends the rows of a constraint |
+| `n_rows`, `n_columns` | the size of the loaded model, including the appended rows |
 | `close()` | releases the solver's model |
 
 `Model.solve()` opens a session, solves and closes it. A caller who needs
@@ -108,6 +113,7 @@ only a solution needs no session.
 The session assembles the matrix when it opens. `solve()` and `diagnose()`
 raise `ValueError` where the model declares a variable or a constraint, or
 sets its objective, after that. Open a new session on the changed model.
+`fix()`, `unfix()`, `set_bound()` and `add_row()` raise `ValueError` there too. They change the model the solver loaded. [A session that changes a model](/guides/sessions) gives the rules of each method.
 
 ```python
 import numpy as np
@@ -152,7 +158,7 @@ and columns that explain it.
 | `status`, `solver` | what the solve reported, and which adapter |
 | `method` | `"native"` where the solver computed the conflict |
 | `conflict` | one `Row` per conflicting row, or `None` where the model is not infeasible |
-| `columns` | one `ColumnBound` per column of the conflict, with the bounds the model declares |
+| `columns` | one `ColumnBound` per column of the conflict, with the current bounds of that column |
 | `ray` | one `RayTerm` per column the ray moves, or `None` where the model is not unbounded |
 
 `conflict` contains the same `Row` that `Model.row` returns, and a
