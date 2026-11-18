@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from nimopt import Model, Param, Set, subset
+from nimopt import Model, Param, Set, Sum, subset
+from nimopt.bounds import Bounds, target_of
 
 
 def test_a_scalar_bound_reaches_every_column():
@@ -203,3 +204,234 @@ def test_an_infinite_bound_is_not_refused():
     lower, upper = m.column_bounds()
     assert np.array_equal(lower, np.array([-np.inf, -np.inf]))
     assert np.array_equal(upper, np.array([np.inf, 5.0]))
+
+
+def plant():
+    """Return x over (P, W) in [0, 100], an integer n over P, and their Bounds."""
+    P = Set("P", np.array(["p0", "p1"]))
+    W = Set("W", np.array(["w0", "w1", "w2"]))
+    m = Model("plant")
+    x = m.var("x", (P, W), lower=0.0, upper=100.0)
+    n = m.var("n", (P,), integer=True)
+    lower, upper = m.column_bounds()
+    return m, P, W, x, n, lower, upper, Bounds(lower, upper)
+
+
+def test_a_point_fix_pins_one_column():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    bounds.fix(x, np.array([0]), 4.0, whole=False)
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x.tolist() == [4.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    assert upper_x.tolist() == [4.0, 100.0, 100.0, 100.0, 100.0, 100.0]
+
+
+def test_a_fix_is_not_clamped_into_the_declared_bounds():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    bounds.fix(x, np.array([0]), -5.0, whole=False)
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x[0] == upper_x[0] == -5.0
+
+
+def test_a_later_fix_replaces_an_earlier_one():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    bounds.fix(x, np.array([0]), 4.0, whole=False)
+    bounds.fix(x, np.array([0]), 7.0, whole=False)
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x[0] == upper_x[0] == 7.0
+
+
+def test_a_fix_that_is_not_finite_raises():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    for value in (np.inf, -np.inf, np.nan):
+        with pytest.raises(ValueError, match="x"):
+            bounds.fix(x, np.array([0]), value, whole=False)
+
+
+def test_a_fix_on_an_integer_column_is_integral():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    with pytest.raises(ValueError):
+        bounds.fix(n, np.array([0]), 2.5, whole=False)
+    bounds.fix(n, np.array([0]), 2.0, whole=False)
+    lower_n, upper_n = bounds.bounds_of(n)
+    assert lower_n[0] == upper_n[0] == 2.0
+
+
+def test_a_parameter_fix_applies_to_a_whole_variable():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    cap = Param.from_dense("v", (P,), np.array([1.0, 2.0]))
+    with pytest.raises(ValueError):
+        bounds.fix(x, np.array([0, 1, 2]), cap, whole=False)
+
+
+def test_a_parameter_fix_over_one_set_pins_every_member():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    v = Param.from_dense("v", (P,), np.array([1.0, 2.0]))
+    bounds.fix(x, np.arange(x.n_columns), v, whole=True)
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x.tolist() == [1.0, 1.0, 1.0, 2.0, 2.0, 2.0]
+    assert upper_x.tolist() == [1.0, 1.0, 1.0, 2.0, 2.0, 2.0]
+
+
+def test_a_parameter_fix_with_fewer_members_pins_those():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    v = Param.from_long("v", (P, W), {"P": ["p1"], "W": ["w0"]}, [9.0])
+    bounds.fix(x, np.arange(x.n_columns), v, whole=True)
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x.tolist() == [0.0, 0.0, 0.0, 9.0, 0.0, 0.0]
+    assert upper_x.tolist() == [100.0, 100.0, 100.0, 9.0, 100.0, 100.0]
+
+
+def test_unfix_of_a_column_that_is_not_pinned_is_accepted():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    bounds.fix(x, np.array([0]), 4.0, whole=False)
+    bounds.unfix(x, np.array([1]))
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x[0] == upper_x[0] == 4.0
+
+
+def test_unfix_of_a_variable_with_no_pin_raises():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    with pytest.raises(ValueError, match="has no fixed column"):
+        bounds.unfix(x, np.arange(x.n_columns))
+
+
+def test_unfix_restores_the_bounds_exactly():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    before = bounds.bounds_of(x)
+    bounds.fix(x, np.array([0]), 4.0, whole=False)
+    bounds.unfix(x, np.array([0]))
+    after = bounds.bounds_of(x)
+    assert after[0].tolist() == before[0].tolist()
+    assert after[1].tolist() == before[1].tolist()
+
+
+def test_set_bound_requires_a_side():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    with pytest.raises(ValueError):
+        bounds.set_bound(x, np.arange(x.n_columns), None, None, whole=True)
+
+
+def test_a_bound_on_one_element_keeps_the_others():
+    Pr = Set("Pr", np.array(["bands", "coils", "plate"]))
+    m = Model("products")
+    v = m.var("v", (Pr,), lower=1.0, upper=9.0)
+    lower, upper = m.column_bounds()
+    bounds = Bounds(lower, upper)
+    bounds.set_bound(v, np.array([2]), None, 3.0, whole=False)
+    lower_v, upper_v = bounds.bounds_of(v)
+    assert upper_v.tolist() == [9.0, 9.0, 3.0]
+    assert lower_v.tolist() == [1.0, 1.0, 1.0]
+
+
+def test_a_fix_survives_set_bound():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    bounds.fix(x, np.array([0]), 4.0, whole=False)
+    bounds.set_bound(x, np.arange(x.n_columns), 1.0, 50.0, whole=True)
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x[0] == upper_x[0] == 4.0
+    assert lower_x[1] == 1.0
+    assert upper_x[1] == 50.0
+    bounds.unfix(x, np.array([0]))
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x[0] == 1.0
+    assert upper_x[0] == 50.0
+
+
+def test_a_parameter_bound_has_a_value_at_every_member():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    part = Param.from_long("cap", (P, W), {"P": ["p1"], "W": ["w0"]}, [9.0])
+    with pytest.raises(ValueError):
+        bounds.set_bound(x, np.arange(x.n_columns), None, part, whole=True)
+
+
+def test_a_parameter_bound_over_one_set_bounds_every_member():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    cap = Param.from_dense("cap", (P,), np.array([10.0, 20.0]))
+    bounds.set_bound(x, np.arange(x.n_columns), None, cap, whole=True)
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert upper_x.tolist() == [10.0, 10.0, 10.0, 20.0, 20.0, 20.0]
+    assert lower_x.tolist() == [0.0] * 6
+
+
+def test_a_parameter_bound_applies_to_a_whole_variable():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    cap = Param.from_dense("cap", (P,), np.array([10.0, 20.0]))
+    with pytest.raises(ValueError):
+        bounds.set_bound(x, np.array([0]), None, cap, whole=False)
+
+
+def test_a_bound_that_is_not_a_number_raises():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    with pytest.raises(ValueError):
+        bounds.set_bound(x, np.arange(x.n_columns), float("nan"), None, whole=True)
+
+
+def test_a_variable_that_is_not_changed_has_no_entry():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    bounds.fix(x, np.array([0]), 4.0, whole=False)
+    lower_n, upper_n = bounds.bounds_of(n)
+    assert lower_n.tolist() == lower[6:8].tolist()
+    assert upper_n.tolist() == upper[6:8].tolist()
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert not np.shares_memory(lower_x, lower)
+    assert not np.shares_memory(upper_x, upper)
+    assert lower[0] == 0.0
+    assert upper[0] == 100.0
+
+
+def test_a_target_is_a_variable_or_one_plain_reference():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    held, positions, whole = target_of(m.variables, x)
+    assert held is x
+    assert positions.tolist() == [0, 1, 2, 3, 4, 5]
+    assert whole is True
+    held, positions, whole = target_of(m.variables, x[P, W])
+    assert held is x
+    assert positions.tolist() == [0, 1, 2, 3, 4, 5]
+    assert whole is True
+    held, positions, whole = target_of(m.variables, x["p0", W])
+    assert held is x
+    assert positions.tolist() == [0, 1, 2]
+    assert whole is False
+    for other in (2.0 * x[P, W], Sum(W, x[P, W]), x[P, W - 1]):
+        with pytest.raises(TypeError):
+            target_of(m.variables, other)
+
+
+def test_a_target_of_another_model_resolves_by_name():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    other, _, _, other_x, _, _, _, _ = plant()
+    assert other_x is not x
+    assert target_of(m.variables, other_x)[0] is x
+
+
+def test_a_target_the_model_does_not_have_raises():
+    m, P, W, x, n, lower, upper, bounds = plant()
+    other, other_P, _, _, _, _, _, _ = plant()
+    y = other.var("y", (other_P,))
+    with pytest.raises(ValueError) as raised:
+        target_of(m.variables, y)
+    assert "'x'" in str(raised.value)
+    assert "'n'" in str(raised.value)
+
+
+def test_unfix_restores_the_bounds_after_the_given_vectors_are_written():
+    # a session writes bounds_of into the vectors it gave to Bounds
+    _, _, _, x, _, lower, upper, bounds = plant()
+    bounds.fix(x, np.array([0]), 4.0, whole=False)
+    lower[0:6], upper[0:6] = bounds.bounds_of(x)
+    bounds.unfix(x, np.array([0]))
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x.tolist() == [0.0] * 6
+    assert upper_x.tolist() == [100.0] * 6
+
+
+def test_a_parameter_fix_is_restored_after_the_given_vectors_are_written():
+    _, P, _, x, _, lower, upper, bounds = plant()
+    held = Param.from_dense("v", (P,), np.array([1.0, 2.0]))
+    bounds.fix(x, np.arange(6), held, whole=True)
+    lower[0:6], upper[0:6] = bounds.bounds_of(x)
+    bounds.unfix(x, np.arange(6))
+    lower_x, upper_x = bounds.bounds_of(x)
+    assert lower_x.tolist() == [0.0] * 6
+    assert upper_x.tolist() == [100.0] * 6
