@@ -18,9 +18,20 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+### Added
+
+- `Expression.block()` returns the coefficients of an expression as a nimblend array and computes no row domain. `Expression.to_dense()` returns them as an ndarray over the frame and the column dimension, with each term added into one array.
+
 ### Changed
 
 - The HiGHS adapter passes the assembled arrays to HiGHS and builds no `HighsLp` object. For a model of 19.4 million rows, 9.4 million columns and 46.4 million nonzeros the pass takes 1.2 s instead of 7.6 s, and the process holds 1.6 GB instead of 2.7 GB for the model during the solve. The adapter raises `RuntimeError` for an assembled vector whose length differs from the matrix, and the message gives each such vector with both lengths. It raises `RuntimeError` for an integrality flag other than 0 and 1.
+- A term summed over several sets reduces them in one pass. The values at one column are added in the order of their coordinates, and the last bits of such a coefficient can differ from the sum taken one set at a time.
+- `Model.objective_coefficients` adds each term of the objective into one vector and merges no term blocks.
+- A constraint computes no row domain from its terms where it is written into the matrix, and where its rows are declared with `over=`.
+
+### Fixed
+
+- An objective that is a constant alone gives every column a cost of zero, and the solved objective is the constant.
 
 ## 0.20261023.1 - 2026-10-23
 

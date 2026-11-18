@@ -325,3 +325,37 @@ def test_a_value_changed_after_declaration_is_written_at_assembly():
     m.constraint("supply", Sum(W, d[P, W] * x[P, W]) <= cap[P])
     d.array = Param.from_dense("d", (P, W), 10.0 * np.ones((2, 3))).array
     assert m.assemble().to_dense()[0, :3].tolist() == [10.0, 10.0, 10.0]
+
+
+def _two_term_model():
+    m = Model("two")
+    P = Set("P", np.array(["p1", "p2", "p3"]))
+    x = m.var("x", (P,))
+    y = m.var("y", (P,))
+    a = Param.from_dense("a", (P,), np.array([1.0, 2.0, 3.0]))
+    return m, P, x, y, a
+
+
+def _no_intersection(monkeypatch):
+    def intersected(self, other):
+        raise AssertionError("two row domains were intersected")
+
+    monkeypatch.setattr(nb.Domain, "intersect", intersected)
+
+
+def test_a_constraint_over_declared_rows_intersects_no_term_domain(monkeypatch):
+    # the declared rows replace the rows the terms span
+    m, P, x, y, a = _two_term_model()
+    _no_intersection(monkeypatch)
+    declared = m.constraint("c", x[P] + a[P] * y[P] <= 4.0, over=product((P,)))
+    assert declared.n_rows == 3
+    assert declared.nnz == 6
+
+
+def test_writing_a_constraint_intersects_no_term_domain(monkeypatch):
+    # the rows are measured at declaration, and the write reads them
+    m, P, x, y, a = _two_term_model()
+    m.constraint("c", x[P] + a[P] * y[P] <= 4.0)
+    expected = m.assemble().to_dense().tolist()
+    _no_intersection(monkeypatch)
+    assert m.assemble().to_dense().tolist() == expected

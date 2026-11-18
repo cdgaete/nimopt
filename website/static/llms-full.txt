@@ -1084,7 +1084,9 @@ materialised.
 | `terms` | the terms it contains |
 | `frame` | the dimensions it is indexed over |
 | `coords` | the coordinates of that frame |
-| `materialise()` | its coefficients as a `nimblend` array |
+| `materialise()` | its coefficients as a `nimblend` array, and the rows they span as a domain |
+| `block()` | its coefficients as a `nimblend` array, with no row domain computed |
+| `to_dense()` | its coefficients as an ndarray over the frame and the column dimension, with each term added into one array |
 | `materialise_at(at)` | its coefficients at one coordinate of the frame, as a `nimblend` array over the column dimension |
 
 ```python

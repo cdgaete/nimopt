@@ -211,6 +211,7 @@ PACKAGE_IMPORTS = {
     "combined_dims",
     "from_long",
     "sum_arrays",
+    "sum_to_dense",
 }
 
 # the constructors that take an index matrix and the predicate that checks

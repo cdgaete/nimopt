@@ -4,7 +4,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 import numpy as np
-from nimblend import Domain, SparseArray, sum_arrays
+import numpy.typing as npt
+from nimblend import Domain, SparseArray, sum_arrays, sum_to_dense
 
 from nimopt.coefficient import NOT_A_COEFFICIENT, Coefficient, Derived, Reference
 from nimopt.names import COLUMN
@@ -208,12 +209,13 @@ class Term:
         The variable's columns have the value 1.0. The lag moves the columns
         onto the rows that read them. The fixed members are selected. The
         coefficient multiplies, the condition restricts and the scale
-        multiplies. Each summed dimension is reduced last. A frame wider than
-        the term's own dimensions is filled by replication. A coefficient over
-        dimensions the variable has none of is replicated over the variable's
-        own dimensions first. `at` maps each dimension of the frame to one
-        label, and the array is then over `(COLUMN,)` at that coordinate.
-        `within` restricts the columns and the coefficient before the product.
+        multiplies. The summed dimensions are reduced last, in one pass. A
+        frame wider than the term's own dimensions is filled by replication.
+        A coefficient over dimensions the variable has none of is replicated
+        over the variable's own dimensions first. `at` maps each dimension of
+        the frame to one label, and the array is then over `(COLUMN,)` at that
+        coordinate. `within` restricts the columns and the coefficient before
+        the product.
         The block then contains every entry inside the row domain, and entries
         outside it where the domain is not the product of its projections.
         """
@@ -245,8 +247,8 @@ class Term:
             )
         if self.scale != 1.0:
             array = array * self.scale
-        for dim in self.summed:
-            array = array.sum(dim)
+        if self.summed:
+            array = array.sum(self.summed)
         if at is None:
             return array.broadcast((*frame, COLUMN), coords)
         late = {d: at[d] for d in array.dims if d in at}
@@ -470,6 +472,47 @@ class Expression:
         """Return each dimension's coordinate, from its variables and coefficients."""
         return {name: s.coord for name, s in self.sets_by_name().items()}
 
+    def _blocks(
+        self, record: Any = None, progress: Any = None, within: Domain | None = None
+    ) -> list[SparseArray]:
+        """Return one block per term over `(*frame, COLUMN)`, in term order.
+
+        `within` restricts each term as in `materialise`. Raises ValueError
+        for a `within` over other dimensions than the frame.
+        """
+        frame = self.frame
+        if within is not None and within.dims != frame:
+            raise ValueError(
+                f"expression is free over {frame} and within is over "
+                f"{within.dims}; pass a domain over the frame"
+            )
+        coords = self.coords
+        rows_of_terms = None if within is None else Within(within)
+        blocks = []
+        for term in self.terms:
+            blocks.append(term.materialise(frame, coords, record, within=rows_of_terms))
+            if progress is not None:
+                progress.term(term)
+        return blocks
+
+    def block(self, progress: Any = None, within: Domain | None = None) -> SparseArray:
+        """Return the block over `(*frame, COLUMN)`, without the rows it spans.
+
+        The block is the block `materialise` returns. No row domain is
+        computed. `progress` and `within` are those of `materialise`. Raises
+        ValueError for a `within` over other dimensions than the frame.
+        """
+        return sum_arrays(self._blocks(progress=progress, within=within))
+
+    def to_dense(self) -> npt.NDArray[np.float64]:
+        """Return the coefficients as a numpy array over `(*frame, COLUMN)`.
+
+        The array equals `block().to_dense()`. Each term is added into one
+        array, and no merged block is built. A cell of no term is 0.0. Raises
+        ValueError for an expression with no term.
+        """
+        return sum_to_dense(self._blocks())
+
     def materialise(
         self, record: Any = None, progress: Any = None, within: Domain | None = None
     ) -> tuple[SparseArray, Domain]:
@@ -485,18 +528,7 @@ class Expression:
         other dimensions than the frame.
         """
         frame = self.frame
-        if within is not None and within.dims != frame:
-            raise ValueError(
-                f"expression is free over {frame} and within is over "
-                f"{within.dims}; pass a domain over the frame"
-            )
-        coords = self.coords
-        rows_of_terms = None if within is None else Within(within)
-        blocks = []
-        for term in self.terms:
-            blocks.append(term.materialise(frame, coords, record, within=rows_of_terms))
-            if progress is not None:
-                progress.term(term)
+        blocks = self._blocks(record, progress, within)
         rows = blocks[0].domain(frame)
         if record is not None:
             record.term_rows(self.terms[0], rows)

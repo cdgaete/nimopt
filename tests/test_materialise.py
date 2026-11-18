@@ -200,3 +200,77 @@ def test_rows_over_other_dimensions_than_the_frame_raise():
     _, P, W, x, _, d, _ = model()
     with pytest.raises(ValueError, match="pass a domain over the frame"):
         Sum(W, d[P, W] * x[P, W]).materialise(within=subset((W,), {"W": ["w1"]}))
+
+
+def same_block(left, right):
+    return (
+        left.dims == right.dims
+        and left.coordinates().tolist() == right.coordinates().tolist()
+        and left.values().tolist() == right.values().tolist()
+    )
+
+
+def _no_intersection(monkeypatch):
+    def intersected(self, other):
+        raise AssertionError("two row domains were intersected")
+
+    monkeypatch.setattr(nb.Domain, "intersect", intersected)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [summed_terms, replicated_term, widening_coefficient, lag, fixed_member],
+)
+def test_block_returns_the_block_of_materialise(case):
+    expression, within = case()
+    assert same_block(expression.block(), expression.materialise()[0])
+    assert same_block(
+        expression.block(within=within), expression.materialise(within=within)[0]
+    )
+
+
+def test_block_intersects_no_row_domain(monkeypatch):
+    expression, within = summed_terms()
+    expected = expression.materialise(within=within)[0]
+    _no_intersection(monkeypatch)
+    assert same_block(expression.block(within=within), expected)
+
+
+def test_block_refuses_rows_over_other_dimensions_than_the_frame():
+    _, P, W, x, _, d, _ = model()
+    with pytest.raises(ValueError, match="pass a domain over the frame"):
+        Sum(W, d[P, W] * x[P, W]).block(within=subset((W,), {"W": ["w1"]}))
+
+
+def test_to_dense_returns_one_value_per_column():
+    _, P, W, x, y, d, a = model()
+    e = Sum(P, W, d[P, W] * x[P, W]) + Sum(P, a[P] * y[P]) + Sum(P, 3.0 * y[P])
+    assert e.to_dense().tolist() == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 13.0, 23.0]
+    assert e.to_dense().tolist() == e.materialise()[0].to_dense().tolist()
+
+
+def test_to_dense_merges_no_term_block(monkeypatch):
+    import nimopt.term
+
+    _, P, W, x, y, d, a = model()
+    e = Sum(P, W, d[P, W] * x[P, W]) + Sum(P, a[P] * y[P])
+
+    def merged(arrays):
+        raise AssertionError("the term blocks were merged")
+
+    monkeypatch.setattr(nimopt.term, "sum_arrays", merged)
+    assert e.to_dense().tolist() == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 10.0, 20.0]
+
+
+def test_a_term_summed_over_two_sets_reduces_them_in_one_call(monkeypatch):
+    _, P, W, x, _, d, _ = model()
+    calls = []
+    reduce = nb.SparseArray.sum
+
+    def counted(self, *args, **kwargs):
+        calls.append(args)
+        return reduce(self, *args, **kwargs)
+
+    monkeypatch.setattr(nb.SparseArray, "sum", counted)
+    Sum(P, W, d[P, W] * x[P, W]).block()
+    assert calls == [(("P", "W"),)]

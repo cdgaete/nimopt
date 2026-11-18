@@ -259,11 +259,10 @@ class Model:
         dimension spans every column the model declares, including those
         declared after it.
         """
-        if self._objective is None:
+        if self._objective is None or not self._objective.terms:
             return np.zeros(self._n_columns, dtype=np.float64)
         self._renumber()
-        block, _ = self._objective.materialise()
-        return block.to_dense()
+        return self._objective.to_dense()
 
     def column_bounds(
         self,

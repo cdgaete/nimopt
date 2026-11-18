@@ -179,3 +179,41 @@ def test_the_model_module_imports_at_module_level_alone():
         if isinstance(node, (ast.Import, ast.ImportFrom))
     ]
     assert nested == []
+
+
+def test_the_costs_add_every_term_of_a_column():
+    T = Set("T", np.array([0, 1, 2]))
+    m = Model("costs")
+    x = m.var("x", (T,))
+    y = m.var("y", (T,))
+    c = Param.from_dense("c", (T,), np.array([1.0, 2.0, 3.0]))
+    m.set_objective(Sum(T, c[T] * x[T]) + Sum(T, 2.0 * x[T]) - Sum(T, y[T]))
+    assert m.objective_coefficients().tolist() == [3.0, 4.0, 5.0, -1.0, -1.0, -1.0]
+
+
+def test_the_costs_merge_no_term_block(monkeypatch):
+    import nimopt.term
+
+    T = Set("T", np.array([0, 1, 2]))
+    m = Model("costs")
+    x = m.var("x", (T,))
+    c = Param.from_dense("c", (T,), np.array([1.0, 2.0, 3.0]))
+    m.set_objective(Sum(T, c[T] * x[T]) + Sum(T, 2.0 * x[T]))
+
+    def merged(arrays):
+        raise AssertionError("the term blocks were merged")
+
+    monkeypatch.setattr(nimopt.term, "sum_arrays", merged)
+    assert m.objective_coefficients().tolist() == [3.0, 4.0, 5.0]
+
+
+def test_an_objective_of_a_constant_alone_has_zero_costs():
+    from nimopt.term import Expression
+
+    T = Set("T", np.array([0, 1, 2]))
+    m = Model("constant")
+    x = m.var("x", (T,), upper=1.0)
+    m.constraint("cap", x[T] <= 1.0)
+    m.set_objective(Expression([], 5.0))
+    assert m.objective_coefficients().tolist() == [0.0, 0.0, 0.0]
+    assert m.solve().objective == 5.0

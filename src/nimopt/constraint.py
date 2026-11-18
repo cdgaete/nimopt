@@ -186,7 +186,7 @@ class Constraint:
         """
         narrowed = self.over is not None or self.where is not None
         within = self.rows if narrowed else None
-        block, _ = self.expression.materialise(progress=progress, within=within)
+        block = self.expression.block(progress=progress, within=within)
 
         def reserve(n: int) -> Any:
             if n != self._nnz:
@@ -228,7 +228,10 @@ def narrow(
     within = declared if declared is not None else condition
     if record is not None:
         within = None
-    block, rows = constraint.expression.materialise(record, within=within)
+    if declared is not None and record is None:
+        block, rows = constraint.expression.block(within=declared), declared
+    else:
+        block, rows = constraint.expression.materialise(record, within=within)
     if record is not None:
         record.reached(frame, rows)
     if declared is not None:
