@@ -124,10 +124,10 @@ def test_a_model_the_backend_refuses_is_not_solved_on():
     m.set_objective(Sum(S, x[S]))
     m.constraint("floor", x[S] >= 1.0)
     assembled = m.assemble()
-    # one cost short of the column count of the matrix
-    assembled.col_cost = np.asarray(assembled.col_cost, dtype=np.float64)[:-1]
+    # a column index outside the two columns of the matrix
+    assembled.indices = np.array([0, 7], dtype=np.int32)
 
-    with pytest.raises(RuntimeError, match="rejected the model"):
+    with pytest.raises(RuntimeError, match="HiGHS rejected the model"):
         highs.solve(assembled, "min")
 
 

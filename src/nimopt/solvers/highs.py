@@ -150,6 +150,45 @@ def installed() -> bool:
     return importable(BACKEND)
 
 
+def _check_vectors(assembled: "Assembled") -> None:
+    """Raise RuntimeError for a vector of a length or a kind HiGHS misreads.
+
+    HiGHS reads each array by the count of rows, columns or nonzeros it is
+    given, and checks no length. It reads an integrality flag above 1 as a
+    column kind other than continuous and integer.
+    """
+    rows, columns = assembled.n_rows, assembled.n_cols
+    nonzeros = assembled.matrix.nnz
+    expected = {
+        "col_cost": columns,
+        "col_lower": columns,
+        "col_upper": columns,
+        "integrality": columns,
+        "row_lower": rows,
+        "row_upper": rows,
+        "indptr": rows + 1,
+        "indices": nonzeros,
+        "values": nonzeros,
+    }
+    wrong = [
+        f"{name} has length {getattr(assembled, name).size}, not {length}"
+        for name, length in expected.items()
+        if getattr(assembled, name).size != length
+    ]
+    if wrong:
+        raise RuntimeError(
+            f"the assembled vectors differ in length from the matrix of {rows} "
+            f"rows, {columns} columns and {nonzeros} nonzeros: "
+            f"{', '.join(wrong)}; pass vectors of the lengths the matrix declares"
+        )
+    flags = assembled.integrality
+    if flags.size and (flags.min() < 0 or flags.max() > 1):
+        raise RuntimeError(
+            "integrality has a value other than 0 and 1; pass 0 for a "
+            "continuous column and 1 for an integer column"
+        )
+
+
 def solve(
     assembled: "Assembled", sense: str, options: Mapping[str, Any] | None = None
 ) -> Result:
@@ -169,30 +208,7 @@ def solve(
             "install a HiGHS with `libhighs_extras` beside `libhighs`, or "
             "choose another method"
         )
-    lp = highspy.HighsLp()
-    lp.num_col_ = assembled.n_cols
-    lp.num_row_ = assembled.n_rows
-    lp.col_cost_ = assembled.col_cost
-    lp.col_lower_ = assembled.col_lower
-    lp.col_upper_ = assembled.col_upper
-    lp.row_lower_ = assembled.row_lower
-    lp.row_upper_ = assembled.row_upper
-    lp.sense_ = getattr(highspy.ObjSense, SENSES[sense])
-    if assembled.integrality.any():
-        lp.integrality_ = np.where(
-            assembled.integrality.astype(bool),
-            highspy.HighsVarType.kInteger,
-            highspy.HighsVarType.kContinuous,
-        )
-
-    matrix = lp.a_matrix_
-    matrix.format_ = highspy.MatrixFormat.kRowwise
-    matrix.num_col_ = assembled.n_cols
-    matrix.num_row_ = assembled.n_rows
-    matrix.start_ = assembled.indptr
-    matrix.index_ = assembled.indices
-    matrix.value_ = assembled.values
-
+    _check_vectors(assembled)
     highs = highspy.Highs()
     highs.setOptionValue("output_flag", False)
     for key, value in settings.items():
@@ -201,15 +217,28 @@ def solve(
                 f"HiGHS rejected option {key!r} at {value!r}; pass a name and "
                 f"a value HiGHS accepts"
             )
-    if highs.passModel(lp) == highspy.HighsStatus.kError:
+    passed = highs.passModel(
+        assembled.n_cols,
+        assembled.n_rows,
+        int(assembled.values.size),
+        int(highspy.MatrixFormat.kRowwise),
+        int(getattr(highspy.ObjSense, SENSES[sense])),
+        0.0,
+        assembled.col_cost,
+        assembled.col_lower,
+        assembled.col_upper,
+        assembled.row_lower,
+        assembled.row_upper,
+        assembled.indptr,
+        assembled.indices,
+        assembled.values,
+        assembled.integrality,
+    )
+    if passed == highspy.HighsStatus.kError:
         raise RuntimeError(
-            f"HiGHS rejected the model it was passed: {assembled.n_cols} "
-            f"columns against {assembled.col_cost.size} costs, "
-            f"{assembled.col_lower.size} lower and {assembled.col_upper.size} "
-            f"upper column bounds, {assembled.n_rows} rows against "
-            f"{assembled.row_lower.size} lower and {assembled.row_upper.size} "
-            f"upper row bounds; pass vectors of the declared column and row "
-            f"counts"
+            f"HiGHS rejected the model it was passed: {assembled.n_rows} rows, "
+            f"{assembled.n_cols} columns and {assembled.values.size} nonzeros; "
+            f"solve with `log=True` and read the reason in the HiGHS log"
         )
     threads = (
         " HiGHS fixes its thread count at the first solve of a process. A "

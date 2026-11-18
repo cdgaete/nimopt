@@ -18,6 +18,10 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+### Changed
+
+- The HiGHS adapter passes the assembled arrays to HiGHS and builds no `HighsLp` object. For a model of 19.4 million rows, 9.4 million columns and 46.4 million nonzeros the pass takes 1.2 s instead of 7.6 s, and the process holds 1.6 GB instead of 2.7 GB for the model during the solve. The adapter raises `RuntimeError` for an assembled vector whose length differs from the matrix, and the message gives each such vector with both lengths. It raises `RuntimeError` for an integrality flag other than 0 and 1.
+
 ## 0.20261023.1 - 2026-10-23
 
 ### Fixed
