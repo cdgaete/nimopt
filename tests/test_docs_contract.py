@@ -104,6 +104,7 @@ NIMBLEND_HOME = {
     "is_canonical": "arrays",
     "combined_dims": "arrays",
     "sum_arrays": "arrays",
+    "sum_to_dense": "arrays",
     "Domain": "domains",
     "StoredCoord": "domains",
     "ProductCoord": "domains",

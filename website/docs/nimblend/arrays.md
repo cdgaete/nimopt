@@ -69,6 +69,7 @@ print(isinstance(array, nb.Array))
 print(array.dims, array.shape, array.absence)
 print(array.nnz)
 print(array.sum("B").to_dense())
+print(array.sum(("A", "B")).to_dense())
 ```
 
 <!-- output -->
@@ -80,6 +81,7 @@ True
 ('A', 'B') (2, 2) empty
 4
 [1. 2.]
+3.0
 ```
 
 </details>
@@ -87,6 +89,8 @@ True
 
 `from_dense` stores every cell it was given, and this array has four entries
 and not two. The zeros are stored, and a stored value is present.
+
+A reduction takes one dimension or several. `array.sum(("A", "B"))` reduces both dimensions in one pass, and a `SparseArray` sorts its entries at most once. Reducing every dimension by name returns an array over no dimension, with one entry. The mean over several dimensions is the mean of every value they contain.
 
 ## `SparseArray`
 
@@ -343,6 +347,31 @@ first = nb.SparseArray.from_dense(np.array([[1.0, 0.0], [0.0, 2.0]]), labels)
 second = nb.SparseArray.from_dense(np.array([[10.0, 20.0], [30.0, 40.0]]), labels)
 
 print(nb.sum_arrays([first, second, first]).to_dense())
+```
+
+<!-- output -->
+<details open>
+<summary>Output</summary>
+
+```text
+[[12. 20.]
+ [30. 44.]]
+```
+
+</details>
+<!-- /output -->
+
+`sum_to_dense(arrays)` returns the same sum as an ndarray of the shape of the frame, with `0.0` at a coordinate of no operand. `sum_to_dense` adds each operand into one buffer and builds no merged array. It equals `sum_arrays(arrays).to_dense()`. The operands declare `"empty"`, and an `"unknown"` operand raises `ValueError`.
+
+```python
+import numpy as np
+import nimblend as nb
+
+labels = {"A": np.array(["a0", "a1"]), "B": np.array(["b0", "b1"])}
+first = nb.SparseArray.from_dense(np.array([[1.0, 0.0], [0.0, 2.0]]), labels)
+second = nb.SparseArray.from_dense(np.array([[10.0, 20.0], [30.0, 40.0]]), labels)
+
+print(nb.sum_to_dense([first, second, first]))
 ```
 
 <!-- output -->
