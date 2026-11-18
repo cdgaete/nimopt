@@ -231,14 +231,24 @@ class Session:
         A relation free over a set appends one row per member, after the rows
         already appended. Raises ValueError where the model changed after the
         session opened, where the adapter does not change a loaded model, for
-        a name the session's model declares, and for a term over a variable
-        the session's model does not declare. A rejected call appends no row.
+        a name the session's model declares, for a term over a variable
+        the session's model does not declare, for a row with a coefficient that
+        is not finite, for a row bound that is NaN and for a row no solution
+        satisfies. The solver is called before the row is recorded. A rejected
+        call appends no row.
         """
         self._require_current()
         self._require_mutation()
         self._check_variables(name, relation)
         constraint = self._copy.constraint(name, relation, where, over)
-        arrays = self._appended.add(name, constraint)
+        try:
+            self._appended.add(name, constraint, accept=self._pass_rows)
+        except BaseException:
+            self._copy._withdraw(name)
+            raise
+
+    def _pass_rows(self, *arrays: Any) -> None:
+        """Pass appended rows to the solver's model where one is loaded."""
         if self._backend is not None:
             self._adapter.append_rows(self._backend, *arrays)
 
@@ -249,18 +259,20 @@ class Session:
         it. Any other solve passes the assembled model to `solve`. Where rows
         were appended before that call, it appends them to the solver's model
         and resumes, and the result of the resume is the result of the solve.
-        Raises ValueError where the model declares a variable or a constraint,
-        or sets its objective, after the session opened.
+        The session stores the solver's model after the appended rows are
+        loaded, and a call that raises stores none. Raises ValueError where the
+        model declares a variable or a constraint, or sets its objective, after
+        the session opened.
         """
         self._require_current()
         if self._backend is not None and self.capabilities.supports("mutation"):
             result = self._adapter.resume(self._backend, self.options)
         else:
             result = self._adapter.solve(self.assembled, self.model.sense, self.options)
-            self._backend = result.backend
             if self._appended.n_rows:
-                self._adapter.append_rows(self._backend, *self._appended.csr())
-                result = self._adapter.resume(self._backend, self.options)
+                self._adapter.append_rows(result.backend, *self._appended.csr())
+                result = self._adapter.resume(result.backend, self.options)
+            self._backend = result.backend
         self._status = result.status
         constant = self.model.objective_constant
         return Solution(

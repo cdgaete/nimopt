@@ -1,6 +1,6 @@
 """The matrix a model assembles into, with its row and column data."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -144,7 +144,10 @@ class Appended:
         return tuple(name for name, _, _ in self._blocks)
 
     def add(
-        self, name: str, constraint: "Constraint"
+        self,
+        name: str,
+        constraint: "Constraint",
+        accept: Callable[..., None] | None = None,
     ) -> tuple[
         npt.NDArray[np.float64],
         npt.NDArray[np.float64],
@@ -161,7 +164,11 @@ class Appended:
         with no coefficient keeps its position in the constraint. The five
         arrays describe the constraint alone, with its rows numbered from zero.
         They are views of the buffer of `write_into`, and a later append does
-        not change them. Raises ValueError for a name that is already appended.
+        not change them. `accept` is called with the five arrays before the
+        rows are recorded, and a call that raises records no row. Raises
+        ValueError for a name that is already appended, for a row with a
+        coefficient that is not finite, for a row bound that is NaN and for a
+        lower bound of infinity or an upper bound of minus infinity.
         """
         if name in self._rows_of:
             raise ValueError(f"row {name!r} is already appended; append each row once")
@@ -175,6 +182,23 @@ class Appended:
         row_lower = np.empty(constraint.n_rows, dtype=np.float64)
         row_upper = np.empty(constraint.n_rows, dtype=np.float64)
         constraint.write_bounds(row_lower, row_upper)
+        if not np.isfinite(values).all():
+            raise ValueError(
+                f"row {name!r} has a coefficient that is not finite; give finite "
+                f"coefficients"
+            )
+        if np.isnan(row_lower).any() or np.isnan(row_upper).any():
+            raise ValueError(
+                f"row {name!r} has a bound that is not a number; give a number or "
+                f"an infinity"
+            )
+        if np.isposinf(row_lower).any() or np.isneginf(row_upper).any():
+            raise ValueError(
+                f"row {name!r} has a lower bound of infinity or an upper bound of "
+                f"minus infinity; give a bound a solution can satisfy"
+            )
+        if accept is not None:
+            accept(row_lower, row_upper, indptr, indices, values)
         total = self._n_rows + constraint.n_rows
         block.group(
             (ROW,),

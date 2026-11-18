@@ -175,6 +175,13 @@ class Model:
         self._n_rows += constraint.n_rows
         return constraint
 
+    def _withdraw(self, name: str) -> None:
+        """Remove a constraint this model declares and count its rows out.
+
+        Raises KeyError for a name the model does not declare.
+        """
+        self._n_rows -= self.constraints.pop(name).n_rows
+
     def piecewise(
         self,
         name: str,

@@ -411,3 +411,100 @@ def test_a_solution_of_a_session_reads_the_rows_and_names_of_its_own_solve():
     # the model the session was opened on has no row named cut
     with pytest.raises(KeyError, match="cut"):
         m.solve().dual("cut")
+
+
+def rejected(*arrays):
+    raise RuntimeError(
+        "HiGHS rejected 1 appended rows; pass rows over the columns of the loaded model"
+    )
+
+
+def test_a_row_the_solver_rejects_is_not_recorded(monkeypatch):
+    m, i, x = two()
+    with m.session() as session:
+        session.solve()
+        monkeypatch.setattr(session._adapter, "append_rows", rejected)
+        with pytest.raises(RuntimeError, match="HiGHS rejected"):
+            session.add_row("cut", Sum(i, x[i]) >= 7.0)
+        monkeypatch.undo()
+        assert session.n_rows == 2
+        assert session._backend.getNumRow() == 2
+        solution = session.solve()
+        assert solution.objective == pytest.approx(4.0)
+        with pytest.raises(KeyError, match="cut"):
+            solution.dual("cut")
+        # the name is free, and the row is appended by a later call
+        session.add_row("cut", Sum(i, x[i]) >= 7.0)
+        assert session.n_rows == 3
+        assert session.solve().objective == pytest.approx(7.0)
+
+
+def test_a_row_with_a_bound_that_is_not_a_number_raises_and_changes_nothing():
+    m, i, x = two()
+    with m.session() as session:
+        session.solve()
+        with pytest.raises(ValueError, match="not a number"):
+            session.add_row("bad", Sum(i, x[i]) >= float("nan"))
+        assert session.n_rows == 2
+        assert session._backend.getNumRow() == 2
+        session.add_row("bad", Sum(i, x[i]) >= 7.0)
+        assert session.solve().objective == pytest.approx(7.0)
+
+
+def test_a_row_with_a_coefficient_that_is_not_finite_keeps_the_earlier_rows():
+    # a model with integer columns reads no dual, and a row count that
+    # differs from the solver's is found by no later check
+    i = Set("i", np.array(["a", "b"]))
+    m = Model("whole")
+    x = m.var("x", (i,), lower=0.0, upper=10.0, integer=True)
+    m.constraint("total", Sum(i, x[i]) >= 4.0)
+    m.set_objective(Sum(i, x[i]))
+    huge = Param.from_dense("huge", (i,), np.array([np.inf, 1.0]))
+    with m.session() as session:
+        assert session.solve().objective == pytest.approx(4.0)
+        session.add_row("must_be_7", Sum(i, x[i]) >= 7.0)
+        with pytest.raises(ValueError, match="not finite"):
+            session.add_row("bad", Sum(i, huge[i] * x[i]) >= 1.0)
+        assert session.n_rows == 2
+        assert session.solve().objective == pytest.approx(7.0)
+        assert session.solve().objective == pytest.approx(7.0)
+
+
+def test_a_row_that_is_not_valid_raises_before_the_first_solve():
+    m, i, x = two()
+    with m.session() as session:
+        with pytest.raises(ValueError, match="not a number"):
+            session.add_row("bad", Sum(i, x[i]) >= float("nan"))
+        assert session.n_rows == 2
+        assert session.solve().objective == pytest.approx(4.0)
+
+
+def test_rows_the_solver_rejects_at_the_first_solve_leave_no_loaded_model(monkeypatch):
+    m, i, x = two()
+    session = m.session()
+    session.add_row("cut", Sum(i, x[i]) >= 7.0)
+    monkeypatch.setattr(session._adapter, "append_rows", rejected)
+    with pytest.raises(RuntimeError, match="HiGHS rejected"):
+        session.solve()
+    assert not session.backend_open
+    monkeypatch.undo()
+    assert session.solve().objective == pytest.approx(7.0)
+    assert session.n_rows == 3
+    session.close()
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_a_row_bound_no_solution_satisfies_raises_and_changes_nothing(loaded):
+    m, i, x = two()
+    with m.session() as session:
+        if loaded:
+            session.solve()
+        with pytest.raises(ValueError, match="infinity"):
+            session.add_row("bad", Sum(i, x[i]) >= np.inf)
+        with pytest.raises(ValueError, match="infinity"):
+            session.add_row("bad", Sum(i, x[i]) <= -np.inf)
+        assert session.n_rows == 2
+        # a row that is open on one side is valid
+        session.add_row("open", Sum(i, x[i]) >= -np.inf)
+        assert session.n_rows == 3
+        assert session.solve().objective == pytest.approx(4.0)

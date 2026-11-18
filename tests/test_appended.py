@@ -205,3 +205,45 @@ def test_a_solution_reads_reduced_costs_through_the_appended_rows():
         appended,
     )
     assert solution.dual("x").to_dense().tolist() == [0.0, 0.0]
+
+
+def test_the_accept_call_reads_the_arrays_before_the_rows_are_recorded():
+    appended = Appended(n_columns=2, first_row=2)
+    seen = []
+
+    def accept(lower, upper, indptr, indices, values):
+        seen.append((appended.n_rows, lower.tolist(), values.tolist()))
+
+    appended.add("cut", cut(), accept=accept)
+    assert seen == [(0, [7.0], [1.0, 1.0])]
+    assert appended.n_rows == 1
+
+
+def test_an_accept_call_that_raises_records_no_row():
+    appended = Appended(n_columns=2, first_row=2)
+
+    def reject(*arrays):
+        raise RuntimeError("rows rejected")
+
+    with pytest.raises(RuntimeError, match="rows rejected"):
+        appended.add("cut", cut(), accept=reject)
+    assert (appended.n_rows, appended.names) == (0, ())
+    assert appended.csr()[2].tolist() == [0]
+    appended.add("cut", cut())
+    assert appended.row_of("cut") == slice(2, 3)
+
+
+def test_a_row_bound_that_is_not_a_number_raises():
+    appended = Appended(n_columns=2, first_row=2)
+    nan = Constraint("nan", Sum(i, x[i]) >= float("nan"))
+    with pytest.raises(ValueError, match="not a number"):
+        appended.add("nan", nan)
+    assert appended.n_rows == 0
+
+
+def test_a_coefficient_that_is_not_finite_raises():
+    huge = Param.from_dense("huge", (i,), np.array([np.inf, 1.0]))
+    appended = Appended(n_columns=2, first_row=2)
+    with pytest.raises(ValueError, match="not finite"):
+        appended.add("bad", Constraint("bad", Sum(i, huge[i] * x[i]) >= 1.0))
+    assert appended.n_rows == 0
