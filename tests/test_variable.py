@@ -208,3 +208,60 @@ def test_labels_at_reads_each_sets_labels_once(monkeypatch):
     monkeypatch.setattr(nb.StoredCoord, "to_index", counted)
     x.labels_at([0, 1, 2, 3, 4, 5])
     assert looked_up == [6, 6]
+
+
+def plant():
+    P = Set("P", np.array(["p0", "p1"]))
+    W = Set("W", np.array(["w0", "w1", "w2"]))
+    return P, W, Variable("x", (P, W), start=0, total_columns=6)
+
+
+def test_columns_of_expands_over_the_dimensions_left_free():
+    _, _, x = plant()
+    assert x.columns_of({}).tolist() == [0, 1, 2, 3, 4, 5]
+    assert x.columns_of({"P": "p1"}).tolist() == [3, 4, 5]
+    assert x.columns_of({"W": "w1"}).tolist() == [1, 4]
+    assert x.columns_of({"P": "p1", "W": "w2"}).tolist() == [5]
+
+
+def test_columns_of_a_subset_variable_reads_its_members():
+    P, W, _ = plant()
+    arcs = subset((P, W), {"P": ["p0", "p0", "p1"], "W": ["w0", "w2", "w1"]})
+    z = Variable("z", (P, W), start=0, total_columns=3, subset=arcs)
+    assert z.columns_of({"P": "p0"}).tolist() == [0, 1]
+    with pytest.raises(ValueError, match="subset="):
+        z.columns_of({"P": "p0", "W": "w1"})
+
+
+def test_align_reads_a_parameter_by_label_and_not_by_position():
+    A = Set("A", np.array(["a0", "a1"]))
+    B = Set("B", np.array(["b0", "b1"]))
+    x = Variable("x", (A, B), start=0, total_columns=4)
+    held = Param.from_dense("held", (B, A), np.array([[1.0, 2.0], [3.0, 4.0]]))
+    positions, values = x.align(held)
+    assert positions.tolist() == [0, 1, 2, 3]
+    assert values.tolist() == [1.0, 3.0, 2.0, 4.0]
+
+
+def test_align_replicates_a_parameter_over_the_dimensions_it_lacks():
+    P, _, x = plant()
+    positions, values = x.align(Param.from_dense("v", (P,), np.array([1.0, 2.0])))
+    assert positions.tolist() == [0, 1, 2, 3, 4, 5]
+    assert values.tolist() == [1.0, 1.0, 1.0, 2.0, 2.0, 2.0]
+
+
+def test_align_of_a_parameter_with_fewer_members_returns_those_members():
+    P, W, x = plant()
+    held = Param.from_long("v", (P, W), {"P": ["p1"], "W": ["w0"]}, [9.0])
+    positions, values = x.align(held)
+    assert positions.tolist() == [3]
+    assert values.tolist() == [9.0]
+
+
+def test_columns_of_and_align_return_positions_from_the_start_of_the_variable():
+    P, W = sets_2x3()
+    y = Variable("y", (P, W), start=6, total_columns=12)
+    assert y.columns_of({"P": "p2"}).tolist() == [3, 4, 5]
+    positions, values = y.align(Param.from_dense("v", (P,), np.array([1.0, 2.0])))
+    assert positions.tolist() == [0, 1, 2, 3, 4, 5]
+    assert values.tolist() == [1.0, 1.0, 1.0, 2.0, 2.0, 2.0]

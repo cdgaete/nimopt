@@ -1,6 +1,6 @@
 """A decision variable, whose columns are a dimension of the model's arrays."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -264,46 +264,112 @@ class Variable(Symbol):
         variable's members. Raises ValueError for a Param with no value or a
         value that is not a number at a member.
         """
-        if which not in ("lower", "upper"):
-            raise ValueError(f"which is 'lower' or 'upper'; got {which!r}")
-        bound = self.lower if which == "lower" else self.upper
+        bound = self._declared(which)
         if not isinstance(bound, Param):
             return bound
-        array = bound.materialise().broadcast(self.dims, self.coords)
+        array = self._aligned(bound)
+        positions = self._positions_of(array)
+        self._check_bound(positions, np.asarray(array.values()), bound, which)
+        return array
+
+    def columns_of(self, fixed: Mapping[str, Any]) -> npt.NDArray[np.int64]:
+        """Return the positions of the columns at the members `fixed` selects.
+
+        A dimension `fixed` does not give stays free and expands over the
+        members of this variable. A non-empty `fixed` that selects no member
+        raises ValueError.
+        """
+        total = self.n_columns
+        if not fixed:
+            return np.arange(total, dtype=np.int64)
+        domain = self.domain()
+        at = domain.array(np.arange(domain.size, dtype=np.float64))
+        selected = np.asarray(at.sel(dict(fixed)).values(), dtype=np.int64)
+        if selected.size == 0:
+            raise ValueError(
+                f"variable {self.name!r} has no member at {dict(fixed)}; "
+                f"give a member of its subset= members"
+            )
+        return np.sort(selected)
+
+    def align(
+        self, param: Param
+    ) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.float64]]:
+        """Return the positions and the values of `param` at this variable's members.
+
+        A dimension `param` lacks is replicated over the members of this
+        variable. A member where `param` has no value is not returned.
+        """
+        array = self._aligned(param)
+        return self._positions_of(array), np.asarray(array.values())
+
+    def _aligned(self, param: Param) -> SparseArray:
+        """Return `param` over this variable's dimensions and members."""
+        array = param.materialise().broadcast(self.dims, self.coords)
         if self._domain is not None:
             array = array.restrict(self._domain)
-        covered = array.domain(self.dims)
-        if covered.size != self.n_columns:
-            self._reject_uncovered(covered, bound, which)
-        unstated = np.flatnonzero(np.isnan(array.values()))
-        if unstated.size:
-            self._reject_not_a_number(covered, bound, which, int(unstated[0]))
         return array
+
+    def _positions_of(self, array: SparseArray) -> npt.NDArray[np.int64]:
+        """Return the position of each entry of an array over this domain."""
+        coord = self._numbered[0]
+        return np.asarray(coord.to_position(array.coordinates()), dtype=np.int64)
+
+    def _declared(self, which: str) -> float | Param:
+        """Return the lower or the upper bound declared for this variable.
+
+        Raises ValueError for a `which` that is not "lower" or "upper".
+        """
+        if which not in ("lower", "upper"):
+            raise ValueError(f"which is 'lower' or 'upper'; got {which!r}")
+        return self.lower if which == "lower" else self.upper
 
     def _write_bound(self, target: npt.NDArray[np.float64], which: str) -> None:
         """Fill `target`, a view of one variable's columns, from one bound."""
-        array = self.bound_array(which)
-        if not isinstance(array, SparseArray):
-            target[:] = array
+        bound = self._declared(which)
+        if not isinstance(bound, Param):
+            target[:] = bound
             return
-        coord = self._numbered[0]
-        target[coord.to_position(array.coordinates())] = array.values()
+        positions, values = self.align(bound)
+        self._check_bound(positions, values, bound, which)
+        target[positions] = values
+
+    def _check_bound(
+        self,
+        positions: npt.NDArray[np.int64],
+        values: npt.NDArray[np.float64],
+        bound: Param,
+        which: str,
+    ) -> None:
+        """Raise ValueError for a bound with no value at a member or a NaN value."""
+        if positions.size != self.n_columns:
+            self._reject_uncovered(positions, bound, which)
+        unstated = np.flatnonzero(np.isnan(values))
+        if unstated.size:
+            self._reject_not_a_number(positions, int(unstated[0]), bound, which)
 
     def _reject_not_a_number(
-        self, covered: Domain, bound: Param, which: str, at: int
+        self,
+        positions: npt.NDArray[np.int64],
+        at: int,
+        bound: Param,
+        which: str,
     ) -> None:
         """Raise ValueError for a bound that is not a number at one member."""
-        labels = covered.labels()
-        named = tuple(label_text(labels[d][at]) for d in self.dims)
+        labels = self.domain().labels(np.asarray([int(positions[at])]))
+        named = tuple(label_text(labels[d][0]) for d in self.dims)
         raise ValueError(
             f"the {which} bound {bound.name!r} is not a number at member "
             f"{named} of variable {self.name!r}; give a finite value or an "
             f"infinity"
         )
 
-    def _reject_uncovered(self, covered: Domain, bound: Param, which: str) -> None:
-        """Raise ValueError for a bound with no value at one column."""
-        labels = self.domain().difference(covered).labels()
+    def _reject_uncovered(
+        self, positions: npt.NDArray[np.int64], bound: Param, which: str
+    ) -> None:
+        """Raise ValueError for a bound with no value at one member."""
+        missing = np.setdiff1d(np.arange(self.n_columns, dtype=np.int64), positions)
+        labels = self.domain().labels(missing[:1])
         named = tuple(label_text(labels[d][0]) for d in self.dims)
         raise ValueError(
             f"the {which} bound {bound.name!r} has no value at member "
