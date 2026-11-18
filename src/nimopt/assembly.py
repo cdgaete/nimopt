@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import numpy.typing as npt
-from nimblend import EntryBuffer, ProductCoord, SparseArray
+from nimblend import Domain, EntryBuffer, ProductCoord, SparseArray
 
 from nimopt.names import COLUMN, ROW
 from nimopt.progress import reporter
@@ -109,6 +109,175 @@ def assemble_model(model: "Model", progress: Any = False) -> "Assembled":
         model.integrality(),
         rows_of,
     )
+
+
+class Appended:
+    """The rows a session appends to the matrix it loaded.
+
+    One resizable buffer contains the entries over `(ROW, COLUMN)`, with rows
+    numbered from zero inside the block. Each appended constraint keeps its
+    name, its row range and its own row bounds. `first_row` is the number of
+    rows of the base matrix, and the appended rows follow them in the loaded
+    model.
+    """
+
+    def __init__(self, n_columns: int, first_row: int) -> None:
+        self.first_row = int(first_row)
+        self._n_columns = int(n_columns)
+        self._buffer = EntryBuffer(2, 0, resizable=True)
+        self._n_rows = 0
+        self._blocks: list[tuple[str, Constraint, int]] = []
+        self._bounds: list[tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = []
+        self._rows_of: dict[str, slice] = {}
+
+    def __repr__(self) -> str:
+        return f"Appended({self._n_rows} rows, {len(self._blocks)} constraints)"
+
+    @property
+    def n_rows(self) -> int:
+        """Return the number of appended rows."""
+        return self._n_rows
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        """Return the names of the appended constraints, in the order added."""
+        return tuple(name for name, _, _ in self._blocks)
+
+    def add(
+        self, name: str, constraint: "Constraint"
+    ) -> tuple[
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+        npt.NDArray[np.int32],
+        npt.NDArray[np.int32],
+        npt.NDArray[np.float64],
+    ]:
+        """Append the rows of a constraint; return its bounds and CSR arrays.
+
+        `Constraint.write_into` writes the block once into a buffer sized to the
+        constraint, and `SparseArray.group` places its entries in the
+        resizable buffer of the appended rows, numbered after the rows already
+        appended. The domain of the group is every row of the block. A row
+        with no coefficient keeps its position in the constraint. The five
+        arrays describe the constraint alone, with its rows numbered from zero.
+        They are views of the buffer of `write_into`, and a later append does
+        not change them. Raises ValueError for a name that is already appended.
+        """
+        if name in self._rows_of:
+            raise ValueError(f"row {name!r} is already appended; append each row once")
+        buffer = EntryBuffer(2, constraint.nnz)
+        rows = ProductCoord((constraint.n_rows,))
+        constraint.write_into(buffer, rows, 0)
+        block = buffer.array(
+            {ROW: rows, COLUMN: ProductCoord((self._n_columns,))}, (ROW, COLUMN)
+        )
+        indices, values, indptr = block.to_csr()
+        row_lower = np.empty(constraint.n_rows, dtype=np.float64)
+        row_upper = np.empty(constraint.n_rows, dtype=np.float64)
+        constraint.write_bounds(row_lower, row_upper)
+        total = self._n_rows + constraint.n_rows
+        block.group(
+            (ROW,),
+            into=ROW,
+            domain=Domain.full((ROW,), block.coords),
+            coord=ProductCoord((total,)),
+            start=self._n_rows,
+            reserve=self._buffer.reserve,
+        )
+        self._rows_of[name] = slice(
+            self.first_row + self._n_rows, self.first_row + total
+        )
+        self._blocks.append((name, constraint, self._n_rows))
+        self._bounds.append((row_lower, row_upper))
+        self._n_rows = total
+        return row_lower, row_upper, indptr, indices, values
+
+    def row_of(self, name: str) -> slice:
+        """Return the range of rows a constraint occupies in the loaded model.
+
+        Raises KeyError for a name that is not appended.
+        """
+        if name not in self._rows_of:
+            valid = (
+                f"use one of {tuple(self._rows_of)}"
+                if self._rows_of
+                else "append a row with add()"
+            )
+            raise KeyError(f"appended rows have no constraint {name!r}; {valid}")
+        return self._rows_of[name]
+
+    def row(
+        self, index: int
+    ) -> tuple[
+        str,
+        int,
+        npt.NDArray[np.int32],
+        npt.NDArray[np.float64],
+        float,
+        float,
+    ]:
+        """Return the name, position, columns, values and bounds of a row.
+
+        `index` is the row's index in the loaded model, at `first_row` or
+        above. Raises ValueError for an index outside the appended rows.
+        """
+        local = int(index) - self.first_row
+        for name, constraint, start in reversed(self._blocks):
+            if start <= local < start + constraint.n_rows:
+                position = local - start
+                columns, values, lower, upper = constraint.row_at(position)
+                return name, position, columns, values, lower, upper
+        raise ValueError(
+            f"row {index} is not an appended row; {self._n_rows} row(s) are "
+            f"appended after row {self.first_row - 1}"
+        )
+
+    def weighted(self, row_dual: npt.NDArray[np.float64]) -> SparseArray | None:
+        """Return each column's sum over the appended rows, weighted by duals.
+
+        `row_dual` has one value per appended row. Returns None where no row
+        is appended.
+        """
+        if self._n_rows == 0:
+            return None
+        return self._matrix().weighted_sum(ROW, row_dual)
+
+    def csr(
+        self,
+    ) -> tuple[
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+        npt.NDArray[np.int32],
+        npt.NDArray[np.int32],
+        npt.NDArray[np.float64],
+    ]:
+        """Return the row bounds and the CSR arrays of every appended row.
+
+        The rows are numbered from zero inside the block. With no row appended
+        the five arrays are empty and `indptr` is `[0]`.
+        """
+        row_lower = (
+            np.concatenate([lower for lower, _ in self._bounds])
+            if self._bounds
+            else np.empty(0, dtype=np.float64)
+        )
+        row_upper = (
+            np.concatenate([upper for _, upper in self._bounds])
+            if self._bounds
+            else np.empty(0, dtype=np.float64)
+        )
+        indices, values, indptr = self._matrix().to_csr()
+        return row_lower, row_upper, indptr, indices, values
+
+    def _matrix(self) -> SparseArray:
+        """Return the appended entries as an array over `(ROW, COLUMN)`."""
+        return self._buffer.array(
+            {
+                ROW: ProductCoord((self._n_rows,)),
+                COLUMN: ProductCoord((self._n_columns,)),
+            },
+            (ROW, COLUMN),
+        )
 
 
 class Assembled:

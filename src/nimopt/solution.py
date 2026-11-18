@@ -5,27 +5,44 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import numpy.typing as npt
-from nimblend import DenseArray, Domain, SparseArray
+from nimblend import DenseArray, Domain, SparseArray, sum_to_dense
 
 from nimopt.names import ROW
 
 if TYPE_CHECKING:
-    from nimopt.assembly import Assembled
+    from nimopt.assembly import Appended, Assembled
     from nimopt.model import Model
 
 NO_FINITE_OPTIMUM = ("unbounded", "unbounded_or_infeasible")
 
 
 def reduced_costs(
-    assembled: "Assembled", row_dual: npt.NDArray[np.float64]
+    assembled: "Assembled",
+    row_dual: npt.NDArray[np.float64],
+    appended: "Appended | None" = None,
 ) -> npt.NDArray[np.float64]:
     """Return each column's cost less the duals of the rows it appears in.
 
-    The matrix is summed over its rows, weighted by `row_dual`, with no
-    temporary of the size of the matrix.
+    `row_dual` has the duals of the rows of `assembled` first and those of the
+    appended rows after them. Each part is summed over its rows with no
+    temporary of the size of the matrix. Raises ValueError for a `row_dual`
+    that has not one value per row of the matrix and of the appended block.
     """
-    weighted = assembled.matrix.weighted_sum(ROW, row_dual)
-    return assembled.col_cost - weighted.to_dense()
+    n_rows = assembled.n_rows
+    n_appended = 0 if appended is None else appended.n_rows
+    row_dual = np.asarray(row_dual, dtype=np.float64)
+    if row_dual.shape != (n_rows + n_appended,):
+        raise ValueError(
+            f"row_dual has {row_dual.size} value(s) and the matrix has "
+            f"{n_rows} row(s) with {n_appended} appended; pass one dual per row"
+        )
+    parts = [assembled.matrix.weighted_sum(ROW, row_dual[:n_rows])]
+    appended_weighted = (
+        None if appended is None else appended.weighted(row_dual[n_rows:])
+    )
+    if appended_weighted is not None:
+        parts.append(appended_weighted)
+    return assembled.col_cost - sum_to_dense(parts)
 
 
 class Solution:
@@ -47,9 +64,9 @@ class Solution:
     at those two statuses included. `dual` raises ValueError where `status` is
     not `optimal`, and for a model with integer columns.
 
-    The reduced costs are computed from `assembled` and the row duals when
-    the solution is constructed. The solution stores no reference to
-    `assembled`.
+    The reduced costs are computed from `assembled`, the row duals and the
+    appended rows when the solution is constructed. The solution stores no
+    reference to either.
     """
 
     def __init__(
@@ -65,6 +82,7 @@ class Solution:
         rows_of: Mapping[str, Any],
         solver: str,
         iterations: int | None = None,
+        appended: "Appended | None" = None,
     ) -> None:
         self.model = model
         self.status = status
@@ -76,7 +94,7 @@ class Solution:
         self._col_value = col_value
         self._row_dual = row_dual
         self._col_dual = (
-            None if row_dual is None else reduced_costs(assembled, row_dual)
+            None if row_dual is None else reduced_costs(assembled, row_dual, appended)
         )
         self._rows_of = rows_of
         self._variables = frozenset(model.variables)
