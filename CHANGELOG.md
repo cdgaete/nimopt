@@ -24,6 +24,7 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 - `Param.domain()` returns the coordinates at which a parameter has a value. Callers that keep the domain of one bound array share one object.
 - `Solution.iterations` returns the simplex iterations the solver reports for the solve. The HiGHS adapter reports the count. The value is `None` for the Gurobi, Mosek and GAMS adapters.
 - The capability `mutation` reports whether an adapter changes the model a solver has loaded. The HiGHS adapter declares it `native` and defines `change_column_bounds`, `append_rows` and `resume`: a change of column bounds, an append of rows and a solve of the loaded model. The Gurobi, Mosek and GAMS adapters declare it `absent`.
+- `Session.fix(target, value)`, `Session.unfix(target)` and `Session.set_bound(target, lower=None, upper=None)` change the column bounds of the model the solver has loaded, and `Session.add_row(name, relation, where=None, over=None)` appends rows to it. `Session.solve()` then solves the loaded model again. With the simplex method HiGHS starts from the basis of the previous solve. `Session.n_rows` and `Session.n_columns` return the size of the loaded model. The model the session was opened on is not changed. The four methods require an adapter with the capability `mutation`, and raise `ValueError` on another adapter.
 
 ### Changed
 

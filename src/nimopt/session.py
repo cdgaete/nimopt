@@ -1,4 +1,4 @@
-"""One open solver model, across a solve and the conflict or ray after it."""
+"""One open solver model: its solves, the changes to it, and the conflict or ray."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -7,8 +7,13 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
-from nimopt.row import Row, read, resolve
+from nimopt.assembly import Appended
+from nimopt.bounds import Bounds, target_of
+from nimopt.param import Param
+from nimopt.row import Row, read, resolve, written
 from nimopt.sets import shown
+from nimopt.term import Relation
+from nimopt.variable import Variable
 
 if TYPE_CHECKING:
     from nimopt.model import Model
@@ -76,8 +81,16 @@ class Session:
 
     A solve passes the matrix to the solver and reads the values back. A
     conflict or a ray is read from that same solved instance. The matrix is
-    assembled when the session opens, and a session that solves twice
-    assembles once.
+    assembled when the session opens.
+
+    `fix`, `unfix`, `set_bound` and `add_row` change the model the solver
+    loaded, and `solve` then solves that model again on the same solver
+    instance. With the simplex method the solver starts from the basis of its
+    previous solve. `n_rows` and `n_columns` report the size of the loaded
+    model.
+
+    The session keeps a private copy of the model for the rows it appends,
+    and the model the session was opened on is not changed.
 
     The solver's own model is passed only to the adapter that built it.
     """
@@ -98,6 +111,9 @@ class Session:
         self._adapter = adapter(solver)
         self._backend = None
         self._status = None
+        self._copy = model._session_copy()
+        self._bounds = Bounds(self.assembled.col_lower, self.assembled.col_upper)
+        self._appended = Appended(self.assembled.n_cols, self.assembled.n_rows)
 
     def __repr__(self) -> str:
         held = "open" if self._backend is not None else "not solved"
@@ -130,44 +146,125 @@ class Session:
         """Return whether this session still stores the solver's model."""
         return self._backend is not None
 
+    @property
+    def n_rows(self) -> int:
+        """Return the number of rows of the loaded model."""
+        return self.assembled.n_rows + self._appended.n_rows
+
+    @property
+    def n_columns(self) -> int:
+        """Return the number of columns of the loaded model."""
+        return self.assembled.n_cols
+
     def close(self) -> None:
         """Release the solver's model."""
         self._backend = None
 
-    def _declarations(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
-        """Return the names of the model's variables and constraints."""
-        return tuple(self.model.variables), tuple(self.model.constraints)
+    def fix(self, target: Any, value: float | Param) -> None:
+        """Pin the columns a target selects to `value`.
 
-    def _require_current(self) -> None:
-        """Raise ValueError where the model changed after the session opened.
-
-        A change is a declared variable or constraint, or a set objective.
+        The next `solve` solves the loaded model with those pins. Raises
+        TypeError for a target that is not a variable or one reference to a
+        variable. Raises ValueError for a variable the session's model does
+        not declare, for a value that is not finite, for a value that is not
+        integral on a column of an integer variable, and for a Param given for
+        a target with a label. Raises ValueError where the model changed after
+        the session opened, and where the adapter does not change a loaded
+        model. A rejected call changes no bound.
         """
-        if self._declarations() != self._declared:
-            raise ValueError(
-                f"model {self.model.name!r} declares variables or constraints "
-                f"that are not in the assembled matrix; open a new Session"
-            )
-        if self.model.objective is not self._objective:
-            raise ValueError(
-                f"model {self.model.name!r} sets its objective after the "
-                f"session opened; open a new Session"
-            )
+        self._require_current()
+        self._require_mutation()
+        variable, positions, whole = target_of(self._copy.variables, target)
+        self._bounds.fix(variable, positions, value, whole)
+        self._write_bounds(variable)
+
+    def unfix(self, target: Any) -> None:
+        """Remove the pin of the columns a target selects.
+
+        The next `solve` solves the loaded model with the declared bounds
+        restored. Raises TypeError for a target that is not a variable or one
+        reference to a variable. Raises ValueError for a variable the session's
+        model does not declare, and for a variable with no fixed column. Raises
+        ValueError where the model changed after the session opened, and where
+        the adapter does not change a loaded model. A rejected call changes no
+        bound.
+        """
+        self._require_current()
+        self._require_mutation()
+        variable, positions, _ = target_of(self._copy.variables, target)
+        self._bounds.unfix(variable, positions)
+        self._write_bounds(variable)
+
+    def set_bound(
+        self,
+        target: Any,
+        lower: float | Param | None = None,
+        upper: float | Param | None = None,
+    ) -> None:
+        """Replace the bounds of the columns a target selects.
+
+        The next `solve` solves the loaded model with those bounds. Raises
+        TypeError for a target that is not a variable or one reference to a
+        variable. Raises ValueError for a variable the session's model does
+        not declare, for neither bound given, for a bound that is NaN, for a
+        Param given for a target with a label, and for a Param with no value at
+        a member of the variable. Raises ValueError where the model changed
+        after the session opened, and where the adapter does not change a
+        loaded model. A rejected call changes no bound.
+        """
+        self._require_current()
+        self._require_mutation()
+        variable, positions, whole = target_of(self._copy.variables, target)
+        self._bounds.set_bound(variable, positions, lower, upper, whole)
+        self._write_bounds(variable)
+
+    def add_row(
+        self,
+        name: str,
+        relation: Any,
+        where: Any = None,
+        over: Any = None,
+    ) -> None:
+        """Append the rows of a constraint to the model the solver loaded.
+
+        `where=` and `over=` have the meaning they have in `Model.constraint`.
+        A relation free over a set appends one row per member, after the rows
+        already appended. Raises ValueError where the model changed after the
+        session opened, where the adapter does not change a loaded model, for
+        a name the session's model declares, and for a term over a variable
+        the session's model does not declare. A rejected call appends no row.
+        """
+        self._require_current()
+        self._require_mutation()
+        self._check_variables(name, relation)
+        constraint = self._copy.constraint(name, relation, where, over)
+        arrays = self._appended.add(name, constraint)
+        if self._backend is not None:
+            self._adapter.append_rows(self._backend, *arrays)
 
     def solve(self) -> Solution:
-        """Solve this session's matrix and read the values back onto its sets.
+        """Solve the loaded model and read the values back onto its sets.
 
+        A solve with a loaded model calls `resume` on an adapter that changes
+        it. Any other solve passes the assembled model to `solve`. Where rows
+        were appended before that call, it appends them to the solver's model
+        and resumes, and the result of the resume is the result of the solve.
         Raises ValueError where the model declares a variable or a constraint,
         or sets its objective, after the session opened.
         """
         self._require_current()
-        result = self._adapter.solve(self.assembled, self.model.sense, self.options)
-        self._backend = result.backend
+        if self._backend is not None and self.capabilities.supports("mutation"):
+            result = self._adapter.resume(self._backend, self.options)
+        else:
+            result = self._adapter.solve(self.assembled, self.model.sense, self.options)
+            self._backend = result.backend
+            if self._appended.n_rows:
+                self._adapter.append_rows(self._backend, *self._appended.csr())
+                result = self._adapter.resume(self._backend, self.options)
         self._status = result.status
-        rows_of = {name: self.assembled.row_of(name) for name in self.model.constraints}
         constant = self.model.objective_constant
         return Solution(
-            self.model,
+            self._copy,
             result.status,
             result.feasible,
             result.objective + constant,
@@ -175,9 +272,10 @@ class Session:
             result.col_value,
             result.row_dual,
             self.assembled,
-            rows_of,
+            self._rows_of(),
             self.solver,
-            result.iterations,
+            iterations=result.iterations,
+            appended=self._appended,
         )
 
     def diagnose(self) -> Diagnosis:
@@ -210,6 +308,81 @@ class Session:
             ray=ray,
         )
 
+    def _declarations(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        """Return the names of the model's variables and constraints."""
+        return tuple(self.model.variables), tuple(self.model.constraints)
+
+    def _require_current(self) -> None:
+        """Raise ValueError where the model changed after the session opened.
+
+        A change is a declared variable or constraint, or a set objective.
+        """
+        if self._declarations() != self._declared:
+            raise ValueError(
+                f"model {self.model.name!r} declares variables or constraints "
+                f"that are not in the assembled matrix; open a new Session"
+            )
+        if self.model.objective is not self._objective:
+            raise ValueError(
+                f"model {self.model.name!r} sets its objective after the "
+                f"session opened; open a new Session"
+            )
+
+    def _require_mutation(self) -> None:
+        """Raise ValueError where this session's adapter changes no loaded model."""
+        if not self.capabilities.supports("mutation"):
+            raise ValueError(
+                f"{self.solver!r} does not change a loaded model; read "
+                f"`capabilities({self.solver!r})`, or open the session with a "
+                f"solver that does"
+            )
+
+    def _check_variables(self, name: str, relation: Any) -> None:
+        """Raise ValueError for a relation over a variable of another model.
+
+        A relation that is not a comparison raises TypeError at
+        `Model.constraint`.
+        """
+        if not isinstance(relation, Relation):
+            return
+        for term in relation.expression.terms:
+            if self._copy.variables.get(term.variable.name) is not term.variable:
+                raise ValueError(
+                    f"row {name!r} is declared over variable "
+                    f"{term.variable.name!r}, not a variable of model "
+                    f"{self._copy.name!r}; use one of "
+                    f"{tuple(self._copy.variables)}"
+                )
+
+    def _write_bounds(self, variable: Variable) -> None:
+        """Write a variable's bounds into the assembled vectors and the backend."""
+        lower, upper = self._bounds.bounds_of(variable)
+        columns = variable._columns()
+        self.assembled.col_lower[columns] = lower
+        self.assembled.col_upper[columns] = upper
+        if self._backend is not None:
+            self._adapter.change_column_bounds(
+                self._backend,
+                np.arange(columns.start, columns.stop, dtype=np.int32),
+                lower,
+                upper,
+            )
+
+    def _rows_of(self) -> dict[str, slice]:
+        """Return the row range of every constraint of the loaded model."""
+        rows_of = {name: self.assembled.row_of(name) for name in self.model.constraints}
+        rows_of.update(
+            {name: self._appended.row_of(name) for name in self._appended.names}
+        )
+        return rows_of
+
+    def _row(self, index: int) -> Row:
+        """Return the row at an index of the loaded model."""
+        if index < self.assembled.n_rows:
+            return read(self._copy, self.assembled, index)
+        name, position, columns, values, lower, upper = self._appended.row(index)
+        return written(self._copy, name, index, position, columns, values, lower, upper)
+
     def _conflict(self) -> tuple[tuple[Row, ...], tuple[ColumnBound, ...]]:
         """Return the rows that cannot all be satisfied and the columns they bind."""
         if not self.capabilities.supports("conflict"):
@@ -219,7 +392,7 @@ class Session:
             )
         rows, columns = self._adapter.conflict(self._backend)
         return (
-            tuple(read(self.model, self.assembled, int(at)) for at in rows),
+            tuple(self._row(int(at)) for at in rows),
             tuple(
                 ColumnBound(
                     variable,
@@ -227,7 +400,7 @@ class Session:
                     float(self.assembled.col_lower[column]),
                     float(self.assembled.col_upper[column]),
                 )
-                for _, column, variable, coordinate in resolve(self.model, columns)
+                for _, column, variable, coordinate in resolve(self._copy, columns)
             ),
         )
 
@@ -244,5 +417,5 @@ class Session:
         moving = np.nonzero(direction)[0]
         return tuple(
             RayTerm(variable, coordinate, float(direction[column]))
-            for _, column, variable, coordinate in resolve(self.model, moving)
+            for _, column, variable, coordinate in resolve(self._copy, moving)
         )

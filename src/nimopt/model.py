@@ -1,6 +1,7 @@
 """A model: its variables, its constraints and the matrix they assemble into."""
 
-from collections.abc import Iterable, Mapping
+from collections import ChainMap
+from collections.abc import Iterable, Mapping, MutableMapping
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -68,7 +69,7 @@ class Model:
         self.name = str(name)
         self._sense = sense
         self.variables = {}
-        self.constraints = {}
+        self.constraints: MutableMapping[str, Constraint] = {}
         self.piecewise_declarations = {}
         self._objective = None
         self._columns = ColumnSpace()
@@ -488,6 +489,26 @@ class Model:
         kept afterwards, and a conflict is read from the solved instance.
         """
         return Session(self, solver, options, progress)
+
+    def _session_copy(self) -> "Model":
+        """Return a model that shares this model's variables and declares its own rows.
+
+        The variables, the objective and the piecewise declarations are the
+        objects of this model. `constraints` is a `ChainMap` of the rows this
+        copy declares and of the constraints of this model. Iteration reads
+        this model's constraints first, and a constraint declared on the copy
+        leaves this model unchanged. The copy counts this model's columns and
+        rows.
+        """
+        copy = Model(self.name, self.sense)
+        copy.variables = self.variables
+        copy.constraints = ChainMap({}, self.constraints)
+        copy.piecewise_declarations = dict(self.piecewise_declarations)
+        copy._objective = self._objective
+        copy._columns = ColumnSpace()
+        copy._columns.total = self._columns.total
+        copy._n_rows = self._n_rows
+        return copy
 
     def solve(
         self,

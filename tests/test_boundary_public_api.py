@@ -24,6 +24,7 @@ OWN_INDEX = (
     "row.py",
     "test_row.py",
     "test_session.py",
+    "test_session_changes.py",
     "test_gurobi.py",
     "test_datetime_members.py",
 )
