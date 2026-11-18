@@ -31,6 +31,7 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 - A constraint computes no row domain from its terms where it is written into the matrix, and where its rows are declared with `over=`.
 - A constraint whose right-hand side is a number stores one float for it, and no value per row. Constraints declared with `over=` one parameter share one row domain.
 - Declaring a variable takes the same time whatever the number of variables the model declares. A model declares 32,000 variables in 0.11 s instead of 7.0 s.
+- With nimblend's one-pass reductions and its product over shared dimensions, PyPSA's European network over 2,920 snapshots builds in 11.2 s of processor time instead of 14.0 s. The traced peak of the build is 3,085 MB instead of 3,348 MB, and the declared model holds 1,263 MB instead of 1,440 MB. The assembled matrix is identical.
 
 ### Fixed
 

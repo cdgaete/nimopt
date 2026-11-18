@@ -12,12 +12,14 @@ the same objective.
 ## Setup
 
 An AMD Ryzen 7 5800X with 8 cores, 16 threads and 62 GB of memory. highspy
-1.15.1, PyPSA 1.3.0, linopy 0.9.1 and numpy 2.5.2. nimopt and nimblend at the
-commit of this file. The one-minute load average read between 1.1 and 1.8 at
-the start and the end of each linopy run, and between 0.6 and 1.6 for the
-nimopt runs. Each number is one run. The linopy build
-of the whole year took between 10.1 s and 18.1 s in the runs made for this
-file.
+1.15.1, linopy 0.9.1 and numpy 2.5.2. PyPSA is the `nimopt-backend` branch, 16
+commits after v1.4.0, and reports version 1.3.0. nimopt and nimblend at the
+commit of this file. Every run sets `PYTHONHASHSEED=0`. Each number is one
+run. The one-minute load average read between 3.5 and 4.4 at the start and
+the end of the runs of the whole year, while another process ran on the
+machine. It was not read for the run of twenty-four snapshots. Across three
+runs the nimopt build of the whole year took between 11.4 s and 11.7 s, and
+the linopy build between 10.2 s and 10.6 s.
 
 Each phase contains the following work:
 
@@ -35,44 +37,44 @@ has no matrix entry.
 
 ## Twenty-four snapshots, solved on both backends
 
-162,582 rows by 79,457 columns, 382,520 nonzeros, 4.81 per column, 2,314 dense
+162,582 rows by 79,457 columns, 382,328 nonzeros, 4.81 per column, 2,314 dense
 columns. Both objectives are 232,416,019,336.75.
 
 | | nimopt | linopy |
 | --- | --- | --- |
-| build | 835.9 ms | 2,050.3 ms |
+| build | 892.7 ms | 2,820.2 ms |
 | matrix | 4.6 MB | 6.1 MB |
-| solve | 286.1 s | 200.4 s |
-| read | 4.6 s | 4.9 s |
-| resident added by the solve | 366.0 MB | 489.9 MB |
-| peak resident of the solve | 829.7 MB | 949.3 MB |
-| peak resident of the process | 1,065.6 MB | 1,063.2 MB |
+| solve | 243.0 s | 505.9 s |
+| read | 4.8 s | 4.8 s |
+| resident added by the solve | 382.0 MB | 523.7 MB |
+| peak resident of the solve | 819.2 MB | 954.8 MB |
+| peak resident of the process | 819.2 MB | 957.3 MB |
 
 The generator dispatch sums to 118,174,790.05 on both backends. The nodal
-prices sum to 10,632,436.32 on the nimopt backend and to 10,636,519.87 on the
+prices sum to 10,637,906.68 on the nimopt backend and to 10,688,675.86 on the
 linopy backend. The two solves return different dual points.
 
 ## The whole year, built on both backends
 
-19,423,878 rows by 9,361,137 columns, 46,377,948 nonzeros, 4.95 per column,
+19,423,878 rows by 9,361,137 columns, 46,354,588 nonzeros, 4.95 per column,
 2,391 dense columns.
 
 | | nimopt | linopy |
 | --- | --- | --- |
-| build | 15.8 s | 10.1 s |
-| matrix | 557 MB | 742 MB |
-| resident added by the build | 3,450 MB | 4,768 MB |
-| peak resident of the process | 4,164 MB | 5,511 MB |
+| build | 11.4 s | 10.2 s |
+| matrix | 556 MB | 742 MB |
+| resident added by the build | 3,202 MB | 4,747 MB |
+| peak resident of the process | 3,937 MB | 5,513 MB |
 
 A separate nimopt run times the two parts of the build: `create_model` takes
-8.3 s and `assemble` takes 7.1 s.
+6.5 s and `assemble` takes 4.7 s.
 
 ## What the numbers show
 
 **The nimopt build is faster at twenty-four snapshots and slower over the
-year.** It takes 0.84 s against 2.05 s at twenty-four snapshots, and 15.8 s
-against 10.1 s over the year. For a horizon 122 times longer, the nimopt build
-time grows 19 times and the linopy build time grows 4.9 times.
+year.** It takes 0.89 s against 2.82 s at twenty-four snapshots, and 11.4 s
+against 10.2 s over the year. For a horizon 122 times longer, the nimopt build
+time grows 13 times and the linopy build time grows 3.6 times.
 
 **Over the year the nimopt build materialises every expression twice.**
 `create_model` declares the constraints, and the shape pass of the
@@ -87,23 +89,27 @@ plus the number of keys is at most four times the number of keys looked up.
 It writes the coordinates of a domain with every cell of its shape one range
 per dimension.
 
-**The matrix is smaller by a quarter, at every size.** 557 MB against 742 MB
+**The matrix is smaller by a quarter, at every size.** 556 MB against 742 MB
 for the same 46.4 million nonzeros. nimopt stores a column index in four bytes
 and linopy in eight. The difference is structural and does not depend on the
 machine.
 
-**The nimopt solve takes 43% longer.** 286.1 s against 200.4 s, for matrices
-of the same shape passed to the same HiGHS with its default method. The second
-assembly in the nimopt solve takes less than the 0.84 s of the whole nimopt
-build. One run per side does not identify the cause of the difference. The
-solve is about 340 times the nimopt build and about 98 times the linopy build,
-and it determines the elapsed time of a run.
+**The nimopt solve takes half the time of the linopy solve.** 243.0 s against
+505.9 s, for matrices of the same shape passed to the same HiGHS with its
+default method. Two more linopy solves, under two other hash seeds and two at
+a time, took 536.7 s and 542.7 s. Three nimopt solves, under three other hash
+seeds and three at a time, took between 271.4 s and 272.7 s, with 256,469
+simplex iterations each. The cause of the difference between the backends is
+not identified. The second assembly in the nimopt solve takes less than the
+0.89 s of the whole nimopt build. The solve is about 270 times the nimopt
+build and about 180 times the linopy build, and it determines the elapsed time
+of a run.
 
 **The nimopt backend adds less resident memory in the solve and in the build
-of the whole year.** The solve adds 366 MB against 490 MB, and its peak is
-119.6 MB lower. Over the year the build adds 3.45 GB against 4.77 GB, and the
-process peaks 1.3 GB lower. At twenty-four snapshots the build adds 16.1 MB
-against 13.6 MB, and the two processes peak at 1,066 MB and 1,063 MB.
+of the whole year.** The solve adds 382 MB against 524 MB, and its peak is
+135.6 MB lower. Over the year the build adds 3.20 GB against 4.75 GB, and the
+process peaks 1.58 GB lower. At twenty-four snapshots the build adds 17.8 MB
+against 14.5 MB, and the two processes peak at 819 MB and 957 MB.
 
 ## What was not measured
 
@@ -118,9 +124,15 @@ into `data/large/interconnected-transport.nc`, and each horizon is measured:
 ```bash
 curl -L -o data/large/interconnected-transport.nc \
   https://zenodo.org/api/records/15656090/files/RESULTS-EU-interconnected-transport.nc/content
+export PYTHONHASHSEED=0
 python -c "import bench_vs_linopy as b; print(b.compare('pypsa', {'snapshots': 24}, traced=False, trace_dir=b.TRACES))"
 python -c "import bench_vs_linopy as b; print(b.compare('pypsa', {'snapshots': 2920}, traced=False, solve=False, trace_dir=b.TRACES))"
 ```
+
+PyPSA takes the direction of each Kirchhoff cycle from the iteration order of
+a set of bus names. Without a fixed hash seed the coefficients of the
+`Kirchhoff-Voltage-Law` rows of some cycles differ in sign between two
+processes, on both backends, and no other part of the model differs.
 
 Each run writes the resident size of every phase to
 `data/large/traces/pypsa-<backend>-<snapshots>-<phase>.csv`, as
