@@ -1,5 +1,6 @@
 """A named coefficient array."""
 
+import weakref
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -29,8 +30,17 @@ class Param(Symbol):
         self.name = str(name)
         self.sets = as_sets(sets, f"parameter {self.name!r}")
         self.array = None
+        self._domain = None
         if array is not None:
             self._bind(array)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return the attributes a copy or a pickle takes, without the domain.
+
+        The domain is kept through weak references, and a weak reference is
+        not pickled. A copy computes its own domain.
+        """
+        return {**self.__dict__, "_domain": None}
 
     @property
     def declared(self) -> bool:
@@ -224,6 +234,22 @@ class Param(Symbol):
                 f"bind it before reading them"
             )
         return self.array
+
+    def domain(self) -> Domain:
+        """Return the coordinates at which this parameter has a value.
+
+        Callers that keep the domain of one bound array share one object.
+        The domain is computed again after the last of them releases it.
+        Raises ValueError where the parameter is declared and has no array.
+        """
+        array = self.materialise()
+        if self._domain is not None and self._domain[0]() is array:
+            held = self._domain[1]()
+            if held is not None:
+                return held
+        held = array.domain(self.dims)
+        self._domain = (weakref.ref(array), weakref.ref(held))
+        return held
 
     @property
     def nnz(self) -> int:

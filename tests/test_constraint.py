@@ -359,3 +359,22 @@ def test_writing_a_constraint_intersects_no_term_domain(monkeypatch):
     expected = m.assemble().to_dense().tolist()
     _no_intersection(monkeypatch)
     assert m.assemble().to_dense().tolist() == expected
+
+
+def test_two_constraints_over_one_parameter_share_their_rows():
+    m, P, x, y, a = _two_term_model()
+    rows = Param.from_long("rows", (P,), {"P": ["p1", "p3"]}, [1.0, 1.0])
+    upper = m.constraint("upper", x[P] <= 4.0, over=rows)
+    lower = m.constraint("lower", x[P] >= 1.0, over=rows)
+    assert upper.rows is lower.rows
+    assert upper.n_rows == 2
+
+
+def test_a_model_with_rows_declared_by_a_parameter_is_pickled():
+    import pickle
+
+    m, P, x, y, a = _two_term_model()
+    rows = Param.from_long("rows", (P,), {"P": ["p1", "p3"]}, [1.0, 1.0])
+    m.constraint("upper", x[P] + a[P] * y[P] <= 4.0, over=rows)
+    clone = pickle.loads(pickle.dumps(m))  # noqa: S301
+    assert clone.assemble().to_dense().tolist() == m.assemble().to_dense().tolist()

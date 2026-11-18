@@ -532,7 +532,7 @@ def rows_of(given: Any, dims: tuple[str, ...] | None, owner: str, what: str) -> 
 
     condition_dims(given, owner, what)
     if isinstance(given, Param):
-        resolved = given.materialise().domain(given.dims)
+        resolved = given.domain()
     elif isinstance(given, tuple):
         resolved = product(given)
     else:

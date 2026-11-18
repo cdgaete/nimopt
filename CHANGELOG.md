@@ -21,6 +21,7 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 ### Added
 
 - `Expression.block()` returns the coefficients of an expression as a nimblend array and computes no row domain. `Expression.to_dense()` returns them as an ndarray over the frame and the column dimension, with each term added into one array.
+- `Param.domain()` returns the coordinates at which a parameter has a value. Callers that keep the domain of one bound array share one object.
 
 ### Changed
 
@@ -28,6 +29,7 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 - A term summed over several sets reduces them in one pass. The values at one column are added in the order of their coordinates, and the last bits of such a coefficient can differ from the sum taken one set at a time.
 - `Model.objective_coefficients` adds each term of the objective into one vector and merges no term blocks.
 - A constraint computes no row domain from its terms where it is written into the matrix, and where its rows are declared with `over=`.
+- A constraint whose right-hand side is a number stores one float for it, and no value per row. Constraints declared with `over=` one parameter share one row domain.
 
 ### Fixed
 

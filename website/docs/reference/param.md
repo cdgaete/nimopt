@@ -182,6 +182,7 @@ print(cost.array.to_dense())
 | `dims` | the sets it is indexed over |
 | `nnz` | the number of coefficients |
 | `materialise()` | the coefficients as a `nimblend` array |
+| `domain()` | the coordinates at which it has a value, as a `nimblend` domain |
 | `param[sets]` | a reference, with the sets given checked against `dims` |
 
 A label in place of a set fixes that dimension at one member: the

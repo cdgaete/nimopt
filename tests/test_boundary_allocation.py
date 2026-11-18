@@ -228,3 +228,21 @@ def test_a_piecewise_declaration_allocates_nothing_per_absent_member():
 
     grew = declaration_bytes(10000) / declaration_bytes(10)
     assert grew < 3.0, grew
+
+
+def declared_bound(n_rows):
+    """A model of one bound row per member, declared and not assembled."""
+    T = Set("T", np.arange(n_rows))
+    m = Model("bound")
+    x = m.var("x", (T,))
+    m.constraint("cap", x[T] <= 1.0)
+    return m
+
+
+def test_a_number_as_the_right_hand_side_stores_no_value_per_row():
+    from ownership import attribute
+
+    few = attribute(lambda: declared_bound(2_000))
+    many = attribute(lambda: declared_bound(50_000))
+    # a float64 per row is 8 bytes; the rows differ by 48 000
+    assert (many["nimopt"] - few["nimopt"]) / 48_000 < 1.0, (few, many)

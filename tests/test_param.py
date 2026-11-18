@@ -372,3 +372,62 @@ def test_arrays_from_every_constructor_bind():
     ]
     for param in built:
         assert Param(param.name, (P, W), param.array).nnz == param.nnz
+
+
+def members_param():
+    G = Set("G", np.array(["a", "b", "c"]))
+    T = Set("T", np.array([0, 1]))
+    held = Param.from_long(
+        "held", (G, T), {"G": ["a", "c", "c"], "T": [1, 0, 1]}, [1.0, 2.0, 3.0]
+    )
+    return G, T, held
+
+
+def test_domain_returns_the_coordinates_with_a_value():
+    _, _, held = members_param()
+    labels = held.domain().labels()
+    assert labels["G"].tolist() == ["a", "c", "c"]
+    assert labels["T"].tolist() == [1, 0, 1]
+
+
+def test_two_readers_of_the_domain_share_one_object():
+    _, _, held = members_param()
+    first = held.domain()
+    assert held.domain() is first
+
+
+def test_the_domain_is_released_when_no_reader_keeps_it():
+    import gc
+    import weakref
+
+    _, _, held = members_param()
+    watched = weakref.ref(held.domain())
+    gc.collect()
+    assert watched() is None
+
+
+def test_the_domain_follows_an_array_bound_later():
+    G, T, held = members_param()
+    first = held.domain()
+    held.array = Param.from_dense("held", (G, T), np.ones((3, 2))).array
+    assert first.size == 3
+    assert held.domain().size == 6
+
+
+def test_a_declared_parameter_has_no_domain():
+    G = Set("G")
+    with pytest.raises(ValueError, match="has no values"):
+        Param("cost", (G,)).domain()
+
+
+def test_a_parameter_whose_domain_was_read_is_pickled_and_copied():
+    import copy
+    import pickle
+
+    _, _, held = members_param()
+    kept = held.domain()
+    pickled = pickle.loads(pickle.dumps(held))  # noqa: S301
+    for clone in (pickled, copy.deepcopy(held)):
+        assert clone.domain() is not kept
+        assert clone.domain().labels()["G"].tolist() == ["a", "c", "c"]
+    assert held.domain() is kept

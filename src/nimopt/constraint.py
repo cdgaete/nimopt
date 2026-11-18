@@ -148,7 +148,8 @@ class Constraint:
         block = self.expression.materialise_at(
             {d: held[0] for d, held in labels.items()}
         )
-        value = float(self._rhs_values[position])
+        held = self._rhs_values
+        value = float(held[position] if isinstance(held, np.ndarray) else held)
         lower = value if self.sense in (">=", "==") else -np.inf
         upper = value if self.sense in ("<=", "==") else np.inf
         return block.coordinates()[0], block.values(), lower, upper
@@ -209,14 +210,16 @@ class Constraint:
 
 def narrow(
     constraint: "Constraint", record: Any = None
-) -> tuple[Domain, npt.NDArray[np.float64], int]:
+) -> tuple[Domain, npt.NDArray[np.float64] | float, int]:
     """Return a constraint's rows, its right-hand side values and its nonzeros.
 
     The rows are the coordinates at which every term is present, narrowed by
     the condition and by the coverage of the right-hand side. `over=` declares
-    the rows instead. Without a recorder, the expression is materialised
-    within the declared rows or the condition. A recorder passed here records
-    what each narrowing dropped, over the whole expression.
+    the rows instead. The right-hand side is one value per row for a
+    coefficient, and one float for a number. Without a recorder, the
+    expression is materialised within the declared rows or the condition. A
+    recorder passed here records what each narrowing dropped, over the whole
+    expression.
     """
     frame = constraint.frame
     owner = f"constraint {constraint.name!r}"
@@ -274,7 +277,7 @@ def narrow(
                 )
         rhs_values = values.restrict(rows).values()
     elif isinstance(rhs, (int, float, np.number)):
-        rhs_values = np.full(rows.size, float(rhs))
+        rhs_values = float(rhs)
     else:
         raise TypeError(
             "a right-hand side is a number or a coefficient read at the "
