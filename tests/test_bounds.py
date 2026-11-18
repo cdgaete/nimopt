@@ -480,3 +480,28 @@ def test_an_unfixed_entry_comes_back_where_the_body_raises():
         raise RuntimeError("rejected")
     lower_x, upper_x = bounds.bounds_of(x)
     assert lower_x[0] == upper_x[0] == 4.0
+
+
+def test_a_fix_of_a_variable_with_no_column_is_recorded():
+    E = Set("E", np.array([], dtype=str))
+    m = Model("empty")
+    m.var("x", (E,), lower=0.0, upper=1.0)
+    held = m.variables["x"]
+    lower, upper = m.column_bounds()
+    bounds = Bounds(lower, upper)
+    bounds.fix(held, np.arange(0), 5.0, whole=True)
+    assert [vector.size for vector in bounds.bounds_of(held)] == [0, 0]
+    bounds.unfix(held, np.arange(0))
+    with pytest.raises(ValueError, match="has no fixed column"):
+        bounds.unfix(held, np.arange(0))
+
+
+def test_a_parameter_fix_at_no_member_is_recorded():
+    _, P, W, x, _, _, _, bounds = plant()
+    nowhere = Param.from_long("nowhere", (P, W), {"P": [], "W": []}, [])
+    bounds.fix(x, np.arange(6), nowhere, whole=True)
+    assert bounds.bounds_of(x)[0].tolist() == [0.0] * 6
+    assert bounds.bounds_of(x)[1].tolist() == [100.0] * 6
+    bounds.unfix(x, np.arange(6))
+    with pytest.raises(ValueError, match="has no fixed column"):
+        bounds.unfix(x, np.arange(6))

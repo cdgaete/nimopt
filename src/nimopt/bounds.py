@@ -163,7 +163,11 @@ class Bounds:
         value: float | Param,
         whole: bool,
     ) -> None:
-        """Pin the columns of `variable` at `positions` to `value`."""
+        """Pin the columns of `variable` at `positions` to `value`.
+
+        A whole-variable fix records the variable where it pins no column, and
+        `unfix` accepts it then.
+        """
         if isinstance(value, Param):
             if not whole:
                 raise ValueError(
@@ -178,7 +182,7 @@ class Bounds:
             pins_at = np.asarray(positions, dtype=np.int64)
             number = float(_pin_values(variable, np.asarray([value]))[0])
             values = np.full(pins_at.size, number, dtype=np.float64)
-        if pins_at.size == 0:
+        if pins_at.size == 0 and not whole:
             return
         self._entry(variable)
         pins = self._pins.get(variable.name)
