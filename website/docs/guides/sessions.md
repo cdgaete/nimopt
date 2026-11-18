@@ -81,11 +81,15 @@ A value for `fix` is a number, or a `Param` for the whole variable. The `Param` 
 - `set_bound` takes a number for a slice, and a number or a `Param` with a value at every member for the whole variable.
 - A fix stays in place across `set_bound`.
 
+A `fix`, `unfix`, `set_bound` or `add_row` call that raises changes nothing in the session and nothing in the solver's model.
+
 ## Appended rows
 
 `add_row(name, relation, where=None, over=None)` takes the arguments of `Model.constraint`. A relation free over a set appends one row per member. The appended rows follow the rows of the model, in the order of the calls.
 
 `Solution.dual(name)` returns the duals of an appended constraint, and `Diagnosis` reports an appended row by the name of that constraint. A name the model declares raises `ValueError`. A variable of another model raises `ValueError`.
+
+`add_row` also raises `ValueError` for a row with a coefficient that is not finite, a bound that is NaN, a lower bound of infinity or an upper bound of minus infinity.
 
 ```python
 import numpy as np
@@ -129,6 +133,8 @@ objective 7.00, dual of cut 1.00
 - The declared rows. No method removes a row.
 
 A session on the Gurobi, Mosek or GAMS adapter raises `ValueError` at `fix`, `unfix`, `set_bound` and `add_row`. `capabilities(solver)` reports `mutation`, which those adapters declare `absent`. After `close()` the next `solve` loads the model again, with the current bounds and the appended rows.
+
+`diagnose()` raises `ValueError` after `fix`, `unfix`, `set_bound` or `add_row`, until the next `solve`.
 
 ## Options and iterations
 

@@ -114,6 +114,7 @@ The session assembles the matrix when it opens. `solve()` and `diagnose()`
 raise `ValueError` where the model declares a variable or a constraint, or
 sets its objective, after that. Open a new session on the changed model.
 `fix()`, `unfix()`, `set_bound()` and `add_row()` raise `ValueError` there too. They change the model the solver loaded. [A session that changes a model](/guides/sessions) gives the rules of each method.
+`diagnose()` raises `ValueError` after `fix()`, `unfix()`, `set_bound()` or `add_row()` until the next `solve()`.
 
 ```python
 import numpy as np

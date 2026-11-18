@@ -111,6 +111,7 @@ class Session:
         self._adapter = adapter(solver)
         self._backend = None
         self._status = None
+        self._changed_since_solve = False
         self._copy = model._session_copy()
         self._bounds = Bounds(self.assembled.col_lower, self.assembled.col_upper)
         self._appended = Appended(self.assembled.n_cols, self.assembled.n_rows)
@@ -249,6 +250,7 @@ class Session:
         except BaseException:
             self._copy._withdraw(name)
             raise
+        self._changed_since_solve = True
 
     def _pass_rows(self, *arrays: Any) -> None:
         """Pass appended rows to the solver's model where one is loaded."""
@@ -277,6 +279,7 @@ class Session:
                 result = self._adapter.resume(result.backend, self.options)
             self._backend = result.backend
         self._status = result.status
+        self._changed_since_solve = False
         constant = self.model.objective_constant
         return Solution(
             self._copy,
@@ -299,15 +302,21 @@ class Session:
         The conflict and the ray are read from the solved backend. No
         model is solved a second time.
 
-        Raises ValueError before the first solve, and where the model declares
-        a variable or a constraint, or sets its objective, after the session
-        opened.
+        Raises ValueError before the first solve, and after `fix`, `unfix`,
+        `set_bound` or `add_row` until the next solve. Raises ValueError where
+        the model declares a variable or a constraint, or sets its objective,
+        after the session opened.
         """
         self._require_current()
         if self._status is None:
             raise ValueError(
                 f"session on {self.model.name!r} has not solved; call `solve` "
                 f"before `diagnose`"
+            )
+        if self._changed_since_solve:
+            raise ValueError(
+                f"session on {self.model.name!r} changed after its last solve; "
+                f"call `solve` before `diagnose`"
             )
         conflict, columns, ray = None, (), None
         if self._status == "infeasible":
@@ -385,6 +394,7 @@ class Session:
             )
         self.assembled.col_lower[columns] = lower
         self.assembled.col_upper[columns] = upper
+        self._changed_since_solve = True
 
     def _rows_of(self) -> dict[str, slice]:
         """Return the row range of every constraint of the loaded model."""

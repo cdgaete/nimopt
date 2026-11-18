@@ -566,3 +566,66 @@ def test_a_bound_recorded_before_the_first_solve_is_rejected_at_the_solve():
         assert not session.backend_open
         session.set_bound(x, upper=10.0)
         assert session.solve().objective == pytest.approx(4.0)
+
+
+def infeasible_two():
+    """Return a session on two() whose last solve is infeasible."""
+    m, i, x = two()
+    session = m.session()
+    session.set_bound(x, upper=1.0)
+    assert session.solve().status == "infeasible"
+    return session, i, x
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda session, i, x: session.set_bound(x, upper=10.0),
+        lambda session, i, x: session.fix(x["a"], 1.0),
+        lambda session, i, x: session.add_row("cut", Sum(i, x[i]) >= 1.0),
+    ],
+)
+def test_a_diagnosis_after_a_change_requires_a_solve(change):
+    session, i, x = infeasible_two()
+    assert session.diagnose().conflict
+    change(session, i, x)
+    with pytest.raises(ValueError, match="call `solve` before `diagnose`"):
+        session.diagnose()
+    assert session.status == "infeasible"
+    session.solve()
+    session.diagnose()
+    session.close()
+
+
+def test_a_diagnosis_after_an_unfix_requires_a_solve():
+    session, i, x = infeasible_two()
+    session.fix(x["a"], 1.0)
+    session.solve()
+    session.unfix(x["a"])
+    with pytest.raises(ValueError, match="call `solve` before `diagnose`"):
+        session.diagnose()
+    session.close()
+
+
+def test_a_rejected_change_leaves_the_diagnosis_readable():
+    session, i, x = infeasible_two()
+    with pytest.raises(ValueError):
+        session.fix(x["a"], float("inf"))
+    with pytest.raises(ValueError, match="total"):
+        session.add_row("total", Sum(i, x[i]) >= 1.0)
+    assert session.diagnose().status == "infeasible"
+    assert session.diagnose().conflict
+    session.close()
+
+
+def test_a_solved_change_is_diagnosed():
+    session, i, x = infeasible_two()
+    session.set_bound(x, upper=10.0)
+    assert session.solve().status == "optimal"
+    diagnosis = session.diagnose()
+    assert (diagnosis.status, diagnosis.conflict, diagnosis.ray) == (
+        "optimal",
+        None,
+        None,
+    )
+    session.close()
