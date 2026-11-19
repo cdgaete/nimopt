@@ -265,20 +265,30 @@ class Singletons:
         shares = np.zeros(self._n_rows, dtype=np.float64)
         if self._written == 0:
             return shares, declared
-        positive = np.maximum(reduced, 0.0)
-        lower_part = positive if sense == "min" else reduced - positive
-        lower, upper = self._bounds()
-        columns = self._columns[: self._written]
-        for part, bound, merged in (
-            (lower_part, lower, col_lower),
-            (reduced - lower_part, upper, col_upper),
-        ):
-            sets = np.flatnonzero(np.isfinite(bound) & (bound == merged[columns]))
-            first = np.unique(columns[sets], return_index=True)[1]
-            at = columns[sets][first]
-            shares[sets[first]] += part[at]
-            declared[at] -= part[at]
-        return shares / self._coefficients, declared
+        taken_lower = np.zeros(reduced.size, dtype=bool)
+        taken_upper = np.zeros(reduced.size, dtype=bool)
+        for held in self._blocks.values():
+            columns = self._columns[held.at]
+            block_lower, block_upper = self._block_bounds(held)
+            cost = reduced[columns]
+            if sense == "min":
+                lower_part = np.maximum(cost, 0.0)
+            else:
+                lower_part = np.minimum(cost, 0.0)
+            for part, bound, merged, taken in (
+                (lower_part, block_lower, col_lower, taken_lower),
+                (cost - lower_part, block_upper, col_upper, taken_upper),
+            ):
+                sets = np.flatnonzero(
+                    np.isfinite(bound) & (bound == merged[columns]) & ~taken[columns]
+                )
+                found, first = np.unique(columns[sets], return_index=True)
+                at = sets[first]
+                shares[held.at.start + at] += part[at]
+                declared[found] -= part[at]
+                taken[found] = True
+        shares /= self._coefficients
+        return shares, declared
 
     def _touching(self, start: int, stop: int) -> list[_Block]:
         """Return the blocks that contain a column from `start` to `stop`."""
@@ -315,16 +325,6 @@ class Singletons:
         sets_lower = positive if constraint.sense == ">=" else ~positive
         lower[sets_lower] = value[sets_lower]
         upper[~sets_lower] = value[~sets_lower]
-        return lower, upper
-
-    def _bounds(
-        self,
-    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-        """Return the lower and upper bound each converted row sets."""
-        lower = np.full(self._written, -np.inf, dtype=np.float64)
-        upper = np.full(self._written, np.inf, dtype=np.float64)
-        for held in self._blocks.values():
-            lower[held.at], upper[held.at] = self._block_bounds(held)
         return lower, upper
 
 
