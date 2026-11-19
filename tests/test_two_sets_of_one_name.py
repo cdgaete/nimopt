@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from nimopt import Model, Param, Set, Sum, subset
+from nimopt import Model, Param, Set, Sum, load, save, subset
 
 FORMS = ("parameter", "tuple", "domain")
 READS = r"constraint 'c' reads different labels on \['A'\]"
@@ -163,3 +163,26 @@ def test_two_sets_of_one_name_with_equal_labels_are_accepted():
     assert m.column_bounds()[1].tolist() == [10.0, 20.0]
     assert x.align(cap)[1].tolist() == [10.0, 20.0]
     assert m.n_rows == 2
+
+
+def equal_sets_model():
+    """Return a model over two sets named A with equal labels: optimum 30."""
+    A = Set("A", np.array(["a0", "a1"]))
+    same = Set("A", np.array(["a0", "a1"]))
+    cap = Param.from_dense("cap", (same,), np.array([10.0, 20.0]))
+    m = Model("equal", sense="max")
+    x = m.var("x", (A,), upper=cap)
+    m.set_objective(Sum(A, x[A]))
+    return m
+
+
+def test_explain_reports_two_sets_of_one_name_with_equal_labels_once():
+    explanation = equal_sets_model().explain()
+    assert [(held.name, held.size) for held in explanation.sets] == [("A", 2)]
+
+
+def test_a_model_over_two_sets_of_one_name_with_equal_labels_is_saved(tmp_path):
+    pytest.importorskip("highspy")
+    path = tmp_path / "equal.yaml"
+    save(equal_sets_model(), path)
+    assert load(path).solve().objective == pytest.approx(30.0)

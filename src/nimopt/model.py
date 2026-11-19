@@ -449,18 +449,24 @@ class Model:
         parameters are walked beside the variables. An alias reads a set's
         members and has none of its own. The two are reported apart, and a
         file contains data for a set alone. The base set of an alias is taken
-        with the alias. `as_declared=True` skips the variables the piecewise
-        declarations generated.
+        with the alias. Two sets of one name with equal labels in the same
+        order are one dimension, and the first is returned. Raises ValueError
+        for two sets of one name with different labels. `as_declared=True`
+        skips the variables the piecewise declarations generated.
         """
         found = {}
 
         def take(dimension: Any) -> None:
             if isinstance(dimension, Alias):
                 take(dimension.base)
-            if found.setdefault(dimension.name, dimension) is not dimension:
+            held = found.setdefault(dimension.name, dimension)
+            if held is dimension:
+                return
+            if held.coord is None or held.coord != dimension.coord:
                 raise ValueError(
                     f"model {self.name!r} is declared over two sets named "
-                    f"{dimension.name!r}; declare one set per name"
+                    f"{dimension.name!r} with different labels; declare one "
+                    f"set per name"
                 )
 
         skip = self._generated() if as_declared else frozenset()
