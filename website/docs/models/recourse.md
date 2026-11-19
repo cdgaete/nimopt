@@ -90,7 +90,7 @@ from nimopt.models import recourse
 inputs = recourse.data()
 solution = recourse.definition().build(inputs).solve()
 print(inputs["demand"].round(2))
-print(np.asarray(solution.primal("on").values()).reshape(4, 3))
+print(np.asarray(solution.primal("on").values()).round().astype(int).reshape(4, 3))
 print(np.asarray(solution.primal("shed").values()).reshape(3, 4))
 ```
 
@@ -102,10 +102,10 @@ print(np.asarray(solution.primal("shed").values()).reshape(3, 4))
 [[ 38.25 119.   182.75  80.75]
  [ 45.   140.   215.    95.  ]
  [ 56.25 175.   268.75 118.75]]
-[[-0.  1. -0.]
- [ 1.  1. -0.]
- [ 1.  1.  1.]
- [ 1. -0. -0.]]
+[[0 1 0]
+ [1 1 0]
+ [1 1 1]
+ [1 0 0]]
 [[0.   0.   0.   0.  ]
  [0.   0.   0.   0.  ]
  [0.   0.   8.75 0.  ]]
