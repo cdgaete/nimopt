@@ -18,6 +18,8 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+## 0.20261119.1 - 2026-11-19
+
 ### Changed
 
 - The `highs` extra requires `highspy>=1.16`. HiGHS 1.10.0 to 1.15.1 with its presolve solves a model with the optimum -10.0 and an integer column with the lower bound -2.2 to -9.84. HiGHS 1.16.0 returns -10.0.
