@@ -52,7 +52,7 @@ class Written:
 
 def check_singleton_rows(value: str) -> None:
     """Raise ValueError for a value of `singleton_rows` that selects no matrix."""
-    if value not in ("bounds", "rows"):
+    if not isinstance(value, str) or value not in ("bounds", "rows"):
         raise ValueError(f"singleton_rows is 'bounds' or 'rows'; got {value!r}")
 
 

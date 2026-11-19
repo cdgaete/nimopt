@@ -168,6 +168,12 @@ def test_an_unknown_value_raises_at_assemble():
         plant().assemble(singleton_rows="bound")
 
 
+def test_a_value_that_is_not_a_string_raises_at_assemble():
+    # an array of one string compares equal to the string
+    with pytest.raises(ValueError, match="singleton_rows is 'bounds' or 'rows'; got"):
+        plant().assemble(singleton_rows=np.array(["bounds"]))
+
+
 def test_a_row_of_one_coefficient_that_is_not_a_singleton_row_is_loaded():
     T = Set("T", np.arange(3))
     k = Param.from_dense("k", (T,), np.array([1e-21, 1.0, 1.0]))
