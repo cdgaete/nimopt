@@ -6,6 +6,8 @@ from nimopt.models import commitment, dispatch, nodal, transport
 from nimopt.solvers import gams, highs
 from nimopt.solvers.base import STATUS
 from nimopt.solvers.options import OPTIONS as VOCABULARY
+from optimality import check
+from singleton_models import neg_max, plant
 from test_session import dispatch as small
 from test_session import infeasible, odd, unbounded
 from test_solution_limit import knapsack
@@ -59,6 +61,8 @@ MODES = [
     pytest.param({}, id="in-process", marks=in_process),
     pytest.param(SEPARATE, id="separate-process", marks=separate),
 ]
+
+SOLVER = "gams"
 
 
 def revenue():
@@ -229,6 +233,39 @@ def test_gams_and_highs_return_the_reference_the_model_computes(name, mode):
         solved = model.solve(solver=solver, options=given)
         assert solved.status == "optimal", (solver, solved.status)
         assert solved.objective == pytest.approx(expected, rel=1e-6), solver
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_the_plant_meets_the_optimality_conditions_under_bounds(mode):
+    model = plant()
+    check(model, model.solve(SOLVER, options=mode, singleton_rows="bounds"))
+    other = neg_max()
+    check(other, other.solve(SOLVER, options=mode, singleton_rows="bounds"))
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_two_converted_rows_that_cross_return_infeasible(mode):
+    T = Set("T", np.arange(1))
+    m = Model("m")
+    x = m.var("x", (T,), lower=-np.inf)
+    m.constraint("lo", x[T] >= 2.0)
+    m.constraint("up", x[T] <= 1.0)
+    m.set_objective(Sum(T, x[T]))
+    solved = m.solve(SOLVER, options=mode, singleton_rows="bounds")
+    assert solved.status == "infeasible"
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("name", sorted(SCALES))
+def test_each_corpus_model_is_equal_under_both_values(name, mode):
+    held = MODULES[name]
+    model = held.definition().build(held.data(scale=SCALES[name]))
+    rows = model.solve(SOLVER, options=mode, singleton_rows="rows")
+    bounds = model.solve(SOLVER, options=mode, singleton_rows="bounds")
+    assert bounds.status == rows.status == "optimal"
+    assert bounds.objective == pytest.approx(rows.objective, rel=1e-9)
+    if bounds.has_duals:
+        check(model, bounds)
 
 
 @pytest.mark.parametrize("mode", MODES)

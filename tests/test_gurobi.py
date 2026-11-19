@@ -3,13 +3,17 @@ import pytest
 
 pytest.importorskip("gurobipy", reason="the Gurobi adapter needs the gurobi extra")
 
-from nimopt import capabilities  # noqa: E402
+from nimopt import Model, Set, Sum, capabilities  # noqa: E402
 from nimopt.models import commitment, dispatch, nodal, transport  # noqa: E402
 from nimopt.solvers import available, gurobi  # noqa: E402
 from nimopt.solvers.options import OPTIONS as VOCABULARY  # noqa: E402
+from optimality import check  # noqa: E402
+from singleton_models import neg_max, plant  # noqa: E402
 from test_session import dispatch as small  # noqa: E402
 from test_session import infeasible, odd, unbounded  # noqa: E402
 from test_solution_limit import knapsack  # noqa: E402
+
+SOLVER = "gurobi"
 
 # the size-limited licence builds and solves up to 2000 rows and 2000 columns,
 # so each corpus model is taken at the largest scale that fits under it
@@ -38,6 +42,35 @@ def test_both_adapters_answer_the_reference_the_model_computes(name):
         answer = model.solve(solver=solver)
         assert answer.status == "optimal", (solver, answer.status)
         assert answer.objective == pytest.approx(expected, rel=1e-6), solver
+
+
+def test_the_plant_meets_the_optimality_conditions_under_bounds():
+    model = plant()
+    check(model, model.solve(SOLVER, singleton_rows="bounds"))
+    other = neg_max()
+    check(other, other.solve(SOLVER, singleton_rows="bounds"))
+
+
+def test_two_converted_rows_that_cross_return_infeasible():
+    T = Set("T", np.arange(1))
+    m = Model("m")
+    x = m.var("x", (T,), lower=-np.inf)
+    m.constraint("lo", x[T] >= 2.0)
+    m.constraint("up", x[T] <= 1.0)
+    m.set_objective(Sum(T, x[T]))
+    assert m.solve(SOLVER, singleton_rows="bounds").status == "infeasible"
+
+
+@pytest.mark.parametrize("name", sorted(SCALES))
+def test_each_corpus_model_is_equal_under_both_values(name):
+    held = MODULES[name]
+    model = held.definition().build(held.data(scale=SCALES[name]))
+    rows = model.solve(SOLVER, singleton_rows="rows")
+    bounds = model.solve(SOLVER, singleton_rows="bounds")
+    assert bounds.status == rows.status == "optimal"
+    assert bounds.objective == pytest.approx(rows.objective, rel=1e-9)
+    if bounds.has_duals:
+        check(model, bounds)
 
 
 def test_the_two_adapters_read_the_same_primals_and_duals():
