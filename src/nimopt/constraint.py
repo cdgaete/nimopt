@@ -20,7 +20,7 @@ from nimopt.sets import (
     rows_of,
     shown,
 )
-from nimopt.term import Relation
+from nimopt.term import Expression, Relation
 
 SENSES = ("<=", ">=", "==")
 
@@ -39,6 +39,51 @@ def _convertible(coefficients: npt.NDArray[np.float64]) -> npt.NDArray[np.bool_]
     return (magnitude > SINGLETON_COEFFICIENT_LOW) & (
         magnitude < SINGLETON_COEFFICIENT_HIGH
     )
+
+
+def _integer_variable_columns(expression: Expression) -> tuple[slice, ...]:
+    """Return the slice of column indices of each integer variable of the terms."""
+    return tuple(
+        term.variable._columns() for term in expression.terms if term.variable.integer
+    )
+
+
+def _on_integer_columns(
+    columns: npt.NDArray[np.integer], held: tuple[slice, ...]
+) -> npt.NDArray[np.bool_]:
+    """Return one flag per column, True where the column is of an integer variable."""
+    inside = np.zeros(columns.size, dtype=bool)
+    for at in held:
+        inside |= (columns >= at.start) & (columns < at.stop)
+    return inside
+
+
+def _singleton_rows(
+    coefficients: npt.NDArray[np.float64],
+    bound: npt.NDArray[np.float64] | float,
+    integer: npt.NDArray[np.bool_] | None,
+) -> npt.NDArray[np.bool_]:
+    """Return one flag per row, True where the row is a singleton row.
+
+    A singleton row has a coefficient whose magnitude is above
+    `SINGLETON_COEFFICIENT_LOW` and below `SINGLETON_COEFFICIENT_HIGH`, a
+    finite right-hand side, a magnitude of the right-hand side divided by the
+    coefficient below `SINGLETON_LIMIT` and, where `integer` marks the row, a
+    quotient that is an integer. `bound` is one value per row or one value for
+    every row. `integer` is one flag per row, or None where no row is on a
+    column of an integer variable.
+    """
+    divisor = np.where(coefficients == 0.0, 1.0, coefficients)
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        quotient = bound / divisor
+    usable = (
+        _convertible(coefficients)
+        & np.isfinite(bound)
+        & (np.abs(quotient) < SINGLETON_LIMIT)
+    )
+    if integer is not None:
+        usable &= (~integer) | (quotient == np.rint(quotient))
+    return usable
 
 
 def check_relation(name: str, relation: Any) -> None:
@@ -280,10 +325,14 @@ class Constraint:
         constraint's kept rows are numbered from `row_start` inside it. Returns
         the column and the coefficient of each singleton row, in the order of
         the rows. The expression is materialised once. Raises ValueError where
-        a singleton row does not have exactly one coefficient that can become a
-        column bound, and where the kept rows have a number of coefficients
-        different from the number measured at declaration. Nothing is written
-        then.
+        a marked row fails the definition of a singleton row: it has a number
+        of coefficients other than one, the magnitude of its coefficient is
+        1e-9 or less or 1e15 or more, its right-hand side is not finite, the
+        magnitude of the right-hand side divided by the coefficient is 1e20 or
+        more, or its column is a column of an integer variable and the quotient
+        is not an integer. Raises ValueError where the kept rows have a number
+        of coefficients different from the number measured at declaration.
+        Nothing is written then.
         """
         narrowed = self.over is not None or self.where is not None
         within = self.rows if narrowed else None
@@ -298,7 +347,15 @@ class Constraint:
         usable = count == 1
         value = np.zeros(marked.size, dtype=np.float64)
         value[at] = coefficients
-        usable &= _convertible(value)
+        stored = self._rhs_values
+        bound = self.singleton_rhs() if isinstance(stored, np.ndarray) else stored
+        integer_columns = _integer_variable_columns(self.expression)
+        integer: npt.NDArray[np.bool_] | None = None
+        if integer_columns:
+            column = np.zeros(marked.size, dtype=np.int64)
+            column[at] = columns
+            integer = _on_integer_columns(column, integer_columns)
+        usable &= _singleton_rows(value, bound, integer)
         found = int(np.count_nonzero(usable))
         if found != marked.size:
             raise ValueError(
@@ -447,7 +504,11 @@ def narrow(
     if record is not None:
         record.settled(rows)
     at = rows.positions_of(block)
-    marking = None if record is not None else _marking(block, rows, at, rhs_values)
+    marking = (
+        None
+        if record is not None
+        else _marking(block, rows, at, rhs_values, constraint.expression)
+    )
     return rows, rhs_values, int((at >= 0).sum()), marking
 
 
@@ -456,17 +517,20 @@ def _marking(
     rows: Domain,
     at: npt.NDArray[np.integer],
     rhs_values: npt.NDArray[np.float64] | float,
+    expression: Expression,
 ) -> bool | npt.NDArray[np.bool_] | None:
     """Return the singleton marking of a block over `rows`.
 
     The result is None where no row of `rows` is a singleton row, True where
-    every row is one, and one flag per row otherwise. A row is a singleton row
-    where it has exactly one coefficient inside `rows`, the magnitude of that
-    coefficient is above `SINGLETON_COEFFICIENT_LOW` and below
-    `SINGLETON_COEFFICIENT_HIGH`, the right-hand side is finite, and the
-    magnitude of the right-hand side divided by the coefficient is below
-    `SINGLETON_LIMIT`. The entries of `at` are the positions of the entries of
-    the block in `rows`, and the entries ascend by row.
+    every row is one, and one flag per row otherwise. A singleton row has one
+    coefficient inside `rows` whose magnitude is above
+    `SINGLETON_COEFFICIENT_LOW` and below `SINGLETON_COEFFICIENT_HIGH`, a
+    finite right-hand side, a magnitude of the right-hand side divided by the
+    coefficient below `SINGLETON_LIMIT` and, where its column is a column of an
+    integer variable of `expression`, a quotient that is an integer. Where no
+    term of `expression` has an integer variable, no column coordinate is
+    read. The entries of `at` are the positions of the entries of the block in
+    `rows`, and the entries ascend by row.
     """
     keep = at >= 0
     every = keep.all()
@@ -480,15 +544,15 @@ def _marking(
         entries = entries[keep]
     coefficients = entries[marked[inside]]
     held = rhs_values
-    if isinstance(held, np.ndarray):
-        bound = held[positions]
-    else:
-        bound = np.full(positions.size, float(held))
-    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        quotient = np.abs(bound / np.where(coefficients == 0.0, 1.0, coefficients))
-    marked[positions] = (
-        _convertible(coefficients) & np.isfinite(bound) & (quotient < SINGLETON_LIMIT)
-    )
+    bound = held[positions] if isinstance(held, np.ndarray) else float(held)
+    integer_columns = _integer_variable_columns(expression)
+    integer: npt.NDArray[np.bool_] | None = None
+    if integer_columns:
+        columns = block.coordinates((COLUMN,))[0]
+        if not every:
+            columns = columns[keep]
+        integer = _on_integer_columns(columns[marked[inside]], integer_columns)
+    marked[positions] = _singleton_rows(coefficients, bound, integer)
     if marked.all():
         return True
     if not marked.any():

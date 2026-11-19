@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nimopt import Model, Param, Set
+from nimopt import Model, Param, Set, Sum, product
 from singleton_models import mixed, neg_max, plant
 
 
@@ -28,12 +28,12 @@ def test_a_mixed_constraint_marks_its_rows_of_one_coefficient():
     assert held.kept_positions().tolist() == [0]
 
 
-def one_term(coefficients, rhs, sense="<="):
+def one_term(coefficients, rhs, sense="<=", integer=False):
     T = Set("T", np.arange(3))
     k = Param.from_dense("k", (T,), np.array(coefficients))
     r = Param.from_dense("r", (T,), np.array(rhs))
     m = Model("m")
-    x = m.var("x", (T,), lower=-np.inf)
+    x = m.var("x", (T,), lower=-np.inf, integer=integer)
     relation = k[T] * x[T] <= r[T] if sense == "<=" else k[T] * x[T] >= r[T]
     return m.constraint("c", relation)
 
@@ -199,3 +199,105 @@ def test_a_marked_row_whose_coefficient_leaves_the_range_raises_at_assembly():
     k.array = Param.from_dense("k", (T,), np.array([1e-12, 3.0, 4.0])).array
     with pytest.raises(ValueError, match="marked 3 singleton rows and built 2"):
         m.assemble(singleton_rows="bounds")
+
+
+def test_a_fractional_bound_on_an_integer_column_is_not_a_singleton_row():
+    # the bounds are 2.2, 2.0 and -1.5
+    held = one_term([-1.0, 1.0, 2.0], [-2.2, 2.0, -3.0], integer=True)
+    assert held.singleton_positions().tolist() == [1]
+
+
+def test_a_fractional_bound_on_a_continuous_column_is_a_singleton_row():
+    held = one_term([-1.0, 1.0, 2.0], [-2.2, 2.0, -3.0])
+    assert held.singleton_positions().tolist() == [0, 1, 2]
+
+
+def test_a_number_as_right_hand_side_is_checked_on_an_integer_column():
+    T = Set("T", np.arange(3))
+    m = Model("m")
+    x = m.var("x", (T,), lower=-3.0, upper=9.0, integer=True)
+    assert m.constraint("whole", -1.0 * x[T] <= 2.0).n_singleton_rows == 3
+    assert m.constraint("part", -1.0 * x[T] <= 2.2).n_singleton_rows == 0
+
+
+def test_the_integer_check_reads_the_column_of_each_row():
+    # row 0 has its coefficient on the integer x, row 1 on the continuous y,
+    # and row 2 has one on each
+    T = Set("T", np.arange(3))
+    on_x = Param.from_long("on_x", (T,), {"T": np.array([0, 2])}, np.array([1.0, 1.0]))
+    on_y = Param.from_long("on_y", (T,), {"T": np.array([1, 2])}, np.array([1.0, 1.0]))
+    m = Model("m")
+    x = m.var("x", (T,), lower=-np.inf, integer=True)
+    y = m.var("y", (T,), lower=-np.inf)
+    held = m.constraint("c", on_x[T] * x[T] + on_y[T] * y[T] <= 2.5, over=product((T,)))
+    assert held.n_rows == 3
+    assert held.singleton_positions().tolist() == [1]
+    a = m.assemble(singleton_rows="bounds")
+    assert a.n_rows == 2
+    assert a.col_upper.tolist() == [np.inf, np.inf, np.inf, np.inf, 2.5, np.inf]
+
+
+def integer_model():
+    """`-x <= 2.2` on an integer x: the optimum is -10 at x = -2 and y = 1."""
+    G = Set("G", np.array(["a"]))
+    T = Set("T", np.arange(2))
+    m = Model("m")
+    x = m.var("x", (G, T), lower=-3.0, upper=9.0, integer=True)
+    y = m.var("y", (G,), lower=0.0)
+    m.constraint("s1", -1.0 * x[G, T] <= 2.2)
+    m.constraint("y0", 0.5 * y[G] >= 0.3)
+    m.constraint("k", Sum(T, x[G, T]) + y[G] >= -3.0)
+    m.set_objective(Sum(G, T, 3.0 * x[G, T]) + Sum(G, 2.0 * y[G]))
+    return m
+
+
+@pytest.mark.parametrize("value", ["rows", "bounds"])
+def test_an_integer_model_with_a_fractional_row_has_the_same_optimum(value):
+    solution = integer_model().solve("highs", singleton_rows=value)
+    assert solution.status == "optimal"
+    assert solution.objective == pytest.approx(-10.0)
+
+
+def test_the_fractional_row_of_an_integer_column_is_loaded():
+    a = integer_model().assemble(singleton_rows="bounds")
+    # s1 keeps its two rows, y0 is a column bound, k is one row
+    assert a.n_rows == 3
+    assert a.col_lower.tolist() == [-3.0, -3.0, 0.6]
+
+
+def changed(coefficients, rhs, after, integer=False):
+    T = Set("T", np.arange(3))
+    k = Param.from_dense("k", (T,), np.array(coefficients))
+    m = Model("m")
+    x = m.var("x", (T,), lower=-np.inf, integer=integer)
+    if isinstance(rhs, float):
+        m.constraint("c", k[T] * x[T] >= rhs)
+    else:
+        r = Param.from_dense("r", (T,), np.array(rhs))
+        m.constraint("c", k[T] * x[T] >= r[T])
+    k.array = Param.from_dense("k", (T,), np.array(after)).array
+    return m
+
+
+def test_a_marked_row_whose_bound_reaches_1e20_raises_at_assembly():
+    m = changed([1.0, 1.0, 1.0], [1e13, 1.0, 1.0], [1e-8, 1.0, 1.0])
+    with pytest.raises(ValueError, match="marked 3 singleton rows and built 2"):
+        m.assemble(singleton_rows="bounds")
+
+
+def test_a_marked_row_of_a_number_whose_bound_reaches_1e20_raises_at_assembly():
+    m = changed([1.0, 1.0, 1.0], 1e13, [1e-8, 1.0, 1.0])
+    with pytest.raises(ValueError, match="marked 3 singleton rows and built 2"):
+        m.assemble(singleton_rows="bounds")
+
+
+def test_a_marked_row_whose_bound_leaves_the_integers_raises_at_assembly():
+    m = changed([2.0, 2.0, 2.0], 4.0, [3.0, 2.0, 2.0], integer=True)
+    with pytest.raises(ValueError, match="marked 3 singleton rows and built 2"):
+        m.assemble(singleton_rows="bounds")
+
+
+def test_a_changed_coefficient_that_keeps_the_definition_assembles():
+    m = changed([2.0, 2.0, 2.0], 4.0, [4.0, 2.0, 1.0], integer=True)
+    a = m.assemble(singleton_rows="bounds")
+    assert (a.n_rows, a.col_lower.tolist()) == (0, [1.0, 2.0, 4.0])

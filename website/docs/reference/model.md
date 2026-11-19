@@ -70,11 +70,13 @@ print(m.objective_coefficients())
 A **singleton row** is a declared row with one coefficient. The magnitude of
 that coefficient is above `1e-9` and below `1e15`, the right-hand side is
 finite, and the right-hand side divided by the coefficient is below `1e20` in
-magnitude. HiGHS reads a coefficient of `1e-9` or less as
-zero and rejects one of `1e15` or more. A row outside this definition is
-written as a row: a coefficient of `1e-9` or less, a coefficient of `1e15` or
-more, a right-hand side that is infinite or NaN, and a bound of `1e20` or
-more in magnitude.
+magnitude. On a column of an integer variable, the right-hand side divided by
+the coefficient is also an integer. HiGHS reads a coefficient of `1e-9` or
+less as zero and rejects one of `1e15` or more. A row outside this definition
+is written as a row: a coefficient of `1e-9` or less, a coefficient of `1e15`
+or more, a right-hand side that is infinite or NaN, a bound of `1e20` or more
+in magnitude, and a bound that is not an integer on a column of an integer
+variable.
 
 `singleton_rows` selects the matrix that `assemble()`, `session()` and
 `solve()` build. Its values are `"bounds"` and `"rows"`, and `"bounds"` is

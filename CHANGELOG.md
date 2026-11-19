@@ -26,7 +26,7 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ### Changed
 
-- A row with one coefficient is stored as a bound of its column, and the solver receives a matrix without it. `singleton_rows="rows"` on `Model.assemble`, `Model.session` and `Model.solve` builds the matrix with every row.
+- A row with one coefficient is stored as a bound of its column, and the solver receives a matrix without it. On a column of an integer variable, a row is stored as a bound only where the bound is an integer. `singleton_rows="rows"` on `Model.assemble`, `Model.session` and `Model.solve` builds the matrix with every row.
 - `Row.index` is the position of the row among the declared rows.
 - `Session.n_rows` and `Assembled.n_rows` report the rows the solver loaded.
 - `Solution.dual` returns a value at every declared row. The dual of a row stored as a column bound is computed from the reduced costs.
