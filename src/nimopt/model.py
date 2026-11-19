@@ -484,13 +484,18 @@ class Model:
             tuple(d for d in held if isinstance(d, Alias)),
         )
 
-    def assemble(self, progress: Any = False) -> Assembled:
+    def assemble(
+        self, progress: Any = False, singleton_rows: str = "rows"
+    ) -> Assembled:
         """Return the model's matrix and its row and column data, in CSR form.
 
         Each constraint rebuilds its expression, writes it into its slice of
         one buffer and releases it. One expression is live at a time.
+        `singleton_rows` selects the matrix: `"bounds"` stores a declared row
+        of one coefficient as a bound of its column, and `"rows"` writes every
+        row. Raises ValueError for another value.
         """
-        return assemble_model(self, progress)
+        return assemble_model(self, progress, singleton_rows)
 
     def session(
         self,

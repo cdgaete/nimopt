@@ -49,27 +49,176 @@ class Written:
             self.held.done()
 
 
+def check_singleton_rows(value: str) -> None:
+    """Raise ValueError for a value of `singleton_rows` that selects no matrix."""
+    if value not in ("bounds", "rows"):
+        raise ValueError(f"singleton_rows is 'bounds' or 'rows'; got {value!r}")
+
+
+class Singletons:
+    """The rows an assembly stores as column bounds.
+
+    The record contains the constraint of each converted row and the column and
+    the coefficient of that row, in the order of the constraints and of the rows
+    inside a constraint. The bound a converted row sets is computed from the
+    right-hand side the constraint stores when it is read. The columns are one
+    int32 array and the coefficients one float64 array, both allocated at the
+    number of converted rows the constraints mark.
+    """
+
+    def __init__(self, n_rows: int = 0) -> None:
+        self._n_rows = int(n_rows)
+        self._columns = np.empty(self._n_rows, dtype=np.int32)
+        self._coefficients = np.empty(self._n_rows, dtype=np.float64)
+        self._blocks: dict[str, tuple[Constraint, slice]] = {}
+        self._written = 0
+
+    def __repr__(self) -> str:
+        return f"Singletons({self._n_rows} rows, {len(self._blocks)} constraints)"
+
+    @property
+    def n_rows(self) -> int:
+        """Return the number of converted rows."""
+        return self._n_rows
+
+    def add(
+        self,
+        name: str,
+        constraint: "Constraint",
+        columns: npt.NDArray[np.int32],
+        coefficients: npt.NDArray[np.float64],
+    ) -> None:
+        """Write the column and the coefficient of each converted row.
+
+        The rows are numbered after the converted rows already written. Raises
+        ValueError where the record has no room for them.
+        """
+        start = self._written
+        stop = start + int(np.asarray(columns).size)
+        if stop > self._n_rows:
+            raise ValueError(
+                f"constraint {name!r} writes {stop - start} converted rows at "
+                f"{start} and the record has {self._n_rows} rows; allocate the "
+                f"record at the number of rows the constraints mark"
+            )
+        self._columns[start:stop] = columns
+        self._coefficients[start:stop] = coefficients
+        self._blocks[name] = (constraint, slice(start, stop))
+        self._written = stop
+
+    def rows_of(self, name: str) -> slice | None:
+        """Return the range of the converted rows of a constraint.
+
+        Returns None for a constraint with no converted row.
+        """
+        held = self._blocks.get(name)
+        return None if held is None else held[1]
+
+    def kept(self, name: str) -> npt.NDArray[np.int64] | None:
+        """Return the positions of the kept rows of a constraint.
+
+        The positions are among the rows of the constraint. Returns None for a
+        constraint with no converted row.
+        """
+        held = self._blocks.get(name)
+        if held is None:
+            return None
+        return held[0].kept_positions()
+
+    def clip(
+        self,
+        start: int,
+        stop: int,
+        lower: npt.NDArray[np.float64],
+        upper: npt.NDArray[np.float64],
+    ) -> None:
+        """Narrow the bounds of the columns `start` to `stop` in place.
+
+        A converted row whose column is in the range sets a lower or an upper
+        bound. The lower bound of a column is the largest of its bound and of
+        the lower bounds set on it; the upper bound is the smallest.
+        """
+        if self._written == 0:
+            return
+        row_lower, row_upper = self._bounds()
+        columns = self._columns[: self._written]
+        inside = (columns >= start) & (columns < stop)
+        at = columns[inside] - start
+        np.maximum.at(lower, at, row_lower[inside])
+        np.minimum.at(upper, at, row_upper[inside])
+
+    def _bounds(
+        self,
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """Return the lower and upper bound each converted row sets."""
+        written = self._written
+        lower = np.full(written, -np.inf)
+        upper = np.full(written, np.inf)
+        for constraint, at in self._blocks.values():
+            coefficients = self._coefficients[at]
+            value = constraint.singleton_rhs() / coefficients
+            positive = coefficients > 0
+            sets_lower = positive if constraint.sense == ">=" else ~positive
+            if constraint.sense == "==":
+                lower[at], upper[at] = value, value
+            else:
+                lower[at] = np.where(sets_lower, value, -np.inf)
+                upper[at] = np.where(sets_lower, np.inf, value)
+        return lower, upper
+
+
 def matrix_of(
-    constraints: Mapping[str, "Constraint"], n_columns: int, report: Written
+    constraints: Mapping[str, "Constraint"],
+    n_columns: int,
+    report: Written,
+    singleton_rows: str = "rows",
 ) -> tuple[
-    SparseArray, dict[str, slice], npt.NDArray[np.float64], npt.NDArray[np.float64]
+    SparseArray,
+    dict[str, slice],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    Singletons,
 ]:
-    """Return the matrix of `constraints`, their row ranges and their row bounds.
+    """Return the matrix, the row ranges, the row bounds and the `Singletons`.
 
     Rows are numbered from zero in the order of `constraints`. Each constraint
     writes its block into one buffer. The row bounds are written after the
-    matrix is built.
+    matrix is built. Under `singleton_rows="bounds"` a row of one coefficient
+    is stored as a bound of its column and is absent from the matrix.
     """
-    n_rows = sum(c.n_rows for c in constraints.values())
-    buffer = EntryBuffer(2, sum(c.nnz for c in constraints.values()))
+    check_singleton_rows(singleton_rows)
+    converted = singleton_rows == "bounds"
+    blocks = [
+        (
+            name,
+            constraint,
+            constraint.n_rows - constraint.n_singleton_rows,
+            constraint.nnz - constraint.n_singleton_rows,
+        )
+        if converted
+        else (name, constraint, constraint.n_rows, constraint.nnz)
+        for name, constraint in constraints.items()
+    ]
+    n_rows = sum(kept for _, _, kept, _ in blocks)
+    n_converted = (
+        sum(c.n_singleton_rows for c in constraints.values()) if converted else 0
+    )
+    buffer = EntryBuffer(2, sum(nnz for _, _, _, nnz in blocks))
     rows = ProductCoord((n_rows,))
     rows_of = {}
+    singletons = Singletons(n_converted)
     row_start = 0
-    for name, constraint in constraints.items():
-        constraint.write_into(buffer, rows, row_start, report)
+    for name, constraint, kept, _ in blocks:
+        if kept == constraint.n_rows:
+            constraint.write_into(buffer, rows, row_start, report)
+        else:
+            columns, coefficients = constraint.write_kept(
+                buffer, rows, row_start, report
+            )
+            singletons.add(name, constraint, columns, coefficients)
         report.constraint(name, constraint.nnz)
-        rows_of[name] = slice(row_start, row_start + constraint.n_rows)
-        row_start += constraint.n_rows
+        rows_of[name] = slice(row_start, row_start + kept)
+        row_start += kept
     report.close()
     matrix = buffer.array(
         {ROW: rows, COLUMN: ProductCoord((n_columns,))},
@@ -77,25 +226,34 @@ def matrix_of(
     )
     row_lower = np.empty(n_rows, dtype=np.float64)
     row_upper = np.empty(n_rows, dtype=np.float64)
-    for name, constraint in constraints.items():
-        constraint.write_bounds(row_lower[rows_of[name]], row_upper[rows_of[name]])
-    return matrix, rows_of, row_lower, row_upper
+    for name, constraint, kept, _ in blocks:
+        at = rows_of[name]
+        if kept == constraint.n_rows:
+            constraint.write_bounds(row_lower[at], row_upper[at])
+        else:
+            constraint.write_kept_bounds(row_lower[at], row_upper[at])
+    return matrix, rows_of, row_lower, row_upper, singletons
 
 
-def assemble_model(model: "Model", progress: Any = False) -> "Assembled":
+def assemble_model(
+    model: "Model", progress: Any = False, singleton_rows: str = "rows"
+) -> "Assembled":
     """Return a model's matrix and its row and column data, in CSR form.
 
     Each constraint rebuilds its expression, writes it into its slice of one
     buffer and releases it. One expression is live at a time. The row bounds
     are written into the model's own vectors after the matrix is built, and
-    no row is copied twice.
+    no row is copied twice. `singleton_rows` is `"bounds"` or `"rows"`, and
+    raises ValueError for another value.
     """
+    check_singleton_rows(singleton_rows)
     report = Written(reporter(progress), model.nnz, f"assembling {model.name}")
-    matrix, rows_of, row_lower, row_upper = matrix_of(
-        model.constraints, model.n_columns, report
+    matrix, rows_of, row_lower, row_upper, singletons = matrix_of(
+        model.constraints, model.n_columns, report, singleton_rows
     )
     indices, values, indptr = matrix.to_csr()
     col_lower, col_upper = model.column_bounds()
+    singletons.clip(0, model.n_columns, col_lower, col_upper)
     return Assembled(
         matrix,
         indices,
@@ -108,6 +266,7 @@ def assemble_model(model: "Model", progress: Any = False) -> "Assembled":
         col_upper,
         model.integrality(),
         rows_of,
+        singletons,
     )
 
 
@@ -309,7 +468,8 @@ class Assembled:
 
     `matrix` is the labeled array the model built. `indices` and `values` are
     views of the one buffer behind it, and only `indptr` is built. The extents
-    are read from `matrix`.
+    are read from `matrix`. `singletons` contains the rows stored as column
+    bounds.
     """
 
     def __init__(
@@ -325,6 +485,7 @@ class Assembled:
         col_upper: npt.NDArray[np.float64],
         integrality: npt.NDArray[np.int32],
         rows_of: Mapping[str, slice],
+        singletons: Singletons,
     ) -> None:
         self.matrix = matrix
         self.indices = indices
@@ -336,6 +497,7 @@ class Assembled:
         self.col_lower = col_lower
         self.col_upper = col_upper
         self.integrality = integrality
+        self.singletons = singletons
         self._rows_of = rows_of
 
     def __repr__(self) -> str:

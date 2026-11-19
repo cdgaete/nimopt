@@ -8,7 +8,7 @@ import numpy.typing as npt
 from nimblend import Domain, EntryBuffer, SparseArray
 
 from nimopt.coefficient import Coefficient
-from nimopt.names import ROW
+from nimopt.names import COLUMN, ROW
 from nimopt.sets import (
     as_member,
     check_labels,
@@ -34,6 +34,27 @@ def check_relation(name: str, relation: Any) -> None:
             f"constraint {name!r} takes a comparison of an expression, such as "
             f"`expr <= rhs`; got {type(relation).__name__}"
         )
+
+
+def _write_row_bounds(
+    sense: str,
+    values: npt.NDArray[np.float64] | float,
+    lower: npt.NDArray[np.float64],
+    upper: npt.NDArray[np.float64],
+) -> None:
+    """Write the bounds of rows of one sense into `lower` and `upper`.
+
+    `values` holds one right-hand side per row or one number for every row.
+    """
+    if sense == "<=":
+        lower[:] = -np.inf
+        upper[:] = values
+    elif sense == ">=":
+        lower[:] = values
+        upper[:] = np.inf
+    else:
+        lower[:] = values
+        upper[:] = values
 
 
 class Constraint:
@@ -224,16 +245,73 @@ class Constraint:
 
         The vectors are the model's. No vector is allocated per constraint.
         """
-        values = self._rhs_values
-        if self.sense == "<=":
-            lower[:] = -np.inf
-            upper[:] = values
-        elif self.sense == ">=":
-            lower[:] = values
-            upper[:] = np.inf
-        else:
-            lower[:] = values
-            upper[:] = values
+        _write_row_bounds(self.sense, self._rhs_values, lower, upper)
+
+    def write_kept_bounds(
+        self, lower: npt.NDArray[np.float64], upper: npt.NDArray[np.float64]
+    ) -> None:
+        """Write the bounds of the rows that are not singleton rows in place.
+
+        The vectors contain one entry per kept row. The bound of a row is that
+        of `write_bounds`.
+        """
+        _write_row_bounds(self.sense, self._rhs_at(self.kept_positions()), lower, upper)
+
+    def write_kept(
+        self, buffer: EntryBuffer, rows: Any, row_start: int, progress: Any = None
+    ) -> tuple[npt.NDArray[np.int32], npt.NDArray[np.float64]]:
+        """Write the entries of the rows that are not singleton rows to `buffer`.
+
+        `rows` is the coordinate of every loaded row of the model, and this
+        constraint's kept rows are numbered from `row_start` inside it. Returns
+        the column and the coefficient of each singleton row, in the order of
+        the rows. The expression is materialised once. Raises ValueError where
+        a singleton row has not exactly one finite coefficient that is not
+        zero, and where the kept rows have a number of coefficients different
+        from the number measured at declaration. Nothing is written then.
+        """
+        narrowed = self.over is not None or self.where is not None
+        within = self.rows if narrowed else None
+        block = self.expression.block(progress=progress, within=within)
+        marked = self.rows.take(self.singleton_positions())
+        kept = self.rows.take(self.kept_positions())
+        held = block.restrict(marked)
+        columns = held.coordinates((COLUMN,))[0]
+        coefficients = held.values()
+        at = marked.positions_of(held)
+        count = np.bincount(at, minlength=marked.size)
+        usable = count == 1
+        value = np.zeros(marked.size, dtype=np.float64)
+        value[at] = coefficients
+        usable &= np.isfinite(value) & (value != 0.0)
+        found = int(np.count_nonzero(usable))
+        if found != marked.size:
+            raise ValueError(
+                f"constraint {self.name!r} marked {marked.size} singleton rows "
+                f"and built {found}; keep the parameter data unchanged between "
+                f"measuring and writing"
+            )
+        if kept.size:
+            expected = self._nnz - marked.size
+
+            def reserve(n: int) -> Any:
+                if n != expected:
+                    raise ValueError(
+                        f"constraint {self.name!r} measured {self._nnz} "
+                        f"coefficients and built {n + marked.size}; keep the "
+                        f"parameter data unchanged between measuring and writing"
+                    )
+                return buffer.reserve(n)
+
+            block.group(
+                self.frame,
+                into=ROW,
+                domain=kept,
+                coord=rows,
+                start=row_start,
+                reserve=reserve,
+            )
+        return columns, coefficients
 
     def write_into(
         self, buffer: EntryBuffer, rows: Any, row_start: int, progress: Any = None
