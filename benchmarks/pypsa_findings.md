@@ -6,8 +6,9 @@ links, 278 stores, 56 storage units. PyPSA builds its model through
 `n.optimize.create_model` on the `nimopt` backend and on the `linopy` backend.
 The `pypsa` rung of `bench_vs_linopy.py` measures both, each in a process of
 its own. At both horizons measured, the two backends build matrices with the
-same rows, columns and nonzeros. Where the problem was solved, both solve to
-the same objective.
+same rows, columns and nonzeros. The nimopt side of that rung builds with
+`singleton_rows="rows"` and writes every declared row. Where the problem was
+solved, both solve to the same objective.
 
 ## Setup
 
@@ -69,6 +70,26 @@ linopy backend. The two solves return different dual points.
 A separate nimopt run times the two parts of the build: `create_model` takes
 6.5 s and `assemble` takes 4.7 s.
 
+## The whole year under both values of `singleton_rows`
+
+`bench_pypsa_backend.py` measures the nimopt backend under both values. Under `"bounds"`, the default, 8,801,358 of the 19,423,878 declared rows are stored as column bounds, and the solver loads 10,622,520 rows and 37,553,230 nonzeros. Under `"rows"` the solver loads every declared row.
+
+| | `"rows"` | `"bounds"` |
+| --- | --- | --- |
+| loaded rows | 19,423,878 | 10,622,520 |
+| matrix | 556.3 MB | 450.6 MB |
+| build | 11.2 s to 11.6 s | 11.5 s to 11.8 s |
+| resident added by the build | 3,180 MB to 3,185 MB | 2,902 MB to 2,905 MB |
+| peak resident of the process in the build | 3,915 MB to 3,917 MB | 3,636 MB to 3,637 MB |
+| solve | 1,597 s | 1,575 s |
+| resident added by the solve | 40,059 MB | 36,368 MB |
+| peak resident of the process in the solve | 42,190 MB | 38,534 MB |
+| read | 6.4 s | 6.2 s |
+
+The build is three runs of each value, in alternation. nimopt 0.20261118.1, in the same alternation, builds in 11.1 s to 11.3 s with a peak of 3,932 MB to 3,935 MB. The solve is one run of each value with Mosek 11.2, barrier without crossover, at 16 threads. Both solves return status `optimal` and the objective 1,058,936,103,870.507. Mosek reports 6,457,581 constraints and 12,095,142 variables after its presolve for both matrices, and 4.82e8 nonzeros in its factor for both.
+
+The solve under `"bounds"` peaks 3,656 MB lower. The build under `"bounds"` peaks 278 MB to 280 MB lower and takes 0.2 s to 0.5 s longer.
+
 ## What the numbers show
 
 **The nimopt build is faster at twenty-four snapshots and slower over the
@@ -113,8 +134,8 @@ against 14.5 MB, and the two processes peak at 819 MB and 957 MB.
 
 ## What was not measured
 
-The rungs of 192 and 730 snapshots are not solved here, and the whole year is
-built and not solved.
+The rungs of 192 and 730 snapshots are not solved here. The whole year is
+solved with Mosek on the nimopt backend only.
 
 ## Reproducing the numbers
 
@@ -127,6 +148,10 @@ curl -L -o data/large/interconnected-transport.nc \
 export PYTHONHASHSEED=0
 python -c "import bench_vs_linopy as b; print(b.compare('pypsa', {'snapshots': 24}, traced=False, trace_dir=b.TRACES))"
 python -c "import bench_vs_linopy as b; print(b.compare('pypsa', {'snapshots': 2920}, traced=False, solve=False, trace_dir=b.TRACES))"
+python bench_pypsa_backend.py nimopt --build-only --singleton-rows bounds
+python bench_pypsa_backend.py nimopt --build-only --singleton-rows rows
+python bench_pypsa_backend.py nimopt --solver mosek --method barrier --crossover off --singleton-rows bounds
+python bench_pypsa_backend.py nimopt --solver mosek --method barrier --crossover off --singleton-rows rows
 ```
 
 PyPSA takes the direction of each Kirchhoff cycle from the iteration order of

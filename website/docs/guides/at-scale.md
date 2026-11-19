@@ -94,32 +94,53 @@ named row block in a matrix too large to print.
 A declared row with one coefficient is stored as a bound of its column, and
 the matrix passed to the solver has no entry for it. The full-year European
 network through the PyPSA backend declares 19,423,878 rows, 9,361,137
-columns and 46,354,588 nonzeros, and 8,801,358 of those rows (45.3%) have one
-coefficient. Without those rows the same network has 10,622,520 rows and
-37,553,230 nonzeros, and the arrays passed to a solver take 888 MB instead of
-1,169 MB.
+columns and 46,354,588 nonzeros, and 8,801,358 of those rows (45.3%) are
+[singleton rows](/reference/model#a-singleton-row). The matrix the solver
+loads has 10,622,520 rows and 37,553,230 nonzeros.
 
-| Full-year European network, measurement | Every row | One coefficient as a bound |
+`benchmarks/bench_pypsa_backend.py` measures both values of `singleton_rows`
+on that network. The build is three runs of each value. The solve is Mosek
+11.2, barrier without crossover, at 16 threads.
+
+| Full-year European network | `"rows"` | `"bounds"` |
 | --- | --- | --- |
-| Mosek 11.2, barrier without crossover at 16 threads, peak of the process | 41.1 GB | 37.8 GB |
-| Mosek 11.2, peak of the presolve | 19.5 GB | 13.5 GB |
-| CPLEX through GAMS 43.4, peak before the factorization | 21.5 GB | 16.8 GB |
-| HiGHS 1.15.1, copy of the model | 1,632 MB | 1,210 MB |
-| HiGHS 1.15.1, peak of `presolve()` above the copy | 11,797 MB | 9,259 MB |
+| Loaded rows | 19,423,878 | 10,622,520 |
+| Matrix | 556.3 MB | 450.6 MB |
+| Build | 11.2 s to 11.6 s | 11.5 s to 11.8 s |
+| Peak of the process in the build | 3,915 MB to 3,917 MB | 3,636 MB to 3,637 MB |
+| Solve | 1,597 s | 1,575 s |
+| Peak of the process in the solve | 42.2 GB | 38.5 GB |
+| Solution and duals read onto the network | 6.4 s | 6.2 s |
 
-Mosek 11.2 solves the full-year European network at 16 threads, barrier
-without crossover, to status `optimal` from both forms, with the objective
-1,128,619,364,130.2 in both, and its factorization adds 25 GB to 27 GB in
-both. CPLEX through GAMS 43.4 loads the GMO in 47 s with every row and in
-34 s without the singleton rows. Mosek, CPLEX and HiGHS each build the same
-presolved model from both forms.
+Both solves return status `optimal` and the objective 1,058,936,103,870.507.
+Mosek reduces both matrices to the same presolved model of 6,457,581
+constraints, and its factorization is the same for both. The build takes
+0.2 s to 0.5 s longer under `"bounds"`: each constraint counts the
+coefficients of its rows at its declaration, and a constraint with singleton
+rows reads them once more at the assembly.
+
+The arrays of both matrices of the same network, passed to each solver
+adapter directly:
+
+| Full-year European network, peak of the process | Every row | Singleton rows as bounds |
+| --- | --- | --- |
+| Mosek 11.2, in its presolve | 19.5 GB | 13.5 GB |
+| CPLEX through GAMS 43.4, before its factorization | 21.5 GB | 16.8 GB |
+| HiGHS 1.15.1, copy of the model | 1,632 MB | 1,210 MB |
+| HiGHS 1.15.1, `presolve()` above the copy | 11,797 MB | 9,259 MB |
+
+CPLEX through GAMS 43.4 loads the GMO in 47 s with every row and in 34 s
+without the singleton rows. HiGHS and CPLEX each build the same presolved
+model from both matrices.
 
 The duals of a row stored as a bound are computed from the reduced costs. At
-24 snapshots with Mosek and crossover, both forms return the objective
-302,099,279,596.448, and the duals of the 76,866 rows absent from the matrix
-equal the duals of the solve with every row within 1e-6. Every coefficient of
-those rows is 1 or -1 at 24 snapshots, and 78,737 of the 79,457 columns have
-no bound of their own there.
+24 snapshots with Mosek and crossover, both values return the objective
+232,416,019,336.747, and the duals of the 76,866 rows stored as bounds equal
+the duals of the solve with every row: the largest difference is 9.3e-9.
+
+A session reads fewer rows as well. `benchmarks/bench_session.py` changes one
+column bound of a storage model eight times: a resumed solve takes 70 ms, and
+a rebuild with a solve from no basis 1,075 ms.
 
 `singleton_rows="rows"` writes every row into the matrix.
 
