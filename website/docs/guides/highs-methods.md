@@ -111,63 +111,26 @@ solution = model.solve(options={"method": "pdlp", "pdlp_tol": 1e-8, "log": True}
 
 ## Installing a HiGHS with HiPO and GPU support
 
-HiGHS 1.15.1 stores the HiPO orderings and its BLAS in a separate library,
-`libhighs_extras`. `libhighs` loads that library at run time by name. The
-`highspy` wheel on PyPI and the conda-forge package ship without that library
-and without CUDA. Given `hipo`, such a HiGHS logs an error and runs simplex.
-`nimopt` raises instead and reports the missing library. Given `pdlp`, it
-runs the method on the CPU.
+HiGHS stores the HiPO orderings and its BLAS in a separate library, `libhighs_extras`. The `highspy` wheel on PyPI contains HiPO and contains neither that library nor CUDA. Given `hipo`, a HiGHS without the library logs an error and runs simplex. `nimopt` raises instead and reports the missing library. Given `pdlp`, a HiGHS without CUDA runs the method on the CPU.
 
-Both come from a source build of the same version, with three pieces
-installed separately:
+**HiPO.** The PyPI package `highspy-extras` contains the library. `highspy` 1.16.0 loads it from the directory of that package at import, and only where both packages have the same version.
 
-1. **The extras library**, from the `extern` directory of the HiGHS
-   repository. That directory is a CMake project of its own. It builds
-   METIS, AMD and RCM from the tree and links a BLAS. OpenBLAS from a conda
-   environment is sufficient.
+```bash
+uv pip install --python <venv>/bin/python "highspy[extras]"
+```
 
-   ```bash
-   cmake -S extern -B build-extras -G Ninja -DCMAKE_BUILD_TYPE=Release \
-     -DHIPO=ON -DBLA_VENDOR=OpenBLAS
-   cmake --build build-extras
-   ```
+**The GPU.** PDLP runs on a GPU with a `highspy` built from the HiGHS repository at the tag of the release, with a CUDA toolkit in the environment and the compute capability of the card. Pass the prefix of the conda environment through the `CMAKE_PREFIX_PATH` environment variable, not through `CMAKE_ARGS`. `CMAKE_ARGS` replaces the path the Python build adds for pybind11.
 
-2. **The wheel**, from the repository root, where the HiGHS build
-   configuration enables HiPO. Pass the prefix of the conda environment
-   through the `CMAKE_PREFIX_PATH` environment variable, not through
-   `CMAKE_ARGS`. `CMAKE_ARGS` replaces the path the Python build adds for
-   pybind11.
+```bash
+CMAKE_PREFIX_PATH=$CONDA_PREFIX CUDACXX=$CONDA_PREFIX/bin/nvcc CUDAToolkit_ROOT=$CONDA_PREFIX \
+CMAKE_ARGS="-DCUPDLP_GPU=ON -DCMAKE_CUDA_ARCHITECTURES=75 -DBLA_VENDOR=OpenBLAS" \
+  uv build --wheel --python <venv>/bin/python -o dist .
+```
 
-   ```bash
-   CMAKE_PREFIX_PATH=$CONDA_PREFIX CMAKE_ARGS="-DBLA_VENDOR=OpenBLAS" \
-     uv build --wheel --python <venv>/bin/python -o dist .
-   ```
+The GPU wheel links the CUDA runtime, cuBLAS and cuSPARSE, and the conda environment that provides them must remain installed. The `libhighs` and `libcudalin` of the wheel require the `lib` directory of that environment in their own run path. `patchelf --set-rpath` sets it on the unpacked wheel before the wheel is packed again. The run path of the extension module alone does not resolve the CUDA libraries.
 
-   For the GPU, the same command with a CUDA toolkit in the environment and
-   the card's compute capability:
+```bash
+uv pip install --python <venv>/bin/python dist/highspy-1.16.0-*.whl "highspy-extras==1.16.0"
+```
 
-   ```bash
-   CMAKE_PREFIX_PATH=$CONDA_PREFIX CUDACXX=$CONDA_PREFIX/bin/nvcc CUDAToolkit_ROOT=$CONDA_PREFIX \
-   CMAKE_ARGS="-DCUPDLP_GPU=ON -DCMAKE_CUDA_ARCHITECTURES=75 -DBLA_VENDOR=OpenBLAS" \
-     uv build --wheel --python <venv>/bin/python -o dist .
-   ```
-
-3. **The placement.** The `libhighs` of the wheel searches its own
-   directory for the extras library. Copy the built `libhighs_extras.so`
-   into the `highspy` package directory of the environment the wheel is
-   installed in. The extras library links the BLAS it was built against, and
-   the GPU wheel links the CUDA runtime, cuBLAS and cuSPARSE. The conda
-   environment that provides them must remain installed. The `libhighs` and
-   `libcudalin` of the GPU wheel require the `lib` directory of that
-   environment in their own run path. `patchelf --set-rpath` sets it on the
-   unpacked wheel before the wheel is packed again. The run path of the
-   extension module alone does not resolve the CUDA libraries.
-
-   ```bash
-   uv pip install --python <venv>/bin/python dist/highspy-1.15.1-*.whl
-   cp build-extras/libhighs_extras.so <venv>/lib/python3.13/site-packages/highspy/
-   ```
-
-A solve with `method="hipo"` verifies the installation. A HiGHS without the
-extras library raises before anything is solved. A HiGHS with the library
-returns the optimum.
+A solve with `method="hipo"` verifies the HiPO installation. A HiGHS without the extras library raises before anything is solved, and a HiGHS with the library returns the optimum. A solve with `method="pdlp"` and `log=True` on a GPU build prints the CUDA device in its log.

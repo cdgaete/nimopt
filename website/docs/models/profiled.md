@@ -58,7 +58,7 @@ print(solution.objective, profiled.reference(inputs))
 <summary>Output</summary>
 
 ```text
-28119.536003699297 28119.536003699293
+28119.536003699293 28119.536003699293
 ```
 
 </details>

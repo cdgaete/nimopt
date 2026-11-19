@@ -18,6 +18,11 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+### Changed
+
+- The `highs` extra requires `highspy>=1.16`. HiGHS 1.10.0 to 1.15.1 with its presolve solves a model with the optimum -10.0 and an integer column with the lower bound -2.2 to -9.84. HiGHS 1.16.0 returns -10.0.
+- HiGHS 1.16.0 loads the HiPO library from the package `highspy-extras` of the same version. The message for `method="hipo"` without that library asks for `highspy-extras`.
+
 ### Fixed
 
 - On GAMS 54.6, a model with a column whose lower bound is above its upper bound returns the status `infeasible`. CPLEX under GAMS 54.6 reports the model status `infeasible - no solution` for it, and the adapter returned `unbounded_or_infeasible`. Two singleton rows that cross on one column give such bounds under `singleton_rows="bounds"`.

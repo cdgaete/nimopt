@@ -170,8 +170,8 @@ def _settings(options: Mapping[str, Any] | None) -> dict[str, Any]:
     if settings.get("solver") == "hipo" and not hipo_available():
         raise RuntimeError(
             "method is 'hipo' and this HiGHS provides no HiPO extras library; "
-            "install a HiGHS with `libhighs_extras` beside `libhighs`, or "
-            "choose another method"
+            "install `highspy-extras` at the version of `highspy`, or choose "
+            "another method"
         )
     return settings
 

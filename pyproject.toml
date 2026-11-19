@@ -40,14 +40,14 @@ Repository = "https://github.com/cdgaete/nimopt"
 Issues = "https://github.com/cdgaete/nimopt/issues"
 
 [project.optional-dependencies]
-highs = ["highspy>=1.15"]
+highs = ["highspy>=1.16"]
 gurobi = ["gurobipy>=12", "scipy>=1.11"]
 mosek = ["mosek>=11"]
 dev = [
     "pytest>=8",
     "hypothesis>=6",
     "ruff>=0.16",
-    "highspy>=1.15",
+    "highspy>=1.16",
     "gurobipy>=12",
     "scipy>=1.11",
     "mosek>=11",
@@ -56,7 +56,7 @@ dev = [
     "vulture>=2.14",
     "ty>=0.0.78",
 ]
-bench = ["linopy>=0.5", "highspy>=1.15", "pypsa>=1.2"]
+bench = ["linopy>=0.5", "highspy>=1.16", "pypsa>=1.2"]
 
 [tool.hatch.version]
 path = "src/nimopt/__init__.py"

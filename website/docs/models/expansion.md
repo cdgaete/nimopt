@@ -102,7 +102,7 @@ print(solution.objective, expansion.reference(inputs))
 <summary>Output</summary>
 
 ```text
-29703.899999999994 29703.899999999994
+29703.9 29703.899999999994
 ```
 
 </details>

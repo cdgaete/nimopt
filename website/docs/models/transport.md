@@ -61,7 +61,7 @@ print(solution.objective, transport.reference(inputs))
 
 ```text
 12 columns for 12 arcs
-100.99601811246072 100.99601811246073
+100.99601811246073 100.99601811246073
 ```
 
 </details>

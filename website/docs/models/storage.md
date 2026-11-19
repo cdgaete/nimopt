@@ -75,7 +75,7 @@ print("store moved:", abs(solution.primal("charge").to_dense()).max())
 <summary>Output</summary>
 
 ```text
-145449.3739227024 145449.37392270242
+145449.37392270242 145449.37392270242
 store moved: 0.0
 ```
 
