@@ -21,6 +21,7 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 ### Added
 
 - `singleton_rows="bounds"` on `Model.assemble`, `Model.session` and `Model.solve` stores a row with one coefficient as a bound of its column. `Solution.dual` returns a value at every declared row.
+- `explain()` reports the rows with one coefficient of each constraint and of the model.
 
 ## 0.20261118.1 - 2026-11-18
 

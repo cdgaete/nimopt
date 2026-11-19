@@ -51,6 +51,7 @@ class ConstraintShape:
     rows: int | None
     nonzeros: int | None
     relation: str
+    singleton_rows: int | None = None
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,7 @@ class Explanation:
     objective_constant: float = 0.0
     aliases: tuple[tuple[str, str], ...] = ()
     piecewise: tuple[PiecewiseShape, ...] = ()
+    singleton_rows: int | None = None
 
     def __repr__(self) -> str:
         return "\n".join(self._lines())
@@ -97,6 +99,8 @@ class Explanation:
                 f"{self.name}  {self.sense}  {self.columns} columns · "
                 f"{self.rows} rows · {self.nonzeros} nonzeros"
             )
+            if self.singleton_rows:
+                head = f"{head} · {self.singleton_rows} singleton rows"
         else:
             head = f"{self.name}  {self.sense}  not built"
         lines = [head]
@@ -139,6 +143,8 @@ def _variable(shape: VariableShape) -> str:
 def _constraint(shape: ConstraintShape) -> str:
     free = ",".join(shape.free)
     built = "" if shape.rows is None else f"  {shape.rows} rows  {shape.nonzeros} nz"
+    if shape.singleton_rows:
+        built = f"{built}  {shape.singleton_rows} singleton"
     return f"{shape.name} ({free})  {shape.relation}{built}"
 
 

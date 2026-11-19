@@ -155,7 +155,10 @@ def test_a_built_explanation_spells_its_relations_beside_its_counts():
     m.constraint("cap", one[P] * x[P] + 1 <= 5.0)
     m.set_objective(Sum(P, x[P]) + 7.0)
     lines = repr(m.explain()).splitlines()
-    assert lines[-2] == "  constraint  cap (P)  one[P] * x[P] + 1 <= 5  2 rows  2 nz"
+    assert (
+        lines[-2]
+        == "  constraint  cap (P)  one[P] * x[P] + 1 <= 5  2 rows  2 nz  2 singleton"
+    )
     assert lines[-1] == "  objective   min  Sum(P, x[P]) + 7"
 
 
@@ -191,3 +194,16 @@ def test_a_definition_explains_a_piecewise_declaration_with_nothing_generated():
     e = curve().explain()
     assert e.piecewise[0].generated == ()
     assert "  piecewise   cost (G,T)  incremental >= over B" in repr(e).splitlines()
+
+
+def test_explain_counts_the_singleton_rows():
+    from singleton_models import plant
+
+    found = plant().explain()
+    assert found.singleton_rows == 12
+    assert [c.singleton_rows for c in found.constraints] == [6, 6, 0]
+    assert (found.rows, found.nonzeros) == (15, 18)
+    text = repr(found)
+    assert "plant  min  6 columns · 15 rows · 18 nonzeros · 12 singleton rows" in text
+    assert "constraint  floor (G,T)  p[G, T] >= 0  6 rows  6 nz  6 singleton" in text
+    assert "constraint  demand (T)  Sum(G, p[G, T]) == d[T]  3 rows  6 nz\n" in text

@@ -292,6 +292,18 @@ class Model:
         """
         parameters = self._parameters()
         dimensions, aliases = self._dimensions(parameters)
+        constraints = tuple(
+            ConstraintShape(
+                name,
+                c.frame,
+                c.sense,
+                c.n_rows,
+                c.nnz,
+                render(c.relation),
+                c.n_singleton_rows,
+            )
+            for name, c in self.constraints.items()
+        )
         return Explanation(
             name=self.name,
             sense=self.sense,
@@ -303,17 +315,13 @@ class Model:
                 variable_shape(name, v, v.n_columns)
                 for name, v in self.variables.items()
             ),
-            constraints=tuple(
-                ConstraintShape(
-                    name, c.frame, c.sense, c.n_rows, c.nnz, render(c.relation)
-                )
-                for name, c in self.constraints.items()
-            ),
+            constraints=constraints,
             objective=objective_text(self._objective),
             objective_constant=objective_constant(self._objective),
             columns=self.n_columns,
             rows=self._n_rows,
             nonzeros=self.nnz,
+            singleton_rows=sum(c.n_singleton_rows for c in self.constraints.values()),
             piecewise=tuple(
                 piecewise_shape(d) for d in self.piecewise_declarations.values()
             ),
