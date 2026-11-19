@@ -19,6 +19,11 @@ Run one backend per process, and the resident figures then cover one library:
 `--method` uses the nimopt option names and applies to every solver. The
 linopy backend runs HiGHS alone here, and its method names are the HiGHS names.
 
+`--singleton-rows` selects the matrix the nimopt backend builds. Under
+`bounds` a declared row with one coefficient is stored as a bound of its
+column, and the solver receives a matrix without it. The linopy backend
+builds no such matrix.
+
 The 2,920 three-hourly snapshots of the network cover 8,760 hours.
 `--snapshots` takes the first N, and the default is every snapshot.
 """
@@ -40,6 +45,7 @@ TRACES = LARGE / "traces"
 METHODS = ("choose", "simplex", "barrier")
 CROSSOVER = ("choose", "off", "on")
 SOLVERS = ("highs", "gurobi", "mosek", "gams")
+SINGLETON_ROWS = ("bounds", "rows")
 LINOPY_METHOD = {"choose": "choose", "simplex": "simplex", "barrier": "ipm"}
 
 # linopy adds the objective constant as a column fixed to its value, with no
@@ -85,11 +91,14 @@ def case(
     time_limit=None,
     solver="highs",
     crossover=None,
+    singleton_rows="bounds",
 ):
     """Return the three PyPSA phases on `backend`, as the harness measures them.
 
-    A solve stopped at `time_limit` seconds reports its phase. The objective is
-    then `NaN`, the result contains the status, and the read phase is skipped.
+    `singleton_rows` selects the matrix of the nimopt backend and has no effect
+    on the linopy backend. A solve stopped at `time_limit` seconds reports its
+    phase. The objective is then `NaN`, the result contains the status, and the
+    read phase is skipped.
     """
     snapshots = len(n.snapshots)
     options = {}
@@ -106,6 +115,11 @@ def case(
     elif backend == "linopy":
         if solver != "highs":
             raise ValueError(f"the linopy backend runs HiGHS here; got {solver!r}")
+        if singleton_rows != "bounds":
+            raise ValueError(
+                "the linopy backend builds no singleton_rows matrix; got "
+                f"{singleton_rows!r}"
+            )
         if crossover is not None:
             raise ValueError(
                 "crossover is not supported by the linopy backend; run the "
@@ -124,13 +138,16 @@ def case(
             options["time_limit"] = float(time_limit)
     else:
         raise ValueError(f"backend is 'nimopt' or 'linopy'; got {backend!r}")
+    solve_options = {"singleton_rows": singleton_rows} if backend == "nimopt" else {}
 
     def build():
         model = n.optimize.create_model(backend=backend)
         if backend == "nimopt":
-            assembled = model.model.assemble()
+            assembled = model.model.assemble(singleton_rows=singleton_rows)
             shape = {
                 "rows": int(assembled.n_rows),
+                "declared_rows": int(model.model.n_rows),
+                "converted_rows": int(assembled.singletons.n_rows),
                 "cols": int(assembled.n_cols),
                 "nnz": int(assembled.values.size),
                 "matrix_mb": (assembled.indices.nbytes + assembled.values.nbytes) / 1e6,
@@ -159,7 +176,9 @@ def case(
         return built["shape"]
 
     def solve(built):
-        status, condition = built["model"].solve(solver_name=solver, **options)
+        status, condition = built["model"].solve(
+            solver_name=solver, **solve_options, **options
+        )
         built["status"] = f"{status}, {condition}"
         # linopy reports a time limit as "ok" and returns the iterate; only
         # status optimal is accepted here, on either side
@@ -201,6 +220,12 @@ def report_phase(phase, got):
             "columns",
             flush=True,
         )
+        if "declared_rows" in got:
+            print(
+                f"declare {got['declared_rows']:,} rows, load {got['rows']:,}, "
+                f"convert {got['converted_rows']:,} to column bounds",
+                flush=True,
+            )
 
 
 def report(got):
@@ -220,6 +245,12 @@ def main(argv=None):
     parser.add_argument("--solver", choices=SOLVERS, default="highs")
     parser.add_argument("--method", choices=METHODS, default=None)
     parser.add_argument("--crossover", choices=CROSSOVER, default=None)
+    parser.add_argument(
+        "--singleton-rows",
+        choices=SINGLETON_ROWS,
+        default="bounds",
+        help="the nimopt matrix: a row of one coefficient as a column bound",
+    )
     parser.add_argument("--threads", type=int, default=None)
     parser.add_argument(
         "--time-limit", type=float, default=None, help="seconds the solver may run"
@@ -240,6 +271,7 @@ def main(argv=None):
             args.method,
             args.crossover,
             args.threads,
+            args.singleton_rows,
             len(n.snapshots),
         )
         if part is not None
@@ -254,6 +286,7 @@ def main(argv=None):
             args.time_limit,
             args.solver,
             args.crossover,
+            args.singleton_rows,
         ),
         traced=args.traced,
         solve=not args.build_only,

@@ -157,6 +157,55 @@ def test_the_session_benchmark_resumes_with_fewer_iterations_than_a_rebuild():
     assert max(got["session_iterations"][1:]) <= max(got["rebuild_iterations"])
 
 
+def test_the_pypsa_benchmark_reports_the_declared_and_the_loaded_rows():
+    pypsa = pytest.importorskip("pypsa", reason="the PyPSA rung needs the bench extra")
+    from bench_pypsa_backend import case
+
+    n = pypsa.Network()
+    n.set_snapshots(range(3))
+    n.add("Bus", "b")
+    n.add("Generator", "g", bus="b", p_nom=10.0, marginal_cost=1.0)
+    n.add("Load", "l", bus="b", p_set=5.0)
+    n.determine_network_topology()
+    bounds = case(n, "nimopt", singleton_rows="bounds").build()["shape"]
+    rows = case(n, "nimopt", singleton_rows="rows").build()["shape"]
+    assert rows["converted_rows"] == 0
+    assert rows["rows"] == rows["declared_rows"] == bounds["declared_rows"]
+    assert bounds["converted_rows"] > 0
+    assert bounds["rows"] == bounds["declared_rows"] - bounds["converted_rows"]
+
+
+def test_the_pypsa_comparison_builds_the_same_matrix_on_both_backends():
+    pypsa = pytest.importorskip("pypsa", reason="the PyPSA rung needs the bench extra")
+    pytest.importorskip(
+        "linopy", reason="the comparison benchmarks need the bench extra"
+    )
+    from bench_vs_linopy import CASES
+
+    # the objective constant is a fixed column in linopy and a number in
+    # nimopt; the comparison subtracts one constant column, as `load()` sets
+    pypsa.options.params.optimize.include_objective_constant = True
+    n = pypsa.Network()
+    n.set_snapshots(range(3))
+    n.add("Bus", "b")
+    n.add(
+        "Generator",
+        "g",
+        bus="b",
+        p_nom=10.0,
+        marginal_cost=1.0,
+        capital_cost=5.0,
+        p_nom_extendable=True,
+    )
+    n.add("Load", "l", bus="b", p_set=5.0)
+    n.determine_network_topology()
+    nimopt = CASES["pypsa"]["nimopt"](snapshots=3, network=n).build()["shape"]
+    linopy = CASES["pypsa"]["linopy"](snapshots=3, network=n).build()["shape"]
+    assert nimopt["rows"] == linopy["rows"]
+    assert nimopt["cols"] == linopy["cols"]
+    assert nimopt["nnz"] == linopy["nnz"]
+
+
 def test_a_binding_sweep_returns_the_objectives_of_a_rebuild():
     from bench_session import sweep
 

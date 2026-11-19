@@ -6,7 +6,10 @@ Storage couples adjacent hours through a ramp limit and a cyclic
 `state_of_charge` row. The integer transport model declares the same network
 as a MILP. The European network is built by PyPSA on its nimopt and its
 linopy backend. Every case also reads its primals and duals back onto their
-labels, and that is the fourth axis.
+labels, and that is the fourth axis. The nimopt side of a comparison builds
+the matrix with every row under `singleton_rows="rows"`, and the two
+builders then build the same matrix. `bench_pypsa_backend.py` measures the
+default matrix.
 
 Each side runs in a process of its own. A row is printed only when the two
 sides agree on rows, columns, nonzeros and the solved objective.
@@ -102,11 +105,17 @@ def transport_milp(n_plants, n_warehouses, arcs_per_plant, seed=0):
 
 
 def pypsa(backend):
-    """Return the European network case on one PyPSA optimization backend."""
+    """Return the European network case on one PyPSA optimization backend.
 
-    def case(snapshots):
-        network = bench_pypsa_backend.load(backend, snapshots)
-        return bench_pypsa_backend.case(network, backend)
+    `network` is measured in place of the file, and `snapshots` then selects
+    nothing.
+    """
+
+    def case(snapshots, network=None):
+        if network is None:
+            network = bench_pypsa_backend.load(backend, snapshots)
+        matrix = {"singleton_rows": "rows"} if backend == "nimopt" else {}
+        return bench_pypsa_backend.case(network, backend, **matrix)
 
     return case
 
