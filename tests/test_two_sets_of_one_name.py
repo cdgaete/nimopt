@@ -125,6 +125,21 @@ def test_a_constraint_over_two_sets_of_one_name_raises_with_its_name(part):
     assert m.n_rows == 0
 
 
+def test_a_set_read_at_one_fixed_member_is_compared():
+    A = Set("A", np.array(["a0", "a1"]))
+    T = Set("T", np.array(["t0", "t1"]))
+    other = Set("T", np.array(["t1", "t0"]))
+    p = Param.from_dense("p", (other,), np.array([10.0, 20.0]))
+    m = Model("fixed")
+    x = m.var("x", (A, T))
+    # both readings fix T at t0, and T is no free dimension of the row
+    with pytest.raises(
+        ValueError, match=r"constraint 'c' reads different labels on \['T'\]"
+    ):
+        m.constraint("c", p["t0"] * x[A, "t0"] <= 1.0)
+    assert m.n_rows == 0
+
+
 def test_an_objective_over_two_sets_of_one_name_raises_where_it_is_set():
     A, other = two_sets()
     k = Param.from_dense("k", (other,), np.array([10.0, 20.0]))

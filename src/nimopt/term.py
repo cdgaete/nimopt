@@ -476,7 +476,8 @@ class Expression:
         """Yield the dimension and the coordinate of each set the terms read.
 
         A term reads the sets of its variable, the sets of each parameter of
-        its coefficient and the dimensions of its condition.
+        its coefficient and the dimensions of its condition. A set read at one
+        fixed member is included.
         """
         for term in self.terms:
             for held in term.variable.sets:
