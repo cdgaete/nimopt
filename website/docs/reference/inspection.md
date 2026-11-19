@@ -18,7 +18,7 @@ it.
 | --- | --- |
 | `constraint` | the equation this row belongs to |
 | `coordinate` | the row's own coordinate, per free dimension |
-| `index` | the solver's own row number |
+| `index` | the position of the row among the declared rows of the model |
 | `terms` | one `RowTerm` per coefficient |
 | `sense`, `lower`, `upper` | read from the row's bounds |
 
@@ -35,6 +35,24 @@ through the numbering rule of that variable.
 
 `sense` is read from the bounds: equal bounds are `==`, an infinite lower
 bound is `<=`, an infinite upper bound is `>=`.
+
+`Row.index` is the position of the row among the declared rows of the model.
+It is the same under both values of `singleton_rows`. A row stored as a bound
+of its column has no row number in the solver's matrix, and its position
+follows the declared rows before it. A row appended in a session follows
+every declared row of the model.
+
+`diagnose()` reports a row stored as a column bound as a `Row` as well,
+where the solver reports that bound in the conflict. A column of the conflict
+is reported as a `ColumnBound` unless every bound of it in the subsystem is
+set by a declared row. A bound the model never declared on the variable, such
+as a column fixed in a session outside its bounds, is reported as a
+`ColumnBound`, beside the row that sets the other side. The `ColumnBound`
+reports the bounds the solver has.
+
+The arrays of a loaded matrix are indexed through `Assembled.row_of(name)`,
+not through `Row.index`: a row stored as a column bound occupies no entry of
+them.
 
 ```python
 import numpy as np
@@ -95,6 +113,15 @@ ValueError: constraint 'cap' has no row at {'P': 'p3'}; read `absent('cap')` for
 
 </details>
 <!-- /output -->
+
+## A status that depends on the matrix
+
+A model that is infeasible and whose objective is also unbounded along a ray
+can be reported as `infeasible` or as `unbounded`, and the form of the matrix
+can change which one. Gurobi returned `unbounded` under one value of
+`singleton_rows` and `infeasible` under the other, on one such model. HiGHS
+returned `infeasible` under both values. Both statuses are correct for that
+model, and a caller reads `status` and checks the other property separately.
 
 ## `Absence`
 

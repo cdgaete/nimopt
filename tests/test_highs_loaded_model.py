@@ -8,7 +8,7 @@ pytest.importorskip("highspy")
 
 
 def two_columns():
-    return two()[0].assemble()
+    return two()[0].assemble(singleton_rows="rows")
 
 
 def test_a_changed_bound_is_solved_on_the_loaded_model():

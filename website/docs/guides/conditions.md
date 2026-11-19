@@ -34,7 +34,7 @@ rows = m.constraint("capacity", Sum(W, x[P, W], where=arcs) <= 10.0)
 
 print(x.n_columns)
 print(rows.n_rows, rows.nnz)
-print(m.assemble().to_dense())
+print(m.assemble(singleton_rows="rows").to_dense())
 ```
 
 <!-- output -->

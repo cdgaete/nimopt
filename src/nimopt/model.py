@@ -497,7 +497,7 @@ class Model:
         )
 
     def assemble(
-        self, progress: Any = False, singleton_rows: str = "rows"
+        self, progress: Any = False, singleton_rows: str = "bounds"
     ) -> Assembled:
         """Return the model's matrix and its row and column data, in CSR form.
 
@@ -514,7 +514,7 @@ class Model:
         solver: str = "highs",
         options: Mapping[str, Any] | None = None,
         progress: Any = False,
-        singleton_rows: str = "rows",
+        singleton_rows: str = "bounds",
     ) -> "Session":
         """Return an open session on this model, for a solve and what follows.
 
@@ -551,7 +551,7 @@ class Model:
         solver: str = "highs",
         options: Mapping[str, Any] | None = None,
         progress: Any = False,
-        singleton_rows: str = "rows",
+        singleton_rows: str = "bounds",
     ) -> "Solution":
         """Assemble the model, solve it, and read the values back onto its sets.
 

@@ -49,7 +49,7 @@ def test_a_row_is_read_by_its_index_in_the_loaded_model():
 
 def test_the_reduced_costs_include_the_appended_rows():
     # cost 1 per column; duals 0, 0 for the base rows and 1 for the cut
-    assembled = two_columns().assemble()
+    assembled = two_columns().assemble(singleton_rows="rows")
     appended = Appended(n_columns=2, first_row=2)
     appended.add("cut", cut())
     assert reduced_costs(assembled, np.array([0.0, 0.0, 1.0]), appended).tolist() == [
@@ -110,7 +110,7 @@ def test_no_appended_row_gives_an_empty_block_and_no_weighted_sum():
     assert (lower.size, upper.size, indices.size, values.size) == (0, 0, 0, 0)
     assert indptr.tolist() == [0]
     assert appended.weighted(np.empty(0)) is None
-    assembled = two_columns().assemble()
+    assembled = two_columns().assemble(singleton_rows="rows")
     # cost 1 per column and duals of zero: the reduced costs are the costs
     assert reduced_costs(assembled, np.zeros(2), appended).tolist() == [1.0, 1.0]
 
@@ -124,7 +124,7 @@ def test_the_weighted_sum_is_over_the_columns_of_the_model():
 
 
 def test_duals_of_another_length_than_the_rows_raise():
-    assembled = two_columns().assemble()
+    assembled = two_columns().assemble(singleton_rows="rows")
     appended = Appended(n_columns=2, first_row=2)
     appended.add("cut", cut())
     with pytest.raises(ValueError, match="row_dual"):
@@ -187,7 +187,7 @@ def test_a_solution_reads_reduced_costs_through_the_appended_rows():
     from nimopt.solution import Solution
 
     model = two_columns()
-    assembled = model.assemble()
+    assembled = model.assemble(singleton_rows="rows")
     appended = Appended(n_columns=2, first_row=2)
     appended.add("cut", cut())
     solution = Solution(

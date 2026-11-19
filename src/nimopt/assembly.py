@@ -143,6 +143,39 @@ class Singletons:
             return None
         return held.constraint.kept_positions()
 
+    def sides_set(
+        self,
+        column: int,
+        col_lower: float,
+        col_upper: float,
+        lower: bool,
+        upper: bool,
+    ) -> int:
+        """Return the requested sides of a column whose bound a converted row sets.
+
+        `lower` and `upper` select the sides to check. Bit 1 is set where a
+        converted row sets the lower bound of the column and bit 2 where a
+        converted row sets its upper bound. The bounds of the blocks that
+        contain `column` are computed.
+        """
+        found = 0
+        wanted = int(bool(lower)) + int(bool(upper))
+        for held in self._touching(column, column + 1):
+            if found.bit_count() == wanted:
+                break
+            block_lower, block_upper = self._block_bounds(held)
+            on_column = np.flatnonzero(self._columns[held.at] == column)
+            for side, bound, merged in (
+                (1, block_lower, col_lower),
+                (2, block_upper, col_upper),
+            ):
+                if found & side or not (lower if side == 1 else upper):
+                    continue
+                at = bound[on_column]
+                if np.any(np.isfinite(at) & (at == merged)):
+                    found |= side
+        return found
+
     def setting(
         self,
         column: int,
@@ -364,7 +397,7 @@ def matrix_of(
 
 
 def assemble_model(
-    model: "Model", progress: Any = False, singleton_rows: str = "rows"
+    model: "Model", progress: Any = False, singleton_rows: str = "bounds"
 ) -> "Assembled":
     """Return a model's matrix and its row and column data, in CSR form.
 

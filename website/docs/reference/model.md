@@ -22,8 +22,9 @@ an objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
 | `piecewise(name, x, x_points, y, y_points, sign, method, active=None, relaxed=False, where=None)` | a `Piecewise`; declares the variables and constraints of its method |
 | `set_objective(expression)` | nothing; sets the objective |
 | `sense` | `"min"` or `"max"`, as declared |
-| `solve(solver="highs", options=None)` | a `Solution` |
-| `assemble()` | an `Assembled`: the matrix, with no solver involved |
+| `solve(solver="highs", options=None, singleton_rows="bounds")` | a `Solution` |
+| `session(solver="highs", options=None, singleton_rows="bounds")` | an open `Session` |
+| `assemble(singleton_rows="bounds")` | an `Assembled`: the matrix, with no solver involved |
 | `n_columns`, `n_rows`, `nnz` | the shape declared so far |
 | `column_bounds()` | the lower and upper bound vectors, in column order |
 | `integrality()` | one flag per column |
@@ -63,6 +64,35 @@ print(m.objective_coefficients())
 
 </details>
 <!-- /output -->
+
+## A singleton row
+
+A **singleton row** is a declared row with one coefficient. The magnitude of
+that coefficient is above `1e-9` and below `1e15`, the right-hand side is
+finite, and the right-hand side divided by the coefficient is below `1e20` in
+magnitude. HiGHS reads a coefficient of `1e-9` or less as
+zero and rejects one of `1e15` or more. A row outside this definition is
+written as a row: a coefficient of `1e-9` or less, a coefficient of `1e15` or
+more, a right-hand side that is infinite or NaN, and a bound of `1e20` or
+more in magnitude.
+
+`singleton_rows` selects the matrix that `assemble()`, `session()` and
+`solve()` build. Its values are `"bounds"` and `"rows"`, and `"bounds"` is
+the default. Any other value raises `ValueError`. The keyword selects the
+matrix nimopt builds and is not an entry of `options`.
+
+Under `"bounds"` a singleton row is stored as a bound of its column. A `>=`
+row sets a lower bound, a `<=` row an upper bound and an `==` row both, and a
+negative coefficient exchanges the two sides. The row is absent from the
+matrix, the row pointer and the row bounds, and the bound it sets is the one
+passed to the solver. The declared model does not change: `Model.n_rows`,
+`Model.nnz` and `explain()` count every declared row under both values, and
+`Solution.dual` returns a value at every declared row.
+
+Under `"rows"` every declared row is a row of the matrix.
+
+A solve returns the same status and the same objective under both values,
+within the tolerance of the solver.
 
 ## `Piecewise`
 
@@ -188,6 +218,11 @@ slice(0, 2, None)
 
 </details>
 <!-- /output -->
+
+`n_rows` and `row_of` report the loaded rows: the rows of the matrix passed
+to the solver. A singleton row stored as a bound of its column is not among
+them, and `row_of` returns an empty slice for a constraint whose rows are all
+singleton rows.
 
 `to_dense` is for a small model. A model of any size is read through
 `row_of` and the CSR arrays.

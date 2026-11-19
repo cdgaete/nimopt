@@ -55,7 +55,7 @@ def assembly_metrics(build, solve=False):
     tracemalloc.start()
     started = time.perf_counter()
     model = build()
-    session = model.session()
+    session = model.session(singleton_rows="rows")
     assembled = session.assembled
     elapsed = time.perf_counter() - started
     _, peak = tracemalloc.get_traced_memory()

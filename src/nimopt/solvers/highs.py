@@ -440,20 +440,23 @@ def conflict(
     `sides` contains one int8 per column: 1 where the lower bound of the column is
     in the subsystem, 2 where the upper bound is, 3 where both are and 0 where
     neither is. The strategy option is set here, not at the solve. HiGHS
-    computes the subsystem over the model's linear relaxation. An invalid
-    subsystem raises RuntimeError.
+    computes the subsystem over the model's linear relaxation. Raises
+    RuntimeError where HiGHS reports an invalid subsystem, and where the
+    subsystem contains no row and no column.
     """
     backend.setOptionValue("iis_strategy", IRREDUCIBLE)
     reported, iis = backend.getIis()
-    if not iis.valid_:
+    rows = np.asarray(iis.row_index_, dtype=np.int64)
+    columns = np.asarray(iis.col_index_, dtype=np.int64)
+    if not iis.valid_ or (rows.size == 0 and columns.size == 0):
         raise RuntimeError(
             f"HiGHS computed no conflict over the feasible linear relaxation "
             f"and reported {str(reported).split('.')[-1]}; use a solver whose "
             f"conflict covers the integrality"
         )
     return (
-        np.asarray(iis.row_index_, dtype=np.int64),
-        np.asarray(iis.col_index_, dtype=np.int64),
+        rows,
+        columns,
         np.asarray(
             [COLUMN_BOUND.get(int(at), 0) for at in iis.col_bound_], dtype=np.int8
         ),
@@ -461,8 +464,42 @@ def conflict(
 
 
 def ray(backend: Any) -> npt.NDArray[np.float64] | None:
-    """Return the primal ray of an unbounded model, or None where none exists."""
+    """Return the primal ray of an unbounded model, or None where none exists.
+
+    HiGHS returns no ray for a model with no row. The ray is then computed
+    from the costs and the bounds of the columns.
+    """
     _, found, values = backend.getPrimalRay()
-    if not found:
+    if found:
+        return np.asarray(values, dtype=np.float64)
+    if backend.getNumRow():
         return None
-    return np.asarray(values, dtype=np.float64)
+    return _column_ray(backend)
+
+
+def _column_ray(backend: Any) -> npt.NDArray[np.float64] | None:
+    """Return a ray of a model with no row, from its costs and column bounds.
+
+    Under sense `min` a column improves the objective upward where its cost is
+    negative and its upper bound is infinite, and downward where its cost is
+    positive and its lower bound is infinite. Under sense `max` the two signs
+    of the cost are exchanged. The vector is zero except at the first column
+    that improves the objective in a direction in which it has no bound, where
+    it is 1 or -1. Returns None where no column improves the objective in a
+    direction without a bound.
+    """
+    import highspy
+
+    lp = backend.getLp()
+    cost = np.asarray(lp.col_cost_, dtype=np.float64)
+    infinite = float(highspy.kHighsInf)
+    gain = -cost if lp.sense_ == highspy.ObjSense.kMaximize else cost
+    upward = (gain < 0.0) & (np.asarray(lp.col_upper_, dtype=np.float64) >= infinite)
+    downward = (gain > 0.0) & (np.asarray(lp.col_lower_, dtype=np.float64) <= -infinite)
+    moving = np.flatnonzero(upward | downward)
+    if moving.size == 0:
+        return None
+    at = int(moving[0])
+    direction = np.zeros(cost.size, dtype=np.float64)
+    direction[at] = 1.0 if upward[at] else -1.0
+    return direction

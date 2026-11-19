@@ -123,7 +123,7 @@ def test_a_model_the_backend_refuses_is_not_solved_on():
     x = m.var("x", (S,), lower=0.0, upper=1.0)
     m.set_objective(Sum(S, x[S]))
     m.constraint("floor", x[S] >= 1.0)
-    assembled = m.assemble()
+    assembled = m.assemble(singleton_rows="rows")
     # a column index outside the two columns of the matrix
     assembled.indices = np.array([0, 7], dtype=np.int32)
 

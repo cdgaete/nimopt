@@ -991,7 +991,7 @@ too. A reader takes a field and parses no rendered text.
 | `piecewise` | one `PiecewiseShape` per piecewise declaration |
 | `objective` | the objective expression, or `None` |
 | `columns`, `rows`, `nonzeros` | the model's shape, or `None` |
-| `singleton_rows` | the number of declared rows with one coefficient, or `None` |
+| `singleton_rows` | the number of [singleton rows](/reference/model#a-singleton-row), or `None` |
 
 A count is `None` where nothing is bound. It is never zero. A count of zero
 is a value a caller acts on, and a declaration with no data reports no
@@ -1014,10 +1014,10 @@ read identically.
 declared beside it. An expression contains references and reports both.
 
 `Explanation.singleton_rows` and `ConstraintShape.singleton_rows` count the
-declared rows that hold exactly one coefficient. `rows` and `nonzeros`
-report the declared model, and a row with one coefficient is counted in all
-three fields. A constraint with none reports zero. The rendered text shows
-the count where it is above zero.
+[singleton rows](/reference/model#a-singleton-row). `rows` and `nonzeros`
+report the declared model, and a singleton row is counted in all three
+fields. A constraint with none reports zero. The rendered text shows the
+count where it is above zero.
 
 ```python
 from nimopt import Definition, Sum
@@ -1591,7 +1591,7 @@ it.
 | --- | --- |
 | `constraint` | the equation this row belongs to |
 | `coordinate` | the row's own coordinate, per free dimension |
-| `index` | the solver's own row number |
+| `index` | the position of the row among the declared rows of the model |
 | `terms` | one `RowTerm` per coefficient |
 | `sense`, `lower`, `upper` | read from the row's bounds |
 
@@ -1608,6 +1608,24 @@ through the numbering rule of that variable.
 
 `sense` is read from the bounds: equal bounds are `==`, an infinite lower
 bound is `<=`, an infinite upper bound is `>=`.
+
+`Row.index` is the position of the row among the declared rows of the model.
+It is the same under both values of `singleton_rows`. A row stored as a bound
+of its column has no row number in the solver's matrix, and its position
+follows the declared rows before it. A row appended in a session follows
+every declared row of the model.
+
+`diagnose()` reports a row stored as a column bound as a `Row` as well,
+where the solver reports that bound in the conflict. A column of the conflict
+is reported as a `ColumnBound` unless every bound of it in the subsystem is
+set by a declared row. A bound the model never declared on the variable, such
+as a column fixed in a session outside its bounds, is reported as a
+`ColumnBound`, beside the row that sets the other side. The `ColumnBound`
+reports the bounds the solver has.
+
+The arrays of a loaded matrix are indexed through `Assembled.row_of(name)`,
+not through `Row.index`: a row stored as a column bound occupies no entry of
+them.
 
 ```python
 import numpy as np
@@ -1658,6 +1676,15 @@ Raises ValueError:
 ```text
 ValueError: constraint 'cap' has no row at {'P': 'p3'}; read `absent('cap')` for the rule that dropped it
 ```
+
+## A status that depends on the matrix
+
+A model that is infeasible and whose objective is also unbounded along a ray
+can be reported as `infeasible` or as `unbounded`, and the form of the matrix
+can change which one. Gurobi returned `unbounded` under one value of
+`singleton_rows` and `infeasible` under the other, on one such model. HiGHS
+returned `infeasible` under both values. Both statuses are correct for that
+model, and a caller reads `status` and checks the other property separately.
 
 ## `Absence`
 
@@ -1744,8 +1771,9 @@ an objective. `name` labels it and is otherwise unused. `sense` is `"min"` or
 | `piecewise(name, x, x_points, y, y_points, sign, method, active=None, relaxed=False, where=None)` | a `Piecewise`; declares the variables and constraints of its method |
 | `set_objective(expression)` | nothing; sets the objective |
 | `sense` | `"min"` or `"max"`, as declared |
-| `solve(solver="highs", options=None)` | a `Solution` |
-| `assemble()` | an `Assembled`: the matrix, with no solver involved |
+| `solve(solver="highs", options=None, singleton_rows="bounds")` | a `Solution` |
+| `session(solver="highs", options=None, singleton_rows="bounds")` | an open `Session` |
+| `assemble(singleton_rows="bounds")` | an `Assembled`: the matrix, with no solver involved |
 | `n_columns`, `n_rows`, `nnz` | the shape declared so far |
 | `column_bounds()` | the lower and upper bound vectors, in column order |
 | `integrality()` | one flag per column |
@@ -1780,6 +1808,35 @@ Output:
 6 3 12
 [1. 1. 1. 1. 1. 1.]
 ```
+
+## A singleton row
+
+A **singleton row** is a declared row with one coefficient. The magnitude of
+that coefficient is above `1e-9` and below `1e15`, the right-hand side is
+finite, and the right-hand side divided by the coefficient is below `1e20` in
+magnitude. HiGHS reads a coefficient of `1e-9` or less as
+zero and rejects one of `1e15` or more. A row outside this definition is
+written as a row: a coefficient of `1e-9` or less, a coefficient of `1e15` or
+more, a right-hand side that is infinite or NaN, and a bound of `1e20` or
+more in magnitude.
+
+`singleton_rows` selects the matrix that `assemble()`, `session()` and
+`solve()` build. Its values are `"bounds"` and `"rows"`, and `"bounds"` is
+the default. Any other value raises `ValueError`. The keyword selects the
+matrix nimopt builds and is not an entry of `options`.
+
+Under `"bounds"` a singleton row is stored as a bound of its column. A `>=`
+row sets a lower bound, a `<=` row an upper bound and an `==` row both, and a
+negative coefficient exchanges the two sides. The row is absent from the
+matrix, the row pointer and the row bounds, and the bound it sets is the one
+passed to the solver. The declared model does not change: `Model.n_rows`,
+`Model.nnz` and `explain()` count every declared row under both values, and
+`Solution.dual` returns a value at every declared row.
+
+Under `"rows"` every declared row is a row of the matrix.
+
+A solve returns the same status and the same objective under both values,
+within the tolerance of the solver.
 
 ## `Piecewise`
 
@@ -1900,6 +1957,11 @@ slice(0, 2, None)
 [[1. 1. 1. 0. 0. 0.]
  [0. 0. 0. 1. 1. 1.]]
 ```
+
+`n_rows` and `row_of` report the loaded rows: the rows of the matrix passed
+to the solver. A singleton row stored as a bound of its column is not among
+them, and `row_of` returns an empty slice for a constraint whose rows are all
+singleton rows.
 
 `to_dense` is for a small model. A model of any size is read through
 `row_of` and the CSR arrays.
@@ -2441,6 +2503,44 @@ Raises ValueError:
 ```text
 ValueError: status is 'infeasible' and the solver reports no feasible point; read `status` before reading values
 ```
+
+## The duals of a declared row
+
+A dual is returned at every declared row. A row with one coefficient is
+stored as a bound of its column, and the solver reports the duals of the rows
+it was given. nimopt computes the duals of the rows stored as bounds from the
+reduced costs.
+
+Let `r` be the reduced cost of a column in the matrix the solver loaded: its
+cost less the duals of the loaded rows it appears in. In the declared model
+the column appears in its singleton rows as well, so `r` is the sum of the
+duals of those rows times their coefficients, and of the reduced cost of the
+declared model.
+
+- Under sense `min` the positive part of `r` belongs to the lower bound of
+  the column and the negative part to the upper bound. Under sense `max` the
+  two are exchanged.
+- On each side the part belongs to the first singleton row, in the order the
+  assembly stored those rows, whose bound equals the bound of the column on
+  that side. Its dual is the part divided by its coefficient. Every other
+  singleton row on that side has the dual 0.
+- Where no singleton row has the bound of the column on a side, the part
+  remains in the reduced cost of the declared model. This includes a column
+  pinned in a session outside the bounds of its singleton rows.
+- Where the bound of the variable and the bound of a singleton row are
+  equal, the singleton row receives the part.
+- An `==` singleton row is the first row on both sides and receives both
+  parts.
+
+The rule reads no primal value and has no tolerance. A barrier solve without
+crossover reports small reduced costs at columns that are not at a bound, and
+the row that sets a bound receives them as the column bound receives them
+from the solver. The duals then satisfy the stationarity condition of the
+declared model, and the complementarity error is the solver's own.
+
+`dual(name, kind="variable")` returns the reduced cost of the declared model
+under both values of `singleton_rows`: the cost less the duals of every
+declared row the variable appears in.
 
 ## The array type of a value
 
@@ -3360,6 +3460,7 @@ coordinates are present, and it records no numbering origin.
 | `difference(other)` | the members this one has and `other` does not |
 | `positions_of(array)` | each entry of `array` as its position here, `-1` where absent |
 | `positions_of_coordinates(index)` | each column of an index matrix as its position here, `-1` where absent |
+| `take(positions)` | the members at ascending positions, as a domain over the same frame |
 | `expand(dims, coords)` | every member crossed with the full extent of the named dimensions |
 | `transpose(*dims)` | the same members, over the dimensions in the order given, or reversed when none are given |
 | `project(dims)` | the distinct coordinates of the members over `dims`, in the order given |
@@ -3976,6 +4077,18 @@ afterwards and no copy into place.
 Passing the matrix to a solver returns views. `indices` and `values` are the
 buffer, and only `indptr` is built. A model of four million nonzeros passes
 its matrix without copying it.
+
+## A row with one coefficient
+
+A declared row with one coefficient is a bound on one column. The assembly
+writes it into the bound vectors of the columns and into no slot of the
+buffer, so the matrix has no row for it and the row count passed to the
+solver is smaller. The declared row keeps its place in the model: `Model.row`
+returns it, `Row.index` is its position among the declared rows, and
+`Solution.dual` returns its dual.
+
+`assemble(singleton_rows="rows")`, and the same keyword on `session()` and
+`solve()`, writes every declared row into the matrix.
 
 ## Why the shape is computed first
 
@@ -5294,6 +5407,40 @@ slice(200, 300, None)
 `row_of(name)` gives the rows of a constraint as a slice. A caller locates a
 named row block in a matrix too large to print.
 
+## A row with one coefficient
+
+A declared row with one coefficient is stored as a bound of its column, and
+the matrix passed to the solver has no entry for it. The full-year European
+network through the PyPSA backend declares 19,423,878 rows, 9,361,137
+columns and 46,354,588 nonzeros, and 8,801,358 of those rows (45.3%) have one
+coefficient. Without those rows the same network has 10,622,520 rows and
+37,553,230 nonzeros, and the arrays passed to a solver take 888 MB instead of
+1,169 MB.
+
+| Full-year European network, measurement | Every row | One coefficient as a bound |
+| --- | --- | --- |
+| Mosek 11.2, barrier without crossover at 16 threads, peak of the process | 41.1 GB | 37.8 GB |
+| Mosek 11.2, peak of the presolve | 19.5 GB | 13.5 GB |
+| CPLEX through GAMS 43.4, peak before the factorization | 21.5 GB | 16.8 GB |
+| HiGHS 1.15.1, copy of the model | 1,632 MB | 1,210 MB |
+| HiGHS 1.15.1, peak of `presolve()` above the copy | 11,797 MB | 9,259 MB |
+
+Mosek 11.2 solves the full-year European network at 16 threads, barrier
+without crossover, to status `optimal` from both forms, with the objective
+1,128,619,364,130.2 in both, and its factorization adds 25 GB to 27 GB in
+both. CPLEX through GAMS 43.4 loads the GMO in 47 s with every row and in
+34 s without the singleton rows. Mosek, CPLEX and HiGHS each build the same
+presolved model from both forms.
+
+The duals of a row stored as a bound are computed from the reduced costs. At
+24 snapshots with Mosek and crossover, both forms return the objective
+302,099,279,596.448, and the duals of the 76,866 rows absent from the matrix
+equal the duals of the solve with every row within 1e-6. Every coefficient of
+those rows is 1 or -1 at 24 snapshots, and 78,737 of the 79,457 columns have
+no bound of their own there.
+
+`singleton_rows="rows"` writes every row into the matrix.
+
 ## Reading a large solution
 
 `to_dense()` is for a model small enough to print. At scale, read the CSR
@@ -5586,7 +5733,8 @@ x = m.var("x", (P,), upper=100.0)
 m.constraint("cap", one[P] * x[P] + 1.0 <= 5.0)
 m.set_objective(Sum(P, one[P] * x[P]) + 7.0)
 
-print(m.assemble().n_cols, m.assemble().row_upper)
+assembled = m.assemble(singleton_rows="rows")
+print(assembled.n_cols, assembled.row_upper)
 print(m.solve().objective)
 ```
 
@@ -5681,7 +5829,7 @@ rows = m.constraint("capacity", Sum(W, x[P, W], where=arcs) <= 10.0)
 
 print(x.n_columns)
 print(rows.n_rows, rows.nnz)
-print(m.assemble().to_dense())
+print(m.assemble(singleton_rows="rows").to_dense())
 ```
 
 Output:
@@ -5863,7 +6011,7 @@ x = m.var("x", (G, T))
 rows = m.constraint("start", x[G, "t0"] <= 1.0)
 
 print(rows.n_rows, rows.nnz)
-print(m.assemble().to_dense())
+print(m.assemble(singleton_rows="rows").to_dense())
 ```
 
 Output:
@@ -5895,7 +6043,7 @@ x = m.var("x", (G, T))
 rows = m.constraint("start", rate[G, "t0"] * x[G, "t0"] <= 1.0)
 
 print(rate[G, "t0"].dims)
-print(m.assemble().to_dense())
+print(m.assemble(singleton_rows="rows").to_dense())
 ```
 
 Output:
@@ -7087,12 +7235,12 @@ print(f"the model the session was opened on: {m.solve().objective:,.2f}")
 Output:
 
 ```text
-36 columns, 48 rows
+36 columns, 12 rows
 wind at hour 1 fixed at 0: 37,050.00
 wind at hour 1 fixed at 40: 34,650.00
 wind at hour 1 fixed at 80: 32,700.00
 dual of demand at hour 1: 30.00
-49 rows: 35,400.00
+13 rows: 35,400.00
 the model the session was opened on: 31,500.00
 ```
 
@@ -7115,11 +7263,21 @@ A value for `fix` is a number, or a `Param` for the whole variable. The `Param` 
 - `set_bound` takes a number for a slice, and a number or a `Param` with a value at every member for the whole variable.
 - A fix stays in place across `set_bound`.
 
+A row with one coefficient is a bound on one column. `fix`, `unfix` and
+`set_bound` narrow the bounds of their columns to the bounds those rows set.
+They then write the result to the solver and to `Session.assembled`. A pin
+outside those bounds gives a column whose lower bound is above its upper
+bound, and the solve returns `infeasible`, as the model with every row does.
+
+`Session.n_rows` reports the rows the solver loaded, with the appended rows.
+A row stored as a bound of its column is not among them, and the model counts
+it under `Model.n_rows`.
+
 A `fix`, `unfix`, `set_bound` or `add_row` call that raises changes nothing in the session and nothing in the solver's model.
 
 ## Appended rows
 
-`add_row(name, relation, where=None, over=None)` takes the arguments of `Model.constraint`. A relation free over a set appends one row per member. The appended rows follow the rows of the model, in the order of the calls.
+`add_row(name, relation, where=None, over=None)` takes the arguments of `Model.constraint`. A relation free over a set appends one row per member. The appended rows follow the rows of the model, in the order of the calls. An appended row is a row of the matrix: a session stores no appended row as a bound of its column.
 
 `Solution.dual(name)` returns the duals of an appended constraint, and `Diagnosis` reports an appended row by the name of that constraint. A name the model declares raises `ValueError`. A variable of another model raises `ValueError`.
 
@@ -7149,7 +7307,7 @@ Output:
 
 ```text
 first solve: 4.00
-3 rows
+2 rows
 objective 7.00, dual of cut 1.00
 ```
 
@@ -7276,7 +7434,7 @@ x = m.var("x", (P, W), subset=arcs)
 rows = m.constraint("capacity", Sum(W, x[P, W]) <= 10.0)
 
 print(rows.n_rows, rows.nnz)
-print(m.assemble().to_dense())
+print(m.assemble(singleton_rows="rows").to_dense())
 ```
 
 Output:

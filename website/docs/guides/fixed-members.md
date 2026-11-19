@@ -52,7 +52,7 @@ x = m.var("x", (G, T))
 rows = m.constraint("start", x[G, "t0"] <= 1.0)
 
 print(rows.n_rows, rows.nnz)
-print(m.assemble().to_dense())
+print(m.assemble(singleton_rows="rows").to_dense())
 ```
 
 <!-- output -->
@@ -89,7 +89,7 @@ x = m.var("x", (G, T))
 rows = m.constraint("start", rate[G, "t0"] * x[G, "t0"] <= 1.0)
 
 print(rate[G, "t0"].dims)
-print(m.assemble().to_dense())
+print(m.assemble(singleton_rows="rows").to_dense())
 ```
 
 <!-- output -->

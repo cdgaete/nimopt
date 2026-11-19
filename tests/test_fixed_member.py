@@ -33,7 +33,7 @@ def test_a_parameter_at_a_member_supplies_the_coefficient():
     m, S, T, inflow = storage_shapes()
     x = m.var("x", (S, T))
     m.constraint("pin", inflow[S, "t1"] * x[S, "t1"] == 0.0)
-    assembled = m.assemble()
+    assembled = m.assemble(singleton_rows="rows")
     # column 1 has inflow[s1,t1] = 1.0 and column 4 has inflow[s2,t1] = 4.0
     assert np.array_equal(assembled.values, np.array([1.0, 4.0]))
     assert np.array_equal(assembled.indices, np.array([1, 4], dtype=np.int32))
@@ -80,7 +80,7 @@ def test_a_parameter_reference_is_a_right_hand_side():
     m, S, T, inflow = storage_shapes()
     x = m.var("x", (S, T))
     m.constraint("row", x[S, T] == inflow[S, T])
-    assembled = m.assemble()
+    assembled = m.assemble(singleton_rows="rows")
     assert m.n_rows == 6
     assert np.array_equal(assembled.row_lower, np.arange(6.0))
 
@@ -89,7 +89,7 @@ def test_a_right_hand_side_at_a_member_is_read_there():
     m, S, T, inflow = storage_shapes()
     x = m.var("x", (S, T))
     m.constraint("row", x[S, "t1"] == inflow[S, "t1"])
-    assembled = m.assemble()
+    assembled = m.assemble(singleton_rows="rows")
     # inflow[s1,t1] = 1.0 and inflow[s2,t1] = 4.0
     assert np.array_equal(assembled.row_lower, np.array([1.0, 4.0]))
 

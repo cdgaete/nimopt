@@ -48,7 +48,7 @@ def nimopt_side(xp, yp, sign, method, active):
     demand = no.Param.from_dense("demand", (T,), DEMAND)
     m.constraint("demand", no.Sum(G, p[G, T]) == demand[T])
     m.set_objective(objective)
-    assembled = m.assemble()
+    assembled = m.assemble(singleton_rows="rows")
     solved = m.solve()
     return {
         "objective": solved.objective,

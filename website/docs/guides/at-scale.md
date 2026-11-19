@@ -89,6 +89,40 @@ slice(200, 300, None)
 `row_of(name)` gives the rows of a constraint as a slice. A caller locates a
 named row block in a matrix too large to print.
 
+## A row with one coefficient
+
+A declared row with one coefficient is stored as a bound of its column, and
+the matrix passed to the solver has no entry for it. The full-year European
+network through the PyPSA backend declares 19,423,878 rows, 9,361,137
+columns and 46,354,588 nonzeros, and 8,801,358 of those rows (45.3%) have one
+coefficient. Without those rows the same network has 10,622,520 rows and
+37,553,230 nonzeros, and the arrays passed to a solver take 888 MB instead of
+1,169 MB.
+
+| Full-year European network, measurement | Every row | One coefficient as a bound |
+| --- | --- | --- |
+| Mosek 11.2, barrier without crossover at 16 threads, peak of the process | 41.1 GB | 37.8 GB |
+| Mosek 11.2, peak of the presolve | 19.5 GB | 13.5 GB |
+| CPLEX through GAMS 43.4, peak before the factorization | 21.5 GB | 16.8 GB |
+| HiGHS 1.15.1, copy of the model | 1,632 MB | 1,210 MB |
+| HiGHS 1.15.1, peak of `presolve()` above the copy | 11,797 MB | 9,259 MB |
+
+Mosek 11.2 solves the full-year European network at 16 threads, barrier
+without crossover, to status `optimal` from both forms, with the objective
+1,128,619,364,130.2 in both, and its factorization adds 25 GB to 27 GB in
+both. CPLEX through GAMS 43.4 loads the GMO in 47 s with every row and in
+34 s without the singleton rows. Mosek, CPLEX and HiGHS each build the same
+presolved model from both forms.
+
+The duals of a row stored as a bound are computed from the reduced costs. At
+24 snapshots with Mosek and crossover, both forms return the objective
+302,099,279,596.448, and the duals of the 76,866 rows absent from the matrix
+equal the duals of the solve with every row within 1e-6. Every coefficient of
+those rows is 1 or -1 at 24 snapshots, and 78,737 of the 79,457 columns have
+no bound of their own there.
+
+`singleton_rows="rows"` writes every row into the matrix.
+
 ## Reading a large solution
 
 `to_dense()` is for a model small enough to print. At scale, read the CSR

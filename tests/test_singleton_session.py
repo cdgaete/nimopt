@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from nimopt import Model, Set, Sum
+from nimopt.solvers import highs
 from optimality import residuals
 from singleton_models import plant
 
@@ -84,6 +85,28 @@ def test_a_conflict_of_converted_rows_reports_their_constraints(singleton_rows):
         assert row.index == model.row(row.constraint, **row.coordinate).index
 
 
+def test_a_conflict_of_converted_rows_reports_no_column_bound():
+    model = crossing()
+    with model.session("highs", singleton_rows="bounds") as session:
+        assert session.solve().status == "infeasible"
+        found = session.diagnose()
+    assert {row.constraint for row in found.conflict} == {"lo", "up"}
+    assert found.columns == ()
+
+
+def test_a_conflict_reports_a_pinned_column_and_the_row_of_its_other_side():
+    model, p, session = opened("bounds")
+    with session:
+        assert session.solve().objective == pytest.approx(43.0)
+        session.fix(p["a", 0], 7.0)
+        assert session.solve().status == "infeasible"
+        found = session.diagnose()
+    assert "cap" in {row.constraint for row in found.conflict}
+    assert [(held.variable, held.lower, held.upper) for held in found.columns] == [
+        ("p", 7.0, 5.0)
+    ]
+
+
 def test_a_kept_row_of_a_conflict_has_its_declared_index():
     T = Set("T", np.arange(2))
     m = Model("kept")
@@ -126,6 +149,34 @@ def test_a_model_of_one_singleton_row_alone_is_unbounded(singleton_rows):
     m.set_objective(Sum(T, x[T]))
     with m.session("highs", singleton_rows=singleton_rows) as session:
         assert session.solve().status in ("unbounded", "unbounded_or_infeasible")
+        found = session.diagnose()
+    assert found.ray is not None
+    assert {term.variable: term.direction for term in found.ray}["x"] < 0
+
+
+def test_a_ray_of_a_model_with_no_row_under_sense_max_reads_the_columns():
+    T = Set("T", np.arange(1))
+    m = Model("raymax", sense="max")
+    x = m.var("x", (T,), upper=np.inf)
+    m.constraint("floor", x[T] >= 5.0)
+    m.set_objective(Sum(T, x[T]))
+    with m.session("highs", singleton_rows="bounds") as session:
+        assert session.solve().status == "unbounded"
+        assert session.n_rows == 0
+        direction = highs.ray(session._backend)
+    assert direction.tolist() == [1.0]
+
+
+def test_a_model_with_no_row_that_is_not_unbounded_reports_no_ray():
+    T = Set("T", np.arange(1))
+    m = Model("bounded")
+    x = m.var("x", (T,), upper=np.inf)
+    m.constraint("floor", x[T] >= 5.0)
+    m.set_objective(Sum(T, x[T]))
+    with m.session("highs", singleton_rows="bounds") as session:
+        assert session.solve().status == "optimal"
+        assert session.n_rows == 0
+        assert highs.ray(session._backend) is None
 
 
 def one_sided():

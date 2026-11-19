@@ -130,6 +130,44 @@ ValueError: status is 'infeasible' and the solver reports no feasible point; rea
 </details>
 <!-- /output -->
 
+## The duals of a declared row
+
+A dual is returned at every declared row. A row with one coefficient is
+stored as a bound of its column, and the solver reports the duals of the rows
+it was given. nimopt computes the duals of the rows stored as bounds from the
+reduced costs.
+
+Let `r` be the reduced cost of a column in the matrix the solver loaded: its
+cost less the duals of the loaded rows it appears in. In the declared model
+the column appears in its singleton rows as well, so `r` is the sum of the
+duals of those rows times their coefficients, and of the reduced cost of the
+declared model.
+
+- Under sense `min` the positive part of `r` belongs to the lower bound of
+  the column and the negative part to the upper bound. Under sense `max` the
+  two are exchanged.
+- On each side the part belongs to the first singleton row, in the order the
+  assembly stored those rows, whose bound equals the bound of the column on
+  that side. Its dual is the part divided by its coefficient. Every other
+  singleton row on that side has the dual 0.
+- Where no singleton row has the bound of the column on a side, the part
+  remains in the reduced cost of the declared model. This includes a column
+  pinned in a session outside the bounds of its singleton rows.
+- Where the bound of the variable and the bound of a singleton row are
+  equal, the singleton row receives the part.
+- An `==` singleton row is the first row on both sides and receives both
+  parts.
+
+The rule reads no primal value and has no tolerance. A barrier solve without
+crossover reports small reduced costs at columns that are not at a bound, and
+the row that sets a bound receives them as the column bound receives them
+from the solver. The duals then satisfy the stationarity condition of the
+declared model, and the complementarity error is the solver's own.
+
+`dual(name, kind="variable")` returns the reduced cost of the declared model
+under both values of `singleton_rows`: the cost less the duals of every
+declared row the variable appears in.
+
 ## The array type of a value
 
 A variable over a full product has a value at every cell of its frame. The

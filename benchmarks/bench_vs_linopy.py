@@ -68,7 +68,7 @@ def transport(n_plants, n_warehouses, arcs_per_plant, seed=0, integer=False):
         model = transport_build(
             n_plants, n_warehouses, arcs_per_plant, arc_index, unit_cost, integer
         )
-        return {"model": model, "session": model.session()}
+        return {"model": model, "session": model.session(singleton_rows="rows")}
 
     return Case(
         build=build,
@@ -86,7 +86,7 @@ def storage(n_generators, n_storage, n_hours, seed=0):
         model = storage_build(
             n_generators, n_storage, n_hours, availability, demand, price
         )
-        return {"model": model, "session": model.session()}
+        return {"model": model, "session": model.session(singleton_rows="rows")}
 
     return Case(
         build=build,

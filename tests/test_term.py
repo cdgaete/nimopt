@@ -232,4 +232,4 @@ def test_a_coefficient_over_other_dimensions_repeats_over_the_variables_own():
     rows = m.constraint("cap", avail[T] * cap[G] <= 10.0)
     assert rows.frame == ("T", "G")
     assert rows.n_rows == 6
-    assert m.assemble().to_dense()[2].tolist() == [0.5, 0.0]
+    assert m.assemble(singleton_rows="rows").to_dense()[2].tolist() == [0.5, 0.0]

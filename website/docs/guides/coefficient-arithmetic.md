@@ -167,7 +167,8 @@ x = m.var("x", (P,), upper=100.0)
 m.constraint("cap", one[P] * x[P] + 1.0 <= 5.0)
 m.set_objective(Sum(P, one[P] * x[P]) + 7.0)
 
-print(m.assemble().n_cols, m.assemble().row_upper)
+assembled = m.assemble(singleton_rows="rows")
+print(assembled.n_cols, assembled.row_upper)
 print(m.solve().objective)
 ```
 

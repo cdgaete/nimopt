@@ -22,7 +22,7 @@ too. A reader takes a field and parses no rendered text.
 | `piecewise` | one `PiecewiseShape` per piecewise declaration |
 | `objective` | the objective expression, or `None` |
 | `columns`, `rows`, `nonzeros` | the model's shape, or `None` |
-| `singleton_rows` | the number of declared rows with one coefficient, or `None` |
+| `singleton_rows` | the number of [singleton rows](/reference/model#a-singleton-row), or `None` |
 
 A count is `None` where nothing is bound. It is never zero. A count of zero
 is a value a caller acts on, and a declaration with no data reports no
@@ -45,10 +45,10 @@ read identically.
 declared beside it. An expression contains references and reports both.
 
 `Explanation.singleton_rows` and `ConstraintShape.singleton_rows` count the
-declared rows that hold exactly one coefficient. `rows` and `nonzeros`
-report the declared model, and a row with one coefficient is counted in all
-three fields. A constraint with none reports zero. The rendered text shows
-the count where it is above zero.
+[singleton rows](/reference/model#a-singleton-row). `rows` and `nonzeros`
+report the declared model, and a singleton row is counted in all three
+fields. A constraint with none reports zero. The rendered text shows the
+count where it is above zero.
 
 ```python
 from nimopt import Definition, Sum

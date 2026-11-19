@@ -30,7 +30,7 @@ def first_member(variable):
 
 def test_a_sweep_of_one_fix_solves_each_point():
     _, _, _, session, objectives, solution = swept()
-    assert (session.n_columns, session.n_rows) == (36, 48)
+    assert (session.n_columns, session.n_rows) == (36, 12)
     assert objectives == pytest.approx([37050.0, 34650.0, 32700.0])
     # the dual of demand at hour 1
     assert solution.dual("demand").to_dense()[0] == pytest.approx(30.0)
@@ -39,7 +39,7 @@ def test_a_sweep_of_one_fix_solves_each_point():
 def test_an_appended_row_is_solved_and_read_by_name():
     _, H, g, session, _, _ = swept()
     session.add_row("coal_cap_total", Sum(H, g["coal", H]) <= 1000.0)
-    assert session.n_rows == 49
+    assert session.n_rows == 13
     solution = session.solve()
     assert solution.objective == pytest.approx(35400.0)
     assert solution.dual("coal_cap_total").to_dense().shape == ()
@@ -82,7 +82,7 @@ def test_the_dual_of_an_appended_row_is_read_by_its_name():
     with m.session() as session:
         assert session.solve().objective == pytest.approx(4.0)
         session.add_row("cut", Sum(i, x[i]) >= 7.0)
-        assert session.n_rows == 3
+        assert session.n_rows == 2
         solution = session.solve()
         assert solution.objective == pytest.approx(7.0)
         assert float(solution.dual("cut").to_dense()) == pytest.approx(1.0)
@@ -107,7 +107,7 @@ def test_the_duals_of_rows_appended_across_several_growths_are_read():
         session.solve()
         for k in range(40):
             session.add_row(f"cut{k}", Sum(i, x[i]) >= 4.0 + 0.1 * k)
-        assert session.n_rows == 42
+        assert session.n_rows == 41
         solution = session.solve()
         assert solution.objective == pytest.approx(7.9)
         assert float(solution.dual("cut39").to_dense()) == pytest.approx(1.0)
@@ -168,7 +168,7 @@ def test_a_closed_session_loads_the_changed_model_again():
     solution = session.solve()
     assert solution.objective == pytest.approx(6.0)
     assert float(solution.dual("cut").to_dense()) == pytest.approx(1.0)
-    assert session.n_rows == 3
+    assert session.n_rows == 2
     session.close()
 
 
@@ -197,7 +197,7 @@ def test_a_row_with_a_name_the_model_declares_raises():
         session.add_row("cut", Sum(i, x[i]) >= 6.0)
         with pytest.raises(ValueError, match="cut"):
             session.add_row("cut", Sum(i, x[i]) >= 7.0)
-        assert session.n_rows == 3
+        assert session.n_rows == 2
 
 
 def test_a_row_over_a_variable_of_another_model_raises():
@@ -212,7 +212,7 @@ def test_a_row_over_a_variable_of_another_model_raises():
         # a variable of the same name in another model is another variable
         with pytest.raises(ValueError, match="'x'"):
             session.add_row("cut", Sum(other_i, other_x[other_i]) >= 6.0)
-        assert session.n_rows == 2
+        assert session.n_rows == 1
         assert session.solve().objective == pytest.approx(4.0)
 
 
@@ -296,7 +296,7 @@ def test_an_adapter_without_mutation_raises_at_the_change():
                 call()
         assert session.solve().objective == pytest.approx(4.0)
         assert session.solve().objective == pytest.approx(4.0)
-        assert session.n_rows == 2
+        assert session.n_rows == 1
         assert session.assembled.col_upper.tolist() == [10.0, 10.0]
 
 
@@ -327,7 +327,7 @@ def test_unfix_restores_the_declared_bounds():
         assert session.solve().objective == pytest.approx(7.0)
         session.unfix(x["a"])
         assert session.solve().objective == pytest.approx(4.0)
-        assert session.assembled.col_lower.tolist() == [0.0, 0.0]
+        assert session.assembled.col_lower.tolist() == [0.0, 1.0]
         assert session.assembled.col_upper.tolist() == [10.0, 10.0]
 
 
@@ -353,7 +353,7 @@ def test_a_rejected_change_changes_nothing():
             session.set_bound(x["a"])
         with pytest.raises(ValueError, match="has no fixed column"):
             session.unfix(x)
-        assert session.assembled.col_lower.tolist() == [0.0, 0.0]
+        assert session.assembled.col_lower.tolist() == [0.0, 1.0]
         assert session.assembled.col_upper.tolist() == [10.0, 10.0]
         assert session.solve().objective == pytest.approx(4.0)
 
@@ -363,7 +363,7 @@ def test_a_row_over_a_set_appends_one_row_per_member():
     with m.session() as session:
         session.solve()
         session.add_row("floor", x[i] >= 3.0)
-        assert session.n_rows == 4
+        assert session.n_rows == 3
         solution = session.solve()
         assert solution.objective == pytest.approx(6.0)
         assert solution.dual("floor").to_dense().tolist() == pytest.approx([1.0, 1.0])
@@ -374,7 +374,7 @@ def test_a_condition_narrows_the_rows_of_an_appended_constraint():
     only_b = subset((i,), {"i": ["b"]})
     with m.session() as session:
         session.add_row("floor", x[i] >= 5.0, where=only_b)
-        assert session.n_rows == 3
+        assert session.n_rows == 2
         assert session.solve().objective == pytest.approx(5.0)
 
 
@@ -427,15 +427,15 @@ def test_a_row_the_solver_rejects_is_not_recorded(monkeypatch):
         with pytest.raises(RuntimeError, match="HiGHS rejected"):
             session.add_row("cut", Sum(i, x[i]) >= 7.0)
         monkeypatch.undo()
-        assert session.n_rows == 2
-        assert session._backend.getNumRow() == 2
+        assert session.n_rows == 1
+        assert session._backend.getNumRow() == 1
         solution = session.solve()
         assert solution.objective == pytest.approx(4.0)
         with pytest.raises(KeyError, match="cut"):
             solution.dual("cut")
         # the name is free, and the row is appended by a later call
         session.add_row("cut", Sum(i, x[i]) >= 7.0)
-        assert session.n_rows == 3
+        assert session.n_rows == 2
         assert session.solve().objective == pytest.approx(7.0)
 
 
@@ -445,8 +445,8 @@ def test_a_row_with_a_bound_that_is_not_a_number_raises_and_changes_nothing():
         session.solve()
         with pytest.raises(ValueError, match="not a number"):
             session.add_row("bad", Sum(i, x[i]) >= float("nan"))
-        assert session.n_rows == 2
-        assert session._backend.getNumRow() == 2
+        assert session.n_rows == 1
+        assert session._backend.getNumRow() == 1
         session.add_row("bad", Sum(i, x[i]) >= 7.0)
         assert session.solve().objective == pytest.approx(7.0)
 
@@ -475,7 +475,7 @@ def test_a_row_that_is_not_valid_raises_before_the_first_solve():
     with m.session() as session:
         with pytest.raises(ValueError, match="not a number"):
             session.add_row("bad", Sum(i, x[i]) >= float("nan"))
-        assert session.n_rows == 2
+        assert session.n_rows == 1
         assert session.solve().objective == pytest.approx(4.0)
 
 
@@ -489,7 +489,7 @@ def test_rows_the_solver_rejects_at_the_first_solve_leave_no_loaded_model(monkey
     assert not session.backend_open
     monkeypatch.undo()
     assert session.solve().objective == pytest.approx(7.0)
-    assert session.n_rows == 3
+    assert session.n_rows == 2
     session.close()
 
 
@@ -503,10 +503,10 @@ def test_a_row_bound_no_solution_satisfies_raises_and_changes_nothing(loaded):
             session.add_row("bad", Sum(i, x[i]) >= np.inf)
         with pytest.raises(ValueError, match="infinity"):
             session.add_row("bad", Sum(i, x[i]) <= -np.inf)
-        assert session.n_rows == 2
+        assert session.n_rows == 1
         # a row that is open on one side is valid
         session.add_row("open", Sum(i, x[i]) >= -np.inf)
-        assert session.n_rows == 3
+        assert session.n_rows == 2
         assert session.solve().objective == pytest.approx(4.0)
 
 
@@ -516,7 +516,7 @@ def test_a_bound_the_solver_rejects_changes_nothing():
         session.solve()
         with pytest.raises(RuntimeError, match="HiGHS rejected"):
             session.set_bound(x, upper=-np.inf)
-        assert session.assembled.col_lower.tolist() == [0.0, 0.0]
+        assert session.assembled.col_lower.tolist() == [0.0, 1.0]
         assert session.assembled.col_upper.tolist() == [10.0, 10.0]
         assert session.solve().objective == pytest.approx(4.0)
         # the model the session loads again has the bounds before the call
@@ -532,7 +532,7 @@ def test_a_fix_the_solver_rejects_leaves_no_fixed_column():
         session.solve()
         with pytest.raises(RuntimeError, match="HiGHS rejected"):
             session.fix(x["a"], 1e25)
-        assert session.assembled.col_lower.tolist() == [0.0, 0.0]
+        assert session.assembled.col_lower.tolist() == [0.0, 1.0]
         assert session.assembled.col_upper.tolist() == [10.0, 10.0]
         with pytest.raises(ValueError, match="has no fixed column"):
             session.unfix(x)

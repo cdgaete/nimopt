@@ -216,7 +216,7 @@ def test_a_row_materialises_no_whole_expression(monkeypatch):
 
 def test_row_at_returns_the_columns_coefficients_and_bounds_of_a_row():
     m = nodal().build(nodal_data())
-    a = m.assemble()
+    a = m.assemble(singleton_rows="rows")
     index = a.row_of("live").start + 1
     columns, values, lower, upper = m.constraints["live"].row_at(1)
     span = slice(a.indptr[index], a.indptr[index + 1])

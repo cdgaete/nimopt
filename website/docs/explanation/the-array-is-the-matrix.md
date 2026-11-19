@@ -56,6 +56,18 @@ Passing the matrix to a solver returns views. `indices` and `values` are the
 buffer, and only `indptr` is built. A model of four million nonzeros passes
 its matrix without copying it.
 
+## A row with one coefficient
+
+A declared row with one coefficient is a bound on one column. The assembly
+writes it into the bound vectors of the columns and into no slot of the
+buffer, so the matrix has no row for it and the row count passed to the
+solver is smaller. The declared row keeps its place in the model: `Model.row`
+returns it, `Row.index` is its position among the declared rows, and
+`Solution.dual` returns its dual.
+
+`assemble(singleton_rows="rows")`, and the same keyword on `session()` and
+`solve()`, writes every declared row into the matrix.
+
 ## Why the shape is computed first
 
 Reserving a slice requires its size. A constraint computes its shape when it

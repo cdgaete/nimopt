@@ -20,8 +20,18 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ### Added
 
-- `singleton_rows="bounds"` on `Model.assemble`, `Model.session` and `Model.solve` stores a row with one coefficient as a bound of its column. `Solution.dual` returns a value at every declared row.
+- `singleton_rows` on `Model.assemble`, `Model.session` and `Model.solve`, with the values `"bounds"` and `"rows"`.
 - `explain()` reports the rows with one coefficient of each constraint and of the model.
+- On HiGHS, `Diagnosis.ray` contains a ray for an unbounded model with no row. HiGHS returns none for such a model, and the adapter computes it from the costs and the bounds of the columns.
+
+### Changed
+
+- A row with one coefficient is stored as a bound of its column, and the solver receives a matrix without it. `singleton_rows="rows"` on `Model.assemble`, `Model.session` and `Model.solve` builds the matrix with every row.
+- `Row.index` is the position of the row among the declared rows.
+- `Session.n_rows` and `Assembled.n_rows` report the rows the solver loaded.
+- `Solution.dual` returns a value at every declared row. The dual of a row stored as a column bound is computed from the reduced costs.
+- The `conflict` function of the HiGHS and Gurobi adapters returns a third array: for each column, which of its bounds is in the subsystem. `diagnose()` reports a row stored as a column bound where its bound is in the conflict, and reports no `ColumnBound` for a column whose bounds in the conflict are all set by such rows.
+- On HiGHS, `diagnose()` raises `RuntimeError` for a subsystem with no row and no column, as it does for an invalid subsystem.
 
 ## 0.20261118.1 - 2026-11-18
 

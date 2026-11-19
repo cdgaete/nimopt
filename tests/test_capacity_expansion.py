@@ -22,7 +22,7 @@ def test_a_capacity_column_is_bound_by_a_time_varying_availability():
     m.constraint("balance", Sum(G, ones_gt[G, T] * gen[G, T]) == load[T])
     m.set_objective(Sum(G, invest[G] * cap[G]) + Sum(G, T, run[G, T] * gen[G, T]))
 
-    assembled = m.assemble()
+    assembled = m.assemble(singleton_rows="rows")
     # two cap_link rows and two balance rows; one cap column and two gen
     assert (assembled.n_rows, assembled.n_cols) == (4, 3)
     # two entries in each cap_link row, one in each balance row
@@ -68,7 +68,7 @@ def test_a_link_column_reaches_the_two_buses_it_joins():
     )
     m.set_objective(Sum(B, G, T, cost[B, G, T] * gen[B, G, T]))
 
-    assembled = m.assemble()
+    assembled = m.assemble(singleton_rows="rows")
     # every bus and hour has a row; two gen columns and two flow
     assert (assembled.n_rows, assembled.n_cols) == (4, 4)
     # the generator's two entries and the link's four

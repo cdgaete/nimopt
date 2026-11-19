@@ -93,7 +93,7 @@ def test_a_step_names_the_constraint_it_finished():
 
 def test_assembling_without_a_reporter_reports_nothing():
     model = storage.definition().build(storage.data(2))
-    assembled = model.assemble()
+    assembled = model.assemble(singleton_rows="rows")
     assert assembled.values.size == model.nnz
 
 

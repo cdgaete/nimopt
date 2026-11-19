@@ -157,7 +157,7 @@ def test_the_global_limit_row_matches(reference):
 def test_the_whole_matrix_agrees_with_pypsa(reference):
     from pypsa_network import build
 
-    assembled = build(NETWORK).assemble()
+    assembled = build(NETWORK).assemble(singleton_rows="rows")
     assert assembled.n_rows == reference["rows"]
     assert assembled.n_cols == reference["cols"] - 1
     assert int(assembled.values.size) == reference["nnz"]
@@ -293,7 +293,7 @@ def test_a_carbon_limit_modelled_as_a_store_states_no_row(large_reference):
 def test_the_whole_matrix_agrees_with_pypsa_at_scale(large_reference):
     from pypsa_network import build
 
-    assembled = build(LARGE).assemble()
+    assembled = build(LARGE).assemble(singleton_rows="rows")
     assert assembled.n_rows == large_reference["rows"]
     assert assembled.n_cols == large_reference["cols"] - 1
     assert int(assembled.values.size) == large_reference["nnz"]
@@ -330,7 +330,7 @@ EU = DATA / "large" / "eu.npz"
 def test_the_european_network_at_24_snapshots_has_the_measured_sparsity():
     from pypsa_network import Data, model_from
 
-    assembled = model_from(Data(EU, 24)).assemble()
+    assembled = model_from(Data(EU, 24)).assemble(singleton_rows="rows")
     nnz = int(assembled.values.size)
     assert (assembled.n_rows, assembled.n_cols, nnz) == (162582, 79457, 382520)
     assert abs(nnz / assembled.n_cols - 4.81) < 0.01

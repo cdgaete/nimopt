@@ -31,6 +31,7 @@ coordinates are present, and it records no numbering origin.
 | `difference(other)` | the members this one has and `other` does not |
 | `positions_of(array)` | each entry of `array` as its position here, `-1` where absent |
 | `positions_of_coordinates(index)` | each column of an index matrix as its position here, `-1` where absent |
+| `take(positions)` | the members at ascending positions, as a domain over the same frame |
 | `expand(dims, coords)` | every member crossed with the full extent of the named dimensions |
 | `transpose(*dims)` | the same members, over the dimensions in the order given, or reversed when none are given |
 | `project(dims)` | the distinct coordinates of the members over `dims`, in the order given |

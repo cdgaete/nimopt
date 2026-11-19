@@ -39,7 +39,7 @@ def test_a_condition_leaves_the_full_product_unrestricted():
 def test_a_condition_names_the_columns_the_arcs_stand_for():
     m, P, W, x, one, cap, arcs = arcs_model()
     m.constraint("supply", Sum(W, one[P, W] * x[P, W], where=arcs) <= cap[P])
-    assembled = m.assemble()
+    assembled = m.assemble(singleton_rows="rows")
     # p1 spans w1 and w2, columns 0 and 1; p2 spans w3, column 5
     assert np.array_equal(assembled.indices, np.array([0, 1, 5], dtype=np.int32))
 
@@ -56,7 +56,7 @@ def test_a_condition_survives_a_coefficient_and_a_scale():
     m, P, W, x, one, cap, arcs = arcs_model()
     expression = 2.0 * Sum(W, one[P, W] * x[P, W], where=arcs)
     m.constraint("supply", expression <= cap[P])
-    assembled = m.assemble()
+    assembled = m.assemble(singleton_rows="rows")
     assert m.nnz == 3
     assert np.array_equal(assembled.values, np.array([2.0, 2.0, 2.0]))
 
@@ -107,7 +107,7 @@ def test_a_condition_may_name_a_dimension_the_coefficient_introduces():
     )
     rhs = Param.from_dense("rhs", (B, T), np.zeros((2, 2)))
     m.constraint("balance", Sum(L, inc[B, L, T] * p[L, T], where=live) >= rhs[B, T])
-    assembled = m.assemble()
+    assembled = m.assemble(singleton_rows="rows")
     # only b0's own link entries survive the condition
     assert int(assembled.values.size) == 2
 

@@ -51,8 +51,7 @@ class Diagnosis:
 
     `conflict` is None where the model is not infeasible. `ray` is None where
     the model is not unbounded. An empty tuple reports that the solver
-    returned nothing. `ray` is None where the solver returns no ray, and HiGHS
-    returns none for a model with no loaded row.
+    returned nothing. `ray` is None where the solver returns no ray.
     """
 
     status: str
@@ -106,7 +105,7 @@ class Session:
         solver: str = "highs",
         options: Mapping[str, Any] | None = None,
         progress: Any = False,
-        singleton_rows: str = "rows",
+        singleton_rows: str = "bounds",
     ) -> None:
         check_singleton_rows(singleton_rows)
         self.model = model
@@ -440,7 +439,9 @@ class Session:
 
         A column of the conflict adds the converted row that sets its lower
         bound where the lower bound is in the subsystem, and the converted row
-        that sets its upper bound where the upper bound is.
+        that sets its upper bound where the upper bound is. The column is
+        reported as a `ColumnBound` unless every bound of it in the subsystem is
+        set by a converted row, and where `sides` reports neither bound.
         """
         if not self.capabilities.supports("conflict"):
             raise ValueError(
@@ -450,12 +451,14 @@ class Session:
         rows, columns, sides = self._adapter.conflict(self._backend)
         conflict = [self._row(int(at)) for at in rows]
         bounds = []
+        singletons = self.assembled.singletons
         for position, column, variable, coordinate in resolve(self._copy, columns):
             lower = float(self.assembled.col_lower[column])
             upper = float(self.assembled.col_upper[column])
             side = int(sides[position])
-            for name, at_row in self.assembled.singletons.setting(
-                column, lower, upper, bool(side & 1), bool(side & 2)
+            on_lower, on_upper = bool(side & 1), bool(side & 2)
+            for name, at_row in singletons.setting(
+                column, lower, upper, on_lower, on_upper
             ):
                 constraint = self._copy.constraints[name]
                 held = constraint.row_at(at_row)
@@ -468,7 +471,12 @@ class Session:
                         *held,
                     )
                 )
-            bounds.append(ColumnBound(variable, coordinate, lower, upper))
+            if (
+                side == 0
+                or singletons.sides_set(column, lower, upper, on_lower, on_upper)
+                != side
+            ):
+                bounds.append(ColumnBound(variable, coordinate, lower, upper))
         return tuple(conflict), tuple(bounds)
 
     def _ray(self) -> tuple[RayTerm, ...] | None:

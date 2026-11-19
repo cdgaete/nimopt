@@ -50,12 +50,12 @@ print(f"the model the session was opened on: {m.solve().objective:,.2f}")
 <summary>Output</summary>
 
 ```text
-36 columns, 48 rows
+36 columns, 12 rows
 wind at hour 1 fixed at 0: 37,050.00
 wind at hour 1 fixed at 40: 34,650.00
 wind at hour 1 fixed at 80: 32,700.00
 dual of demand at hour 1: 30.00
-49 rows: 35,400.00
+13 rows: 35,400.00
 the model the session was opened on: 31,500.00
 ```
 
@@ -81,11 +81,21 @@ A value for `fix` is a number, or a `Param` for the whole variable. The `Param` 
 - `set_bound` takes a number for a slice, and a number or a `Param` with a value at every member for the whole variable.
 - A fix stays in place across `set_bound`.
 
+A row with one coefficient is a bound on one column. `fix`, `unfix` and
+`set_bound` narrow the bounds of their columns to the bounds those rows set.
+They then write the result to the solver and to `Session.assembled`. A pin
+outside those bounds gives a column whose lower bound is above its upper
+bound, and the solve returns `infeasible`, as the model with every row does.
+
+`Session.n_rows` reports the rows the solver loaded, with the appended rows.
+A row stored as a bound of its column is not among them, and the model counts
+it under `Model.n_rows`.
+
 A `fix`, `unfix`, `set_bound` or `add_row` call that raises changes nothing in the session and nothing in the solver's model.
 
 ## Appended rows
 
-`add_row(name, relation, where=None, over=None)` takes the arguments of `Model.constraint`. A relation free over a set appends one row per member. The appended rows follow the rows of the model, in the order of the calls.
+`add_row(name, relation, where=None, over=None)` takes the arguments of `Model.constraint`. A relation free over a set appends one row per member. The appended rows follow the rows of the model, in the order of the calls. An appended row is a row of the matrix: a session stores no appended row as a bound of its column.
 
 `Solution.dual(name)` returns the duals of an appended constraint, and `Diagnosis` reports an appended row by the name of that constraint. A name the model declares raises `ValueError`. A variable of another model raises `ValueError`.
 
@@ -117,7 +127,7 @@ with m.session() as session:
 
 ```text
 first solve: 4.00
-3 rows
+2 rows
 objective 7.00, dual of cut 1.00
 ```
 
