@@ -214,7 +214,7 @@ def test_a_constraint_narrows_to_the_same_shape_when_it_is_re_run():
     one = Param.from_dense("one", (P,), np.ones(3))
     rhs = Param.from_long("rhs", (P,), {"P": np.array(["p1", "p2"])}, np.ones(2))
     c = m.constraint("cap", one[P] * x[P] <= rhs[P])
-    rows, values, nnz = narrow(c)
+    rows, values, nnz, _ = narrow(c)
     assert rows.size == c.n_rows
     assert nnz == c.nnz
     assert list(values) == [1.0, 1.0]

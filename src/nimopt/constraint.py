@@ -24,6 +24,8 @@ from nimopt.term import Relation
 
 SENSES = ("<=", ">=", "==")
 
+SINGLETON_LIMIT = 1e20
+
 
 def check_relation(name: str, relation: Any) -> None:
     """Raise TypeError for a relation that is not a comparison of an expression."""
@@ -69,7 +71,7 @@ class Constraint:
                 f"pass one of them"
             )
         check_labels(f"constraint {self.name!r}", self._coordinates())
-        self.rows, self._rhs_values, self._nnz = narrow(self)
+        self.rows, self._rhs_values, self._nnz, self._singletons = narrow(self)
 
     def _coordinates(self) -> Iterator[tuple[str, Any]]:
         """Yield the dimension and the coordinate of each set this constraint reads.
@@ -103,6 +105,47 @@ class Constraint:
     def nnz(self) -> int:
         """Return the number of coefficients this constraint contributes."""
         return self._nnz
+
+    @property
+    def n_singleton_rows(self) -> int:
+        """Return the number of singleton rows of this constraint."""
+        marked = self._singletons
+        if marked is None:
+            return 0
+        if marked is True:
+            return self.rows.size
+        return int(np.count_nonzero(marked))
+
+    def singleton_positions(self) -> npt.NDArray[np.int64]:
+        """Return the positions of the singleton rows, ascending."""
+        return np.flatnonzero(self._marked()).astype(np.int64)
+
+    def kept_positions(self) -> npt.NDArray[np.int64]:
+        """Return the positions of the rows that are not singleton rows, ascending."""
+        return np.flatnonzero(~self._marked()).astype(np.int64)
+
+    def singleton_rhs(self) -> npt.NDArray[np.float64]:
+        """Return the right-hand side of each singleton row.
+
+        The values are in the order of the rows.
+        """
+        return self._rhs_at(self.singleton_positions())
+
+    def _marked(self) -> npt.NDArray[np.bool_]:
+        """Return one flag per row, True at a singleton row."""
+        marked = self._singletons
+        if marked is None:
+            return np.zeros(self.rows.size, dtype=bool)
+        if isinstance(marked, bool):
+            return np.full(self.rows.size, marked)
+        return marked
+
+    def _rhs_at(self, positions: npt.NDArray[np.int64]) -> npt.NDArray[np.float64]:
+        """Return the right-hand side at `positions`, in the order given."""
+        held = self._rhs_values
+        if isinstance(held, np.ndarray):
+            return held[positions].astype(np.float64, copy=True)
+        return np.full(positions.size, float(held))
 
     @property
     def relation(self) -> Relation:
@@ -230,13 +273,17 @@ class Constraint:
 
 def narrow(
     constraint: "Constraint", record: Any = None
-) -> tuple[Domain, npt.NDArray[np.float64] | float, int]:
-    """Return a constraint's rows, its right-hand side values and its nonzeros.
+) -> tuple[
+    Domain, npt.NDArray[np.float64] | float, int, bool | npt.NDArray[np.bool_] | None
+]:
+    """Return a constraint's rows, right-hand side values, nonzeros and marking.
 
     The rows are the coordinates at which every term is present, narrowed by
     the condition and by the coverage of the right-hand side. `over=` declares
     the rows instead. The right-hand side is one value per row for a
-    coefficient, and one float for a number. Without a recorder, the
+    coefficient, and one float for a number. The marking is `None` where no
+    row is a singleton row and where a recorder is passed, `True` where every
+    row is one, and one flag per row otherwise. Without a recorder, the
     expression is materialised within the declared rows or the condition. A
     recorder passed here records what each narrowing dropped, over the whole
     expression.
@@ -306,7 +353,56 @@ def narrow(
     rhs_values = rhs_values - constraint.expression.constant
     if record is not None:
         record.settled(rows)
-    return rows, rhs_values, int((rows.positions_of(block) >= 0).sum())
+    at = rows.positions_of(block)
+    marking = None if record is not None else _marking(block, rows, at, rhs_values)
+    return rows, rhs_values, int((at >= 0).sum()), marking
+
+
+def _marking(
+    block: SparseArray,
+    rows: Domain,
+    at: npt.NDArray[np.integer],
+    rhs_values: npt.NDArray[np.float64] | float,
+) -> bool | npt.NDArray[np.bool_] | None:
+    """Return the singleton marking of a block over `rows`.
+
+    The result is None where no row of `rows` is a singleton row, True where
+    every row is one, and one flag per row otherwise. A row is a singleton row
+    where it has exactly one coefficient inside `rows`, that coefficient is
+    finite and not zero, the right-hand side is finite, and the magnitude of
+    the right-hand side divided by the coefficient is below
+    `SINGLETON_LIMIT`. The entries of `at` are the positions of the entries of
+    the block in `rows`, and the entries ascend by row.
+    """
+    keep = at >= 0
+    every = keep.all()
+    inside = at if every else at[keep]
+    marked = np.bincount(inside, minlength=rows.size) == 1
+    if not marked.any():
+        return None
+    positions = np.flatnonzero(marked)
+    entries = block.values()
+    if not every:
+        entries = entries[keep]
+    coefficients = entries[marked[inside]]
+    held = rhs_values
+    if isinstance(held, np.ndarray):
+        bound = held[positions]
+    else:
+        bound = np.full(positions.size, float(held))
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        quotient = np.abs(bound / np.where(coefficients == 0.0, 1.0, coefficients))
+    marked[positions] = (
+        np.isfinite(coefficients)
+        & (coefficients != 0.0)
+        & np.isfinite(bound)
+        & (quotient < SINGLETON_LIMIT)
+    )
+    if marked.all():
+        return True
+    if not marked.any():
+        return None
+    return marked
 
 
 def _named(given: Any, owner: str) -> str:
