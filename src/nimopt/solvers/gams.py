@@ -22,6 +22,10 @@ adapter raises on. A status in none of them raises.
 The options file sets `rerun yes`. Where presolve reports a model infeasible or
 unbounded, CPLEX then solves it again without presolve.
 
+CPLEX under GAMS 54.6 reports the model status `infeasible - no solution` for
+a column whose lower bound is above its upper bound, and under GAMS 43.4 it
+reports `infeasible`. The adapter returns the status `infeasible` for both.
+
 The option `separate_process` runs CPLEX in a process of its own. GEV then
 writes the model, the solution and the log to the scratch directory. The
 adapter writes the log to standard output after the solve and removes the
@@ -134,6 +138,8 @@ LIMITS = {
 }
 
 NORMAL = "normal completion"
+
+NO_SOLUTION = "infeasible - no solution"
 
 TERMINATED = "terminated by solver"
 
@@ -614,11 +620,15 @@ def _status(
     limits: Mapping[str, int],
     iterations: float,
     nodes: float,
+    crossed: bool = False,
 ) -> str:
     """Return the `STATUS` member a model status and a solve status report.
 
     `limits` maps `iteration_limit` and `node_limit` to the values a caller
-    set. Raises RuntimeError for a status this adapter maps to no outcome.
+    set. `crossed` is True where a column of the model has a lower bound above
+    its upper bound, and the model status `infeasible - no solution` is then
+    `infeasible`. Raises RuntimeError for a status this adapter maps to no
+    outcome.
     """
     check_reported(
         solve_status,
@@ -646,6 +656,8 @@ def _status(
             )
         return reached[0]
     check_reported(model_status, (), OUTCOME, "CPLEX under GAMS", "model status")
+    if crossed and model_status == NO_SOLUTION:
+        return "infeasible"
     return OUTCOME[model_status]
 
 
@@ -783,6 +795,7 @@ def _read(
         limits,
         library.gmoGetHeadnTail(model, ITERATIONS),
         library.gmoGetHeadnTail(model, NODES),
+        bool(np.any(assembled.col_lower > assembled.col_upper)),
     )
     n, m = assembled.n_cols, assembled.n_rows
     integer = bool(assembled.integrality.any())

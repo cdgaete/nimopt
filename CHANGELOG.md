@@ -18,6 +18,10 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+### Fixed
+
+- On GAMS 54.6, a model with a column whose lower bound is above its upper bound returns the status `infeasible`. CPLEX under GAMS 54.6 reports the model status `infeasible - no solution` for it, and the adapter returned `unbounded_or_infeasible`. Two singleton rows that cross on one column give such bounds under `singleton_rows="bounds"`.
+
 ## 0.20261119.0 - 2026-11-19
 
 ### Added

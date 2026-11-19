@@ -171,6 +171,23 @@ def test_a_termination_at_two_limits_asks_for_one():
         gams._status("integer solution", "terminated by solver", limits, 0.0, 0.0)
 
 
+def test_a_column_with_crossed_bounds_is_infeasible_at_no_solution():
+    # GAMS 54.6 reports "infeasible - no solution" for a column whose lower
+    # bound is above its upper bound, and GAMS 43.4 reports "infeasible"
+    reported = ("infeasible - no solution", gams.NORMAL, {}, 0.0, 0.0)
+    assert gams._status(*reported, crossed=True) == "infeasible"
+    assert gams._status(*reported, crossed=False) == "unbounded_or_infeasible"
+    assert gams._status(*reported) == "unbounded_or_infeasible"
+
+
+def test_crossed_bounds_change_no_other_status():
+    for model_status, status in gams.OUTCOME.items():
+        if model_status == "infeasible - no solution":
+            continue
+        reported = (model_status, gams.NORMAL, {}, 0.0, 0.0)
+        assert gams._status(*reported, crossed=True) == status
+
+
 def test_a_signature_the_library_does_not_confirm_raises_naming_it():
     # a GAMS release whose entry point takes other arguments would be called
     # with the wrong stack; the adapter raises before the first call
