@@ -93,6 +93,9 @@ class Variable(Symbol):
         else:
             self._total = int(total_columns)
         sizes = tuple(len(s) for s in self.sets)
+        for bound in (self.lower, self.upper):
+            if isinstance(bound, Param):
+                self._same_labels(coords_of(bound.sets), f"parameter {bound.name!r}")
         if self.subset is None:
             self.coord = ProductCoord(sizes)
             return
@@ -103,8 +106,25 @@ class Variable(Symbol):
                 f"and its members span {members.dims} of sizes "
                 f"{members.shape}; give members over {self.dims}"
             )
+        self._same_labels(members.coords, "its subset=")
         self._domain = members
         self.coord = members.as_coord()
+
+    def _same_labels(self, coords: Mapping[str, Any], other: str) -> None:
+        """Raise ValueError for a dimension whose labels differ from this variable's.
+
+        `coords` maps dimensions of this variable to coordinates. `other` is
+        the text that identifies their owner in the message.
+        """
+        mine = self.coords
+        differing = [
+            d for d, held in coords.items() if held is not mine[d] and held != mine[d]
+        ]
+        if differing:
+            raise ValueError(
+                f"variable {self.name!r} and {other} have different labels on "
+                f"{differing}; declare both over the same sets"
+            )
 
     def _bound(self, bound: float | Param, which: str) -> float | Param:
         """Return the bound as given, as a float or a Param.
@@ -298,14 +318,21 @@ class Variable(Symbol):
         """Return the positions and the values of `param` at this variable's members.
 
         A dimension `param` lacks is replicated over the members of this
-        variable. A member where `param` has no value is not returned.
+        variable. A member where `param` has no value is not returned. Raises
+        ValueError for a dimension with different labels in `param` and in
+        this variable.
         """
         array = self._aligned(param)
         return self._positions_of(array), np.asarray(array.values())
 
     def _aligned(self, param: Param) -> SparseArray:
-        """Return `param` over this variable's dimensions and members."""
+        """Return `param` over this variable's dimensions and members.
+
+        Raises ValueError for a dimension with different labels in `param`
+        and in this variable.
+        """
         array = param.materialise().broadcast(self.dims, self.coords)
+        self._same_labels(array.coords, f"parameter {param.name!r}")
         if self._domain is not None:
             array = array.restrict(self._domain)
         return array

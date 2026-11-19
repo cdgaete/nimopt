@@ -18,6 +18,10 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+### Fixed
+
+- A model that reads two sets of one name with different labels raises `ValueError`. The check covers a parameter given as `lower=` or `upper=` of a variable, to `Variable.align`, to `Session.fix` or to `Session.set_bound`, the `subset=` of a variable, the `over=` of a constraint and the `where=` of `Sum`. Two sets of one name with equal labels in the same order are one dimension.
+
 ## 0.20261118.0 - 2026-11-18
 
 ### Added

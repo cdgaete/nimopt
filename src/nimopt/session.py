@@ -168,10 +168,11 @@ class Session:
         TypeError for a target that is not a variable or one reference to a
         variable. Raises ValueError for a variable the session's model does
         not declare, for a value that is not finite, for a value that is not
-        integral on a column of an integer variable, and for a Param given for
-        a target with a label. Raises ValueError where the model changed after
-        the session opened, and where the adapter does not change a loaded
-        model. A rejected call changes no bound.
+        integral on a column of an integer variable, for a Param given for a
+        target with a label, and for a Param whose labels on a dimension
+        differ from the labels of the variable. Raises ValueError where the
+        model changed after the session opened, and where the adapter does
+        not change a loaded model. A rejected call changes no bound.
         """
         self._require_current()
         self._require_mutation()
@@ -210,10 +211,11 @@ class Session:
         TypeError for a target that is not a variable or one reference to a
         variable. Raises ValueError for a variable the session's model does
         not declare, for neither bound given, for a bound that is NaN, for a
-        Param given for a target with a label, and for a Param with no value at
-        a member of the variable. Raises ValueError where the model changed
-        after the session opened, and where the adapter does not change a
-        loaded model. A rejected call changes no bound.
+        Param given for a target with a label, for a Param with no value at a
+        member of the variable, and for a Param whose labels on a dimension
+        differ from the labels of the variable. Raises ValueError where the
+        model changed after the session opened, and where the adapter does
+        not change a loaded model. A rejected call changes no bound.
         """
         self._require_current()
         self._require_mutation()
