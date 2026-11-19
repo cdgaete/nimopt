@@ -18,6 +18,8 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+## 0.20261119.0 - 2026-11-19
+
 ### Added
 
 - `singleton_rows` on `Model.assemble`, `Model.session` and `Model.solve`, with the values `"bounds"` and `"rows"`.
