@@ -216,21 +216,31 @@ def solve(
     )
 
 
-def conflict(backend: Any) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]:
-    """Return the rows and columns of an irreducible infeasible subsystem.
+def conflict(
+    backend: Any,
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64], npt.NDArray[np.int8]]:
+    """Return the rows, the columns and the sides of an infeasible subsystem.
 
-    The subsystem is computed here, not at the solve. Gurobi computes it over
-    the model with its integrality. A model feasible as a relaxation and
-    infeasible as a mixed-integer program yields a subsystem.
+    `sides` contains one int8 per column: 1 where the lower bound of the column is
+    in the subsystem, 2 where the upper bound is, 3 where both are and 0 where
+    neither is. The subsystem is computed here, not at the solve. Gurobi
+    computes it over the model with its integrality. A model feasible as a
+    relaxation and infeasible as a mixed-integer program yields a subsystem.
     """
     backend.computeIIS()
     rows = [at for at, row in enumerate(backend.getConstrs()) if row.IISConstr]
-    columns = [
-        at
-        for at, column in enumerate(backend.getVars())
-        if column.IISLB or column.IISUB
-    ]
-    return np.asarray(rows, dtype=np.int64), np.asarray(columns, dtype=np.int64)
+    columns = []
+    sides = []
+    for at, column in enumerate(backend.getVars()):
+        if not (column.IISLB or column.IISUB):
+            continue
+        columns.append(at)
+        sides.append((1 if column.IISLB else 0) | (2 if column.IISUB else 0))
+    return (
+        np.asarray(rows, dtype=np.int64),
+        np.asarray(columns, dtype=np.int64),
+        np.asarray(sides, dtype=np.int8),
+    )
 
 
 def ray(backend: Any) -> npt.NDArray[np.float64] | None:

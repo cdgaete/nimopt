@@ -11,6 +11,7 @@ from optimality import check  # noqa: E402
 from singleton_models import neg_max, plant  # noqa: E402
 from test_session import dispatch as small  # noqa: E402
 from test_session import infeasible, odd, unbounded  # noqa: E402
+from test_singleton_session import crossing, one_sided  # noqa: E402
 from test_solution_limit import knapsack  # noqa: E402
 
 SOLVER = "gurobi"
@@ -102,6 +103,24 @@ def test_a_conflict_from_gurobi_is_native_and_reads_as_a_row():
     assert found.solver == "gurobi"
     assert found.method == "native"
     assert repr(found.conflict[0]) == repr(m.row("balance", snapshot=1))
+
+
+def test_a_conflict_reports_the_converted_rows_whose_bound_is_in_it():
+    model = one_sided()
+    with model.session(SOLVER, singleton_rows="bounds") as session:
+        assert session.solve().status == "infeasible"
+        found = session.diagnose()
+    assert {row.constraint for row in found.conflict} == {"xup", "yup", "need"}
+
+
+def test_a_conflict_of_converted_rows_reports_their_constraints():
+    model = crossing()
+    with model.session(SOLVER, singleton_rows="bounds") as session:
+        assert session.solve().status == "infeasible"
+        found = session.diagnose()
+    assert {row.constraint for row in found.conflict} == {"lo", "up"}
+    for row in found.conflict:
+        assert row.index == model.row(row.constraint, **row.coordinate).index
 
 
 @pytest.mark.parametrize("solver", ["highs", "gurobi"])

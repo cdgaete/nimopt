@@ -51,7 +51,8 @@ class Diagnosis:
 
     `conflict` is None where the model is not infeasible. `ray` is None where
     the model is not unbounded. An empty tuple reports that the solver
-    returned nothing.
+    returned nothing. `ray` is None where the solver returns no ray, and HiGHS
+    returns none for a model with no loaded row.
     """
 
     status: str
@@ -392,10 +393,13 @@ class Session:
     def _write_bounds(self, variable: Variable) -> None:
         """Write a variable's bounds into the solver's model, then the vectors.
 
-        Raises where the solver rejects them, and writes no vector then.
+        The bounds are narrowed to the bounds the converted rows of these
+        columns set. Raises where the solver rejects them, and writes no vector
+        then.
         """
         lower, upper = self._bounds.bounds_of(variable)
         columns = variable._columns()
+        self.assembled.singletons.clip(columns.start, columns.stop, lower, upper)
         if self._backend is not None:
             self._adapter.change_column_bounds(
                 self._backend,
@@ -420,28 +424,52 @@ class Session:
         if index < self.assembled.n_rows:
             return read(self._copy, self.assembled, index)
         name, position, columns, values, lower, upper = self._appended.row(index)
-        return written(self._copy, name, index, position, columns, values, lower, upper)
+        return written(
+            self._copy,
+            name,
+            self.model.n_rows + index - self.assembled.n_rows,
+            position,
+            columns,
+            values,
+            lower,
+            upper,
+        )
 
     def _conflict(self) -> tuple[tuple[Row, ...], tuple[ColumnBound, ...]]:
-        """Return the rows that cannot all be satisfied and the columns they bind."""
+        """Return the rows that cannot all be satisfied and the columns they bind.
+
+        A column of the conflict adds the converted row that sets its lower
+        bound where the lower bound is in the subsystem, and the converted row
+        that sets its upper bound where the upper bound is.
+        """
         if not self.capabilities.supports("conflict"):
             raise ValueError(
                 f"{self.solver!r} computes no conflict; read "
                 f"`capabilities({self.solver!r})` for what this adapter does"
             )
-        rows, columns = self._adapter.conflict(self._backend)
-        return (
-            tuple(self._row(int(at)) for at in rows),
-            tuple(
-                ColumnBound(
-                    variable,
-                    coordinate,
-                    float(self.assembled.col_lower[column]),
-                    float(self.assembled.col_upper[column]),
+        rows, columns, sides = self._adapter.conflict(self._backend)
+        conflict = [self._row(int(at)) for at in rows]
+        bounds = []
+        for position, column, variable, coordinate in resolve(self._copy, columns):
+            lower = float(self.assembled.col_lower[column])
+            upper = float(self.assembled.col_upper[column])
+            side = int(sides[position])
+            for name, at_row in self.assembled.singletons.setting(
+                column, lower, upper, bool(side & 1), bool(side & 2)
+            ):
+                constraint = self._copy.constraints[name]
+                held = constraint.row_at(at_row)
+                conflict.append(
+                    written(
+                        self._copy,
+                        name,
+                        self._copy._first_row(name) + at_row,
+                        at_row,
+                        *held,
+                    )
                 )
-                for _, column, variable, coordinate in resolve(self._copy, columns)
-            ),
-        )
+            bounds.append(ColumnBound(variable, coordinate, lower, upper))
+        return tuple(conflict), tuple(bounds)
 
     def _ray(self) -> tuple[RayTerm, ...] | None:
         """Return the columns of the ray and how far each one moves."""

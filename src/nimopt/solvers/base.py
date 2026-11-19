@@ -10,7 +10,7 @@ and four functions
 
     installed() -> bool
     solve(assembled, sense, options=None) -> Result
-    conflict(backend) -> (rows, columns)
+    conflict(backend) -> (rows, columns, sides)
     ray(backend) -> ndarray | None
 
 and, where it declares the capability `mutation`, three more
@@ -21,6 +21,11 @@ and, where it declares the capability `mutation`, three more
 
 An adapter that declares neither a conflict nor a ray is never called for one.
 An adapter that declares no mutation defines none of the three functions.
+
+`conflict` returns the rows and the columns of an irreducible infeasible
+subsystem, and `sides` with one int8 per column: 1 where the lower bound of that
+column is in the subsystem, 2 where the upper bound is, 3 where both are and 0
+where neither is.
 
 `Result.status` is a member of `STATUS`. `Result.feasible` is True where the
 solver reports `col_value` as a primal-feasible point. Each adapter reads that

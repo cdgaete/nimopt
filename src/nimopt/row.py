@@ -27,7 +27,8 @@ class RowTerm:
 class Row:
     """A row as the matrix stores it: its terms, its sense and its bounds.
 
-    The row contains the entries the assembly pass writes for it.
+    The row contains the entries the assembly pass writes for it. `index` is
+    the position of the row among the rows the model declares.
     """
 
     constraint: str
@@ -121,17 +122,22 @@ def read(model: "Model", assembled: "Assembled", index: int) -> Row:
     """Return the row at `index` of an assembled model.
 
     `index` is the solver's own row number, the number a solver reports for a
-    conflict. Raises ValueError for an index outside the assembled rows.
+    conflict. The returned row's index is its position among the rows the
+    model declares. Raises ValueError for an index outside the assembled rows.
     """
     for name in model.constraints:
         at = assembled.row_of(name)
         if at.start <= index < at.stop:
+            kept = assembled.singletons.kept(name)
+            position = index - at.start
+            if kept is not None:
+                position = int(kept[position])
             span = slice(assembled.indptr[index], assembled.indptr[index + 1])
             return written(
                 model,
                 name,
-                index,
-                index - at.start,
+                model._first_row(name) + position,
+                position,
                 assembled.indices[span],
                 assembled.values[span],
                 float(assembled.row_lower[index]),

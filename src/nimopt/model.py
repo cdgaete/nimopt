@@ -360,20 +360,24 @@ class Model:
         """Return one row of this model's matrix, at the coordinate given.
 
         The row contains the entries `assemble` writes for it, and is the row
-        the solver is given. Its index is its position in the assembled
-        matrix. Raises KeyError for a name that is not a declared constraint.
-        Raises ValueError for a label that is not a member of its dimension.
-        Raises ValueError for a coordinate the constraint has no row at; the
-        message refers to `absent`.
+        the solver is given. Its index is its position among the rows the
+        model declares. Raises KeyError for a name that is not a declared
+        constraint. Raises ValueError for a label that is not a member of its
+        dimension. Raises ValueError for a coordinate the constraint has no row
+        at; the message refers to `absent`.
         """
         constraint = self._constraint(name)
         position = constraint.position_of(coords)
         columns, values, lower, upper = constraint.row_at(position)
-        names = tuple(self.constraints)
-        start = sum(self.constraints[n].n_rows for n in names[: names.index(name)])
+        start = self._first_row(name)
         return written(
             self, name, start + position, position, columns, values, lower, upper
         )
+
+    def _first_row(self, name: str) -> int:
+        """Return the position of a constraint's first declared row."""
+        names = tuple(self.constraints)
+        return sum(self.constraints[n].n_rows for n in names[: names.index(name)])
 
     def absent(self, name: str) -> "Absence":
         """Return which coordinates fell out of the named constraint, and why.

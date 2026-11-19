@@ -1,6 +1,7 @@
 """The matrix a model assembles into, with its row and column data."""
 
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -55,6 +56,20 @@ def check_singleton_rows(value: str) -> None:
         raise ValueError(f"singleton_rows is 'bounds' or 'rows'; got {value!r}")
 
 
+@dataclass(frozen=True)
+class _Block:
+    """One constraint's converted rows in the record.
+
+    `at` is their range in the record. `first_column` and `last_column` are
+    the smallest and the largest column they contain.
+    """
+
+    constraint: "Constraint"
+    at: slice
+    first_column: int
+    last_column: int
+
+
 class Singletons:
     """The rows an assembly stores as column bounds.
 
@@ -70,7 +85,7 @@ class Singletons:
         self._n_rows = int(n_rows)
         self._columns = np.empty(self._n_rows, dtype=np.int32)
         self._coefficients = np.empty(self._n_rows, dtype=np.float64)
-        self._blocks: dict[str, tuple[Constraint, slice]] = {}
+        self._blocks: dict[str, _Block] = {}
         self._written = 0
 
     def __repr__(self) -> str:
@@ -94,7 +109,8 @@ class Singletons:
         ValueError where the record has no room for them.
         """
         start = self._written
-        stop = start + int(np.asarray(columns).size)
+        columns = np.asarray(columns, dtype=np.int32)
+        stop = start + int(columns.size)
         if stop > self._n_rows:
             raise ValueError(
                 f"constraint {name!r} writes {stop - start} converted rows at "
@@ -103,7 +119,9 @@ class Singletons:
             )
         self._columns[start:stop] = columns
         self._coefficients[start:stop] = coefficients
-        self._blocks[name] = (constraint, slice(start, stop))
+        self._blocks[name] = _Block(
+            constraint, slice(start, stop), int(columns.min()), int(columns.max())
+        )
         self._written = stop
 
     def rows_of(self, name: str) -> slice | None:
@@ -112,7 +130,7 @@ class Singletons:
         Returns None for a constraint with no converted row.
         """
         held = self._blocks.get(name)
-        return None if held is None else held[1]
+        return None if held is None else held.at
 
     def kept(self, name: str) -> npt.NDArray[np.int64] | None:
         """Return the positions of the kept rows of a constraint.
@@ -123,7 +141,51 @@ class Singletons:
         held = self._blocks.get(name)
         if held is None:
             return None
-        return held[0].kept_positions()
+        return held.constraint.kept_positions()
+
+    def setting(
+        self,
+        column: int,
+        col_lower: float,
+        col_upper: float,
+        lower: bool,
+        upper: bool,
+    ) -> tuple[tuple[str, int], ...]:
+        """Return the constraint and the position of each row that sets a bound.
+
+        `lower` and `upper` select the sides to report. The result contains the
+        first converted row of `column` whose bound on a requested side equals
+        the bound of the column on that side. A position is among the rows of
+        that constraint. A row that sets both requested bounds appears once. The
+        bounds of the blocks that contain `column` are computed.
+        """
+        blocks = self._touching(column, column + 1)
+        if not blocks or not (lower or upper):
+            return ()
+        first: dict[int, int] = {}
+        wanted = int(bool(lower)) + int(bool(upper))
+        for held in blocks:
+            if len(first) == wanted:
+                break
+            block_lower, block_upper = self._block_bounds(held)
+            on_column = np.flatnonzero(self._columns[held.at] == column)
+            for side, bound, merged in (
+                (1, block_lower, col_lower),
+                (2, block_upper, col_upper),
+            ):
+                if side in first or not (lower if side == 1 else upper):
+                    continue
+                at = bound[on_column]
+                sets = on_column[np.isfinite(at) & (at == merged)]
+                if sets.size:
+                    first[side] = held.at.start + int(sets[0])
+        found: list[tuple[str, int]] = []
+        for side in (1, 2):
+            if side in first:
+                placed = self._placed(first[side])
+                if placed not in found:
+                    found.append(placed)
+        return tuple(found)
 
     def clip(
         self,
@@ -136,16 +198,16 @@ class Singletons:
 
         A converted row whose column is in the range sets a lower or an upper
         bound. The lower bound of a column is the largest of its bound and of
-        the lower bounds set on it; the upper bound is the smallest.
+        the lower bounds set on it; the upper bound is the smallest. Each block
+        that contains a column of the range is read at the size of that block.
         """
-        if self._written == 0:
-            return
-        row_lower, row_upper = self._bounds()
-        columns = self._columns[: self._written]
-        inside = (columns >= start) & (columns < stop)
-        at = columns[inside] - start
-        np.maximum.at(lower, at, row_lower[inside])
-        np.minimum.at(upper, at, row_upper[inside])
+        for held in self._touching(start, stop):
+            block_lower, block_upper = self._block_bounds(held)
+            columns = self._columns[held.at]
+            inside = (columns >= start) & (columns < stop)
+            at = columns[inside] - start
+            np.maximum.at(lower, at, block_lower[inside])
+            np.minimum.at(upper, at, block_upper[inside])
 
     def duals(
         self,
@@ -185,23 +247,51 @@ class Singletons:
             declared[at] -= part[at]
         return shares / self._coefficients, declared
 
+    def _touching(self, start: int, stop: int) -> list[_Block]:
+        """Return the blocks that contain a column from `start` to `stop`."""
+        return [
+            held
+            for held in self._blocks.values()
+            if held.first_column < stop and held.last_column >= start
+        ]
+
+    def _placed(self, index: int) -> tuple[str, int]:
+        """Return the constraint and the position of the converted row `index`."""
+        for name, held in self._blocks.items():
+            if held.at.start <= index < held.at.stop:
+                position = held.constraint.singleton_positions()[index - held.at.start]
+                return name, int(position)
+        raise ValueError(
+            f"converted row {index} is outside the {self._written} rows of the record"
+        )
+
+    def _block_bounds(
+        self, held: _Block
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """Return the lower and the upper bound the rows of one block set."""
+        constraint, at = held.constraint, held.at
+        coefficients = self._coefficients[at]
+        value = constraint.singleton_rhs() / coefficients
+        lower = np.full(value.size, -np.inf, dtype=np.float64)
+        upper = np.full(value.size, np.inf, dtype=np.float64)
+        if constraint.sense == "==":
+            lower[:] = value
+            upper[:] = value
+            return lower, upper
+        positive = coefficients > 0
+        sets_lower = positive if constraint.sense == ">=" else ~positive
+        lower[sets_lower] = value[sets_lower]
+        upper[~sets_lower] = value[~sets_lower]
+        return lower, upper
+
     def _bounds(
         self,
     ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """Return the lower and upper bound each converted row sets."""
-        written = self._written
-        lower = np.full(written, -np.inf)
-        upper = np.full(written, np.inf)
-        for constraint, at in self._blocks.values():
-            coefficients = self._coefficients[at]
-            value = constraint.singleton_rhs() / coefficients
-            positive = coefficients > 0
-            sets_lower = positive if constraint.sense == ">=" else ~positive
-            if constraint.sense == "==":
-                lower[at], upper[at] = value, value
-            else:
-                lower[at] = np.where(sets_lower, value, -np.inf)
-                upper[at] = np.where(sets_lower, np.inf, value)
+        lower = np.full(self._written, -np.inf, dtype=np.float64)
+        upper = np.full(self._written, np.inf, dtype=np.float64)
+        for held in self._blocks.values():
+            lower[held.at], upper[held.at] = self._block_bounds(held)
         return lower, upper
 
 

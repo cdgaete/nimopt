@@ -69,6 +69,8 @@ SENSES = {
 
 IRREDUCIBLE = 4
 
+COLUMN_BOUND = {2: 1, 3: 2, 4: 3}
+
 FAILED = (
     "kNotset",
     "kLoadError",
@@ -430,12 +432,16 @@ def append_rows(
         )
 
 
-def conflict(backend: Any) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]:
-    """Return the rows and columns of an irreducible infeasible subsystem.
+def conflict(
+    backend: Any,
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64], npt.NDArray[np.int8]]:
+    """Return the rows, the columns and the sides of an infeasible subsystem.
 
-    The strategy option is set here, not at the solve. HiGHS computes the
-    subsystem over the model's linear relaxation. An invalid subsystem raises
-    RuntimeError.
+    `sides` contains one int8 per column: 1 where the lower bound of the column is
+    in the subsystem, 2 where the upper bound is, 3 where both are and 0 where
+    neither is. The strategy option is set here, not at the solve. HiGHS
+    computes the subsystem over the model's linear relaxation. An invalid
+    subsystem raises RuntimeError.
     """
     backend.setOptionValue("iis_strategy", IRREDUCIBLE)
     reported, iis = backend.getIis()
@@ -448,6 +454,9 @@ def conflict(backend: Any) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]
     return (
         np.asarray(iis.row_index_, dtype=np.int64),
         np.asarray(iis.col_index_, dtype=np.int64),
+        np.asarray(
+            [COLUMN_BOUND.get(int(at), 0) for at in iis.col_bound_], dtype=np.int8
+        ),
     )
 
 
