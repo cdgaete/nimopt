@@ -18,6 +18,8 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+## 0.20261118.1 - 2026-11-18
+
 ### Fixed
 
 - A variable, a constraint or an objective that reads two sets of one name with different labels raises `ValueError` where it is declared, and the message identifies it. For a variable the check covers a parameter given as `lower=` or `upper=`, to `Variable.align`, to `Session.fix` or to `Session.set_bound`, and its `subset=`. For a constraint and for the objective it covers every variable, coefficient, condition and right-hand side, with `over=` and the `where=` of `Sum`. A set read at one fixed member is compared as well: `p["t0"] * x[A, "t0"]` raises where `p` and `x` are over two sets named `T` with different labels.
