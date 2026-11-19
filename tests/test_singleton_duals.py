@@ -110,6 +110,17 @@ def test_the_cost_model_solves_to_the_same_objective():
     assert bounds.objective == pytest.approx(rows.objective)
 
 
+@pytest.mark.parametrize("singleton_rows", ["rows", "bounds"])
+def test_a_coefficient_highs_reads_as_zero_is_not_converted(singleton_rows):
+    T = Set("T", np.arange(1))
+    k = Param.from_dense("k", (T,), np.array([1e-21]))
+    m = Model("m")
+    x = m.var("x", (T,), lower=-10.0)
+    m.constraint("c", k[T] * x[T] >= 5e-21)
+    m.set_objective(Sum(T, x[T]))
+    assert m.solve(singleton_rows=singleton_rows).objective == pytest.approx(-10.0)
+
+
 @pytest.mark.parametrize("call", ["session", "solve"])
 def test_an_unknown_value_raises(call):
     with pytest.raises(ValueError, match="singleton_rows is 'bounds' or 'rows'"):

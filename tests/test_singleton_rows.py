@@ -48,8 +48,15 @@ def test_an_infinite_right_hand_side_is_not_a_singleton_row():
 
 
 def test_a_bound_of_1e20_or_more_is_not_a_singleton_row():
-    held = one_term([1e-21, 1.0, 1.0], [1.0] * 3, sense=">=")
+    held = one_term([1e-8, 1.0, 1.0], [1e13, 1.0, 1.0], sense=">=")
     assert held.singleton_positions().tolist() == [1, 2]
+
+
+def test_a_coefficient_outside_the_range_is_not_a_singleton_row():
+    assert one_term([1e-9, 1e15, 2e-9], [1.0] * 3).singleton_positions().tolist() == [2]
+    assert one_term(
+        [-1e-9, -1e15, -2e-9], [1.0] * 3
+    ).singleton_positions().tolist() == [2]
 
 
 def test_a_negative_coefficient_does_not_change_the_marking():
@@ -179,5 +186,16 @@ def test_a_marked_row_whose_coefficient_becomes_zero_raises_at_assembly():
     x = m.var("x", (T,), lower=-np.inf)
     m.constraint("c", k[T] * x[T] >= 1.0)
     k.array = Param.from_dense("k", (T,), np.array([0.0, 3.0, 4.0])).array
+    with pytest.raises(ValueError, match="marked 3 singleton rows and built 2"):
+        m.assemble(singleton_rows="bounds")
+
+
+def test_a_marked_row_whose_coefficient_leaves_the_range_raises_at_assembly():
+    T = Set("T", np.arange(3))
+    k = Param.from_dense("k", (T,), np.array([2.0, 3.0, 4.0]))
+    m = Model("m")
+    x = m.var("x", (T,), lower=-np.inf)
+    m.constraint("c", k[T] * x[T] >= 1.0)
+    k.array = Param.from_dense("k", (T,), np.array([1e-12, 3.0, 4.0])).array
     with pytest.raises(ValueError, match="marked 3 singleton rows and built 2"):
         m.assemble(singleton_rows="bounds")

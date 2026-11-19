@@ -25,6 +25,20 @@ from nimopt.term import Relation
 SENSES = ("<=", ">=", "==")
 
 SINGLETON_LIMIT = 1e20
+SINGLETON_COEFFICIENT_LOW = 1e-9
+SINGLETON_COEFFICIENT_HIGH = 1e15
+
+
+def _convertible(coefficients: npt.NDArray[np.float64]) -> npt.NDArray[np.bool_]:
+    """Return one flag per coefficient, True where one can become a column bound.
+
+    HiGHS treats a coefficient of 1e-9 or less in magnitude as zero, and it
+    rejects one of 1e15 or more. A NaN is outside the range.
+    """
+    magnitude = np.abs(coefficients)
+    return (magnitude > SINGLETON_COEFFICIENT_LOW) & (
+        magnitude < SINGLETON_COEFFICIENT_HIGH
+    )
 
 
 def check_relation(name: str, relation: Any) -> None:
@@ -266,9 +280,10 @@ class Constraint:
         constraint's kept rows are numbered from `row_start` inside it. Returns
         the column and the coefficient of each singleton row, in the order of
         the rows. The expression is materialised once. Raises ValueError where
-        a singleton row has not exactly one finite coefficient that is not
-        zero, and where the kept rows have a number of coefficients different
-        from the number measured at declaration. Nothing is written then.
+        a singleton row does not have exactly one coefficient that can become a
+        column bound, and where the kept rows have a number of coefficients
+        different from the number measured at declaration. Nothing is written
+        then.
         """
         narrowed = self.over is not None or self.where is not None
         within = self.rows if narrowed else None
@@ -283,7 +298,7 @@ class Constraint:
         usable = count == 1
         value = np.zeros(marked.size, dtype=np.float64)
         value[at] = coefficients
-        usable &= np.isfinite(value) & (value != 0.0)
+        usable &= _convertible(value)
         found = int(np.count_nonzero(usable))
         if found != marked.size:
             raise ValueError(
@@ -446,9 +461,10 @@ def _marking(
 
     The result is None where no row of `rows` is a singleton row, True where
     every row is one, and one flag per row otherwise. A row is a singleton row
-    where it has exactly one coefficient inside `rows`, that coefficient is
-    finite and not zero, the right-hand side is finite, and the magnitude of
-    the right-hand side divided by the coefficient is below
+    where it has exactly one coefficient inside `rows`, the magnitude of that
+    coefficient is above `SINGLETON_COEFFICIENT_LOW` and below
+    `SINGLETON_COEFFICIENT_HIGH`, the right-hand side is finite, and the
+    magnitude of the right-hand side divided by the coefficient is below
     `SINGLETON_LIMIT`. The entries of `at` are the positions of the entries of
     the block in `rows`, and the entries ascend by row.
     """
@@ -471,10 +487,7 @@ def _marking(
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
         quotient = np.abs(bound / np.where(coefficients == 0.0, 1.0, coefficients))
     marked[positions] = (
-        np.isfinite(coefficients)
-        & (coefficients != 0.0)
-        & np.isfinite(bound)
-        & (quotient < SINGLETON_LIMIT)
+        _convertible(coefficients) & np.isfinite(bound) & (quotient < SINGLETON_LIMIT)
     )
     if marked.all():
         return True
