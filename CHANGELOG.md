@@ -18,6 +18,10 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+### Added
+
+- The extra `hipo` installs `highspy[extras]`: HiGHS with the library its HiPO method requires. `pip install "nimopt[hipo]"` enables `method="hipo"`.
+
 ## 0.20261119.1 - 2026-11-19
 
 ### Changed

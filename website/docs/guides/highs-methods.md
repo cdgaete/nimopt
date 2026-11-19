@@ -113,11 +113,19 @@ solution = model.solve(options={"method": "pdlp", "pdlp_tol": 1e-8, "log": True}
 
 HiGHS stores the HiPO orderings and its BLAS in a separate library, `libhighs_extras`. The `highspy` wheel on PyPI contains HiPO and contains neither that library nor CUDA. Given `hipo`, a HiGHS without the library logs an error and runs simplex. `nimopt` raises instead and reports the missing library. Given `pdlp`, a HiGHS without CUDA runs the method on the CPU.
 
-**HiPO.** The PyPI package `highspy-extras` contains the library. `highspy` 1.16.0 loads it from the directory of that package at import, and only where both packages have the same version.
+**HiPO.** The PyPI package `highspy-extras` contains the library. `highspy` 1.16.0 loads it from the directory of that package at import, and only where both packages have the same version. The extra `hipo` of `nimopt` installs `highspy` with that package:
+
+```bash
+pip install "nimopt[hipo]"
+```
+
+In an environment that has `highspy`, the extra `extras` of `highspy` installs the package at the version of `highspy`:
 
 ```bash
 uv pip install --python <venv>/bin/python "highspy[extras]"
 ```
+
+The library prints the line `Using BLAS: OpenBLAS` to standard output at the first HiGHS solve of a process.
 
 **The GPU.** PDLP runs on a GPU with a `highspy` built from the HiGHS repository at the tag of the release, with a CUDA toolkit in the environment and the compute capability of the card. Pass the prefix of the conda environment through the `CMAKE_PREFIX_PATH` environment variable, not through `CMAKE_ARGS`. `CMAKE_ARGS` replaces the path the Python build adds for pybind11.
 

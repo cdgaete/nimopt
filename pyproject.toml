@@ -41,6 +41,7 @@ Issues = "https://github.com/cdgaete/nimopt/issues"
 
 [project.optional-dependencies]
 highs = ["highspy>=1.16"]
+hipo = ["highspy[extras]>=1.16"]
 gurobi = ["gurobipy>=12", "scipy>=1.11"]
 mosek = ["mosek>=11"]
 dev = [
