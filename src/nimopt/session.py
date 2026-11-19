@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
-from nimopt.assembly import Appended
+from nimopt.assembly import Appended, check_singleton_rows
 from nimopt.bounds import Bounds, target_of
 from nimopt.param import Param
 from nimopt.row import Row, read, resolve, written
@@ -93,6 +93,10 @@ class Session:
     and the model the session was opened on is not changed.
 
     The solver's own model is passed only to the adapter that built it.
+
+    `singleton_rows` selects the matrix the session loads: `"bounds"` stores a
+    declared row of one coefficient as a bound of its column, and `"rows"`
+    writes every row. The session stores the value it was opened with.
     """
 
     def __init__(
@@ -101,10 +105,15 @@ class Session:
         solver: str = "highs",
         options: Mapping[str, Any] | None = None,
         progress: Any = False,
+        singleton_rows: str = "rows",
     ) -> None:
+        check_singleton_rows(singleton_rows)
         self.model = model
         self.solver = solver
-        self.assembled = model.assemble(progress=progress)
+        self.singleton_rows = singleton_rows
+        self.assembled = model.assemble(
+            progress=progress, singleton_rows=singleton_rows
+        )
         self._declared = self._declarations()
         self._objective = model.objective
         self.options = options

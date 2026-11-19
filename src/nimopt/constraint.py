@@ -44,7 +44,7 @@ def _write_row_bounds(
 ) -> None:
     """Write the bounds of rows of one sense into `lower` and `upper`.
 
-    `values` holds one right-hand side per row or one number for every row.
+    `values` contains one right-hand side per row or one number for every row.
     """
     if sense == "<=":
         lower[:] = -np.inf

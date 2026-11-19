@@ -502,13 +502,17 @@ class Model:
         solver: str = "highs",
         options: Mapping[str, Any] | None = None,
         progress: Any = False,
+        singleton_rows: str = "rows",
     ) -> "Session":
         """Return an open session on this model, for a solve and what follows.
 
         The matrix is assembled when the session opens. The solver's model is
         kept afterwards, and a conflict is read from the solved instance.
+        `singleton_rows` selects the matrix: `"bounds"` stores a declared row
+        of one coefficient as a bound of its column, and `"rows"` writes every
+        row. Raises ValueError for another value.
         """
-        return Session(self, solver, options, progress)
+        return Session(self, solver, options, progress, singleton_rows)
 
     def _session_copy(self) -> "Model":
         """Return a model that shares this model's variables and declares its own rows.
@@ -535,13 +539,15 @@ class Model:
         solver: str = "highs",
         options: Mapping[str, Any] | None = None,
         progress: Any = False,
+        singleton_rows: str = "rows",
     ) -> "Solution":
         """Assemble the model, solve it, and read the values back onto its sets.
 
         `options` gives the solver's settings under the names `options()`
         reports. `log=True` among them has the solver write its own iteration
-        log. `progress=` reports the assembly. The assembly finishes before
-        the solver starts.
+        log. `progress=` reports the assembly. `singleton_rows` selects the
+        matrix, as it does at `assemble`. The assembly finishes before the
+        solver starts.
         """
-        with self.session(solver, options, progress) as session:
+        with self.session(solver, options, progress, singleton_rows) as session:
             return session.solve()

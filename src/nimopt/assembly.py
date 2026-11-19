@@ -147,6 +147,44 @@ class Singletons:
         np.maximum.at(lower, at, row_lower[inside])
         np.minimum.at(upper, at, row_upper[inside])
 
+    def duals(
+        self,
+        reduced: npt.NDArray[np.float64],
+        col_lower: npt.NDArray[np.float64],
+        col_upper: npt.NDArray[np.float64],
+        sense: str,
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """Return the dual of each converted row and the declared reduced costs.
+
+        `reduced` contains the reduced cost of each column of the loaded
+        model, and is not changed. Under sense `min` the nonnegative part of a
+        reduced cost belongs to the lower bound of the column and the
+        nonpositive part to the upper bound; under sense `max` the two parts
+        are exchanged. On each side the part belongs to the first converted
+        row whose bound equals the bound of the column on that side, and every
+        other converted row on that side has the dual zero. Where no converted
+        row has that bound, the part remains in the reduced cost of the
+        declared model. The duals are in the order of the record.
+        """
+        declared = reduced.copy()
+        shares = np.zeros(self._n_rows, dtype=np.float64)
+        if self._written == 0:
+            return shares, declared
+        positive = np.maximum(reduced, 0.0)
+        lower_part = positive if sense == "min" else reduced - positive
+        lower, upper = self._bounds()
+        columns = self._columns[: self._written]
+        for part, bound, merged in (
+            (lower_part, lower, col_lower),
+            (reduced - lower_part, upper, col_upper),
+        ):
+            sets = np.flatnonzero(np.isfinite(bound) & (bound == merged[columns]))
+            first = np.unique(columns[sets], return_index=True)[1]
+            at = columns[sets][first]
+            shares[sets[first]] += part[at]
+            declared[at] -= part[at]
+        return shares / self._coefficients, declared
+
     def _bounds(
         self,
     ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:

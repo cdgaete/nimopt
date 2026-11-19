@@ -64,9 +64,9 @@ class Solution:
     at those two statuses included. `dual` raises ValueError where `status` is
     not `optimal`, and for a model with integer columns.
 
-    The reduced costs are computed from `assembled`, the row duals and the
-    appended rows when the solution is constructed. The solution stores no
-    reference to either.
+    The reduced costs of the declared model are computed from `assembled`, the
+    row duals and the appended rows when the solution is constructed. The
+    solution stores no reference to any of them.
     """
 
     def __init__(
@@ -96,6 +96,22 @@ class Solution:
         self._col_dual = (
             None if row_dual is None else reduced_costs(assembled, row_dual, appended)
         )
+        self._converted: dict[
+            str, tuple[npt.NDArray[np.float64], npt.NDArray[np.int64]]
+        ] = {}
+        singletons = assembled.singletons
+        if self._col_dual is not None and singletons.n_rows:
+            shares, self._col_dual = singletons.duals(
+                self._col_dual,
+                assembled.col_lower,
+                assembled.col_upper,
+                model.sense,
+            )
+            for name in model.constraints:
+                at = singletons.rows_of(name)
+                kept = singletons.kept(name)
+                if at is not None and kept is not None:
+                    self._converted[name] = (shares[at], kept)
         self._rows_of = rows_of
         self._variables = frozenset(model.variables)
 
@@ -228,11 +244,12 @@ class Solution:
         `"variable"` and selects which to read. A reduced cost is the
         variable's objective coefficient less the duals of the rows it
         appears in, weighted by its coefficients in them, in the model's own
-        objective. Raises ValueError for a name that identifies both with no
-        `kind`, and for a `kind` that is neither. Raises KeyError for a name
-        the model does not declare, and for one declared after the solve.
-        Raises ValueError where `status` is not `optimal`, and for a model
-        with integer columns.
+        objective. A constraint's dual is returned at every declared row, a
+        row stored as a column bound included. Raises ValueError for a name
+        that identifies both with no `kind`, and for a `kind` that is neither.
+        Raises KeyError for a name the model does not declare, and for one
+        declared after the solve. Raises ValueError where `status` is not
+        `optimal`, and for a model with integer columns.
         """
         if kind is not None and kind not in ("constraint", "variable"):
             raise ValueError(f"kind is 'constraint' or 'variable'; got {kind!r}")
@@ -275,7 +292,16 @@ class Solution:
                 f"again"
             )
         row_dual, _ = self._require_dual()
-        return _on_members(constraint.rows, row_dual[self._rows_of[name]])
+        converted = self._converted.get(name)
+        if converted is None:
+            return _on_members(constraint.rows, row_dual[self._rows_of[name]])
+        converted_dual, kept = converted
+        values = np.empty(constraint.rows.size, dtype=np.float64)
+        values[kept] = row_dual[self._rows_of[name]]
+        marked = np.ones(constraint.rows.size, dtype=bool)
+        marked[kept] = False
+        values[marked] = converted_dual
+        return _on_members(constraint.rows, values)
 
 
 def _on_members(
