@@ -25,7 +25,7 @@ from nimopt.param import Param
 from nimopt.piecewise import Piecewise, check_not_generated, generate
 from nimopt.row import Row, written
 from nimopt.session import Session
-from nimopt.sets import Alias
+from nimopt.sets import Alias, check_labels
 from nimopt.solvers.base import check_sense
 from nimopt.symbol import read_at_its_sets
 from nimopt.syntax import render
@@ -39,8 +39,9 @@ if TYPE_CHECKING:
 def objective_expression(expression: Any) -> Expression:
     """Return `expression` as an objective, read at its sets.
 
-    Raises TypeError for a value that is not an expression, and ValueError for
-    an expression with free dimensions.
+    Raises TypeError for a value that is not an expression. Raises ValueError
+    for an expression with free dimensions, and for a dimension the terms read
+    with two different coordinates.
     """
     expression = read_at_its_sets(expression)
     if not isinstance(expression, Expression):
@@ -53,6 +54,7 @@ def objective_expression(expression: Any) -> Expression:
             f"objective expression has free dimensions {expression.frame}; "
             f"sum the expression over them"
         )
+    check_labels("the objective", expression._coordinates())
     return expression
 
 

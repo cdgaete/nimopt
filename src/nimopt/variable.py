@@ -12,7 +12,14 @@ if TYPE_CHECKING:
 
 from nimopt.names import COLUMN
 from nimopt.param import Param
-from nimopt.sets import as_sets, condition_dims, coords_of, label_text, rows_of
+from nimopt.sets import (
+    as_sets,
+    condition_dims,
+    coords_of,
+    differing_dims,
+    label_text,
+    rows_of,
+)
 from nimopt.symbol import Symbol
 
 
@@ -116,10 +123,7 @@ class Variable(Symbol):
         `coords` maps dimensions of this variable to coordinates. `other` is
         the text that identifies their owner in the message.
         """
-        mine = self.coords
-        differing = [
-            d for d, held in coords.items() if held is not mine[d] and held != mine[d]
-        ]
+        differing = differing_dims((*self.coords.items(), *coords.items()))
         if differing:
             raise ValueError(
                 f"variable {self.name!r} and {other} have different labels on "

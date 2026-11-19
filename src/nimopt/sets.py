@@ -478,6 +478,34 @@ def coords_of(sets: Iterable[Any]) -> dict[str, Any]:
     return {s.name: s.coord for s in sets}
 
 
+def differing_dims(read: Iterable[tuple[str, Any]]) -> list[str]:
+    """Return the dimensions given with two different coordinates, in order.
+
+    `read` gives pairs of a dimension and a coordinate. Two coordinates differ
+    where their labels or the order of their labels differ.
+    """
+    first: dict[str, Any] = {}
+    differing: list[str] = []
+    for name, coord in read:
+        known = first.setdefault(name, coord)
+        if known is not coord and known != coord and name not in differing:
+            differing.append(name)
+    return differing
+
+
+def check_labels(owner: str, read: Iterable[tuple[str, Any]]) -> None:
+    """Raise ValueError for a dimension `owner` reads with two different coordinates.
+
+    `read` gives the dimension and the coordinate of each set `owner` reads.
+    """
+    differing = differing_dims(read)
+    if differing:
+        raise ValueError(
+            f"{owner} reads different labels on {differing}; declare its "
+            f"variables, parameters and conditions over the same sets"
+        )
+
+
 def _frame(sets: Iterable[Any]) -> tuple[tuple[str, ...], dict[str, Any]]:
     return tuple(s.name for s in sets), coords_of(sets)
 
@@ -572,6 +600,21 @@ def condition_dims(given: Any, owner: str, what: str) -> tuple[str, ...]:
         f"{what} of {owner} is a {type(given).__name__}; give a parameter, a "
         f"tuple of sets or a domain"
     )
+
+
+def condition_coords(given: Any, owner: str, what: str) -> dict[str, Any]:
+    """Return the coordinate of each dimension of a condition, without its values.
+
+    A condition is a parameter, a tuple of sets or aliases, or a domain.
+    Raises ValueError for any other value, and for a tuple that contains a
+    lagged or a cyclic set.
+    """
+    from nimopt.param import Param
+
+    condition_dims(given, owner, what)
+    if isinstance(given, Domain):
+        return dict(given.coords)
+    return coords_of(given.sets if isinstance(given, Param) else given)
 
 
 def condition_name(given: Any, owner: str, what: str) -> str | tuple[str, ...] | None:

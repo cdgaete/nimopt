@@ -48,10 +48,11 @@ T 3
 <!-- /output -->
 
 A dimension is identified by the name of its set. Two `Set` objects with one
-name and equal labels in the same order are one dimension. A model that reads
-two sets of one name with different labels raises `ValueError`.
-`Param.from_array` returns a parameter over a set from an array with the
-labels in any order.
+name and equal labels in the same order are one dimension. A variable, a
+constraint or an objective that reads two sets of one name with different
+labels raises `ValueError`. `Model.explain()` and `save` raise `ValueError`
+for a model declared over two such sets. `Param.from_array` returns a
+parameter over a set from an array with the labels in any order.
 
 ## `Alias`
 

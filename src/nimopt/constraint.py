@@ -1,6 +1,6 @@
 """A constraint: an expression, a sense and a right-hand side."""
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 import numpy as np
@@ -11,6 +11,8 @@ from nimopt.coefficient import Coefficient
 from nimopt.names import ROW
 from nimopt.sets import (
     as_member,
+    check_labels,
+    condition_coords,
     condition_dims,
     condition_name,
     coord_dtype,
@@ -66,7 +68,25 @@ class Constraint:
                 f"constraint {self.name!r} is given over= and where= together; "
                 f"pass one of them"
             )
+        check_labels(f"constraint {self.name!r}", self._coordinates())
         self.rows, self._rhs_values, self._nnz = narrow(self)
+
+    def _coordinates(self) -> Iterator[tuple[str, Any]]:
+        """Yield the dimension and the coordinate of each set this constraint reads.
+
+        The constraint reads the sets of its expression, the dimensions of
+        `over=` or `where=`, and the sets of each parameter of its right-hand
+        side.
+        """
+        owner = f"constraint {self.name!r}"
+        yield from self.expression._coordinates()
+        for given, what in ((self.over, "over="), (self.where, "condition")):
+            if given is not None:
+                yield from condition_coords(given, owner, what).items()
+        if isinstance(self.rhs, Coefficient):
+            for parameter in self.rhs.parameters():
+                for held in parameter.sets:
+                    yield held.name, held.coord
 
     def __repr__(self) -> str:
         return (

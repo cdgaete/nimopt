@@ -6,6 +6,7 @@ import pytest
 from nimopt import Model, Param, Set, Sum, subset
 
 FORMS = ("parameter", "tuple", "domain")
+READS = r"constraint 'c' reads different labels on \['A'\]"
 
 
 def two_sets():
@@ -78,7 +79,7 @@ def test_rows_declared_over_another_set_of_the_name_raise(form):
     A, other = two_sets()
     m = Model("rows")
     x = m.var("x", (A,))
-    with pytest.raises(ValueError, match="different labels"):
+    with pytest.raises(ValueError, match=READS):
         m.constraint("c", x[A] <= 1.0, over=condition(form, other))
     assert m.n_rows == 0
 
@@ -87,7 +88,7 @@ def test_a_sum_condition_over_another_set_of_the_name_raises():
     A, other = two_sets()
     m = Model("sum")
     x = m.var("x", (A,))
-    with pytest.raises(ValueError, match="different labels"):
+    with pytest.raises(ValueError, match=READS):
         m.constraint("c", Sum(A, x[A], where=condition("domain", other)) <= 1.0)
 
 
@@ -98,8 +99,58 @@ def test_a_coefficient_over_another_set_than_the_declared_rows_raises():
     k = Param.from_dense("k", (other,), np.array([10.0, 20.0]))
     m = Model("rows")
     y = m.var("y", (T,))
-    with pytest.raises(ValueError, match="different labels"):
+    with pytest.raises(ValueError, match=READS):
         m.constraint("c", k[other] * y[T] <= 1.0, over=(A, T))
+
+
+@pytest.mark.parametrize(
+    "part", ["coefficient", "right-hand side", "condition", "second variable"]
+)
+def test_a_constraint_over_two_sets_of_one_name_raises_with_its_name(part):
+    A, other = two_sets()
+    k = Param.from_dense("k", (other,), np.array([10.0, 20.0]))
+    m = Model("parts")
+    x = m.var("x", (A,))
+    where = None
+    if part == "coefficient":
+        relation = k[other] * x[A] <= 1.0
+    elif part == "right-hand side":
+        relation = x[A] <= k[other]
+    elif part == "condition":
+        relation, where = x[A] <= 1.0, (other,)
+    else:
+        relation = x[A] + m.var("y", (other,))[other] <= 1.0
+    with pytest.raises(ValueError, match=READS):
+        m.constraint("c", relation, where=where)
+    assert m.n_rows == 0
+
+
+def test_an_objective_over_two_sets_of_one_name_raises_where_it_is_set():
+    A, other = two_sets()
+    k = Param.from_dense("k", (other,), np.array([10.0, 20.0]))
+    m = Model("objective")
+    x = m.var("x", (A,))
+    with pytest.raises(
+        ValueError, match=r"the objective reads different labels on \['A'\]"
+    ):
+        m.set_objective(Sum(A, k[other] * x[A]))
+    assert m.objective is None
+
+
+def test_an_appended_row_over_two_sets_of_one_name_raises_with_its_name():
+    pytest.importorskip("highspy")
+    A, other = two_sets()
+    k = Param.from_dense("k", (other,), np.array([10.0, 20.0]))
+    m = Model("session", sense="max")
+    x = m.var("x", (A,), upper=100.0)
+    m.set_objective(Sum(A, x[A]))
+    with m.session() as session:
+        with pytest.raises(
+            ValueError, match=r"constraint 'r' reads different labels on \['A'\]"
+        ):
+            session.add_row("r", x[A] <= k[other])
+        assert session.n_rows == 0
+        assert session.solve().objective == pytest.approx(200.0)
 
 
 def test_two_sets_of_one_name_with_equal_labels_are_accepted():

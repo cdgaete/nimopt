@@ -1,6 +1,6 @@
 """A linear expression as the terms that were written, with no array."""
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -9,7 +9,7 @@ from nimblend import Domain, SparseArray, sum_arrays, sum_to_dense
 
 from nimopt.coefficient import NOT_A_COEFFICIENT, Coefficient, Derived, Reference
 from nimopt.names import COLUMN
-from nimopt.sets import LaggedSet, condition_dims, rows_of
+from nimopt.sets import LaggedSet, condition_coords, condition_dims, rows_of
 from nimopt.symbol import Symbol, read_at_its_sets, read_bare
 
 
@@ -471,6 +471,23 @@ class Expression:
     def coords(self) -> dict[str, Any]:
         """Return each dimension's coordinate, from its variables and coefficients."""
         return {name: s.coord for name, s in self.sets_by_name().items()}
+
+    def _coordinates(self) -> Iterator[tuple[str, Any]]:
+        """Yield the dimension and the coordinate of each set the terms read.
+
+        A term reads the sets of its variable, the sets of each parameter of
+        its coefficient and the dimensions of its condition.
+        """
+        for term in self.terms:
+            for held in term.variable.sets:
+                yield held.name, held.coord
+            if term.coefficient is not None:
+                for parameter in term.coefficient.parameters():
+                    for held in parameter.sets:
+                        yield held.name, held.coord
+            if term.where is not None:
+                owner = f"term {term.variable.name!r}"
+                yield from condition_coords(term.where, owner, "condition").items()
 
     def _blocks(
         self, record: Any = None, progress: Any = None, within: Domain | None = None
