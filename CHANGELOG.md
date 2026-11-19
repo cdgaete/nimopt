@@ -18,6 +18,8 @@ only correct defects of that release, from 0. The releases up to 0.4.1 follow
 
 ## Unreleased
 
+## 0.20261118.0 - 2026-11-18
+
 ### Added
 
 - `Expression.block()` returns the coefficients of an expression as a nimblend array and computes no row domain. `Expression.to_dense()` returns them as an ndarray over the frame and the column dimension, with each term added into one array.
