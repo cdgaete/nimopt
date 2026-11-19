@@ -110,7 +110,7 @@ class Model:
 
     @property
     def nnz(self) -> int:
-        """Return the number of coefficients the assembled matrix contains."""
+        """Return the number of coefficients declared."""
         return sum(c.nnz for c in self.constraints.values())
 
     def var(
@@ -365,10 +365,11 @@ class Model:
         raise KeyError(f"model {self.name!r} has no constraint {name!r}; {valid}")
 
     def row(self, name: str, **coords: Any) -> Row:
-        """Return one row of this model's matrix, at the coordinate given.
+        """Return one declared row of this model, at the coordinate given.
 
-        The row contains the entries `assemble` writes for it, and is the row
-        the solver is given. Its index is its position among the rows the
+        The row contains the coefficients and the bounds the constraint
+        declares for it. A singleton row stored as a bound of its column is
+        returned as a row. Its index is its position among the rows the
         model declares. Raises KeyError for a name that is not a declared
         constraint. Raises ValueError for a label that is not a member of its
         dimension. Raises ValueError for a coordinate the constraint has no row

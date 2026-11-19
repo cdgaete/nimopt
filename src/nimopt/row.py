@@ -25,10 +25,12 @@ class RowTerm:
 
 @dataclass(frozen=True)
 class Row:
-    """A row as the matrix stores it: its terms, its sense and its bounds.
+    """A row of a model: its terms, its sense and its bounds.
 
-    The row contains the entries the assembly pass writes for it. `index` is
-    the position of the row among the rows the model declares.
+    The row contains the coefficients of one declared row or of one row
+    appended in a session. A singleton row stored as a bound of its column is
+    a `Row` with one term. `index` is the position of the row among the rows
+    the model declares, and an appended row follows them.
     """
 
     constraint: str
